@@ -1424,6 +1424,10 @@ html.own-frame .topbar { app-region: drag; -webkit-app-region: drag; }
 html.own-frame .topbar :is(button, a, input, select, textarea, label, [tabindex], .pop, .pop-panel),
 html.own-frame :is(.scrim, .ctx, .toast, .pad-hints, .win-ctl) { app-region: no-drag; -webkit-app-region: no-drag; }
 html.own-frame .app .topbar { padding-right: calc(var(--gutter-r) + 8px + var(--wc-w)); }
+/* With its own title bar, WebView2 works out the drag area again on every frame that something in or around the
+   top bar moves, and that can hold the whole window up for seconds (missed clicks and controller presses).
+   So there nothing in the top bar animates: the tab marker jumps, and the bar hides and comes back at once. */
+html.own-frame :is(.topbar, .topbar *, .win-ctl, .win-ctl *, .topbar *::before, .topbar *::after) { transition: none !important; animation: none !important; }
 :root { --wc-w: 138px; }
 .win-ctl { position: fixed; z-index: 50; top: 0; right: 0; display: flex; transition: opacity .24s; }
 .win-ctl[hidden] { display: none; }
@@ -2224,10 +2228,10 @@ function jumpTo(letter) {
   if (!el) return;
   el.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   // Covers passed on the way take their real size as they come on screen, which can move the letter a little.
-  const main = $('#main'), until = Date.now() + 2000;
-  const snap = () => { main.removeEventListener('scrollend', snap); if (Date.now() < until && el.isConnected) el.scrollIntoView({ block: 'start' }); };
+  const main = $('#main');
+  const snap = () => { main.removeEventListener('scrollend', snap); if (el.isConnected) el.scrollIntoView({ block: 'start' }); };
   main.addEventListener('scrollend', snap);
-  setTimeout(() => main.removeEventListener('scrollend', snap), 2000);
+  setTimeout(() => main.removeEventListener('scrollend', snap), 2000);  // a jump that didn't need to scroll
   el.nextElementSibling?.focus({ preventScroll: true });
 }
 
@@ -2235,7 +2239,8 @@ function jumpTo(letter) {
 const stripSizes = new ResizeObserver(entries => entries.forEach(e => updateArrows(e.target)));
 function updateArrows(strip) {
   const [prev, next] = strip.arrows || [];
-  if (!prev || !strip.isConnected) return;
+  if (!strip.isConnected) return stripSizes.unobserve(strip);  // the page it was on is gone
+  if (!prev) return;
   prev.hidden = strip.scrollLeft <= 4;
   next.hidden = strip.scrollLeft >= strip.scrollWidth - strip.clientWidth - 4;
   prev.style.top = next.style.top = `${strip.offsetTop + strip.offsetHeight / 2}px`;
@@ -3035,7 +3040,7 @@ function renderPrice(sg) {
     : { wishlist: 'Wishlist', browse: 'Browse all' }[state.view.from] || 'Store';
   const shots = sg.screenshots || [];
   const mine = sg.owned.length ? libraryTitleFor(sg) : null;
-  const fetchHistory = host.inApp && !sg.history && !sg.historyAsked;
+  const fetchHistory = host.inApp && !sg.history;
   const facts = [
     sg.released && releasedLabel(sg.released),
     sg.score != null && sg.scoreCount > 0 && `${sg.score}% positive on Steam${sg.scoreCount ? ` (${sg.scoreCount.toLocaleString('en-GB')} reviews)` : ''}`,
@@ -3099,9 +3104,10 @@ function renderPrice(sg) {
   $('#main').scrollTop = 0;
   tintFrom(shots[0] || sg.image, `price:${sg.id}`);
   if (fetchHistory) {
-    sg.historyAsked = true;
-    host.priceHistory(sg.id).catch(() => null).then(h => {
-      if (h) sg.history = h; else sg.historyAsked = false;  // failed: try again next time the page opens
+    // One request per game; opening the page again while it runs waits for the same one. A failed one is tried
+    // again the next time the page opens.
+    sg.historyLoad ||= host.priceHistory(sg.id).catch(() => null).then(h => { sg.historyLoad = null; if (h) sg.history = h; return h; });
+    sg.historyLoad.then(h => {
       const box = $('#price-history');
       if (!box || state.view.name !== 'price' || state.view.id !== sg.id) return;
       box.innerHTML = h ? historyChart(sg) : '<p class="note">Couldn’t load the price history right now.</p>';

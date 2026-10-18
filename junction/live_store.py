@@ -1,7 +1,7 @@
 """The Store's prices for the desktop app: the same data as web/store.json, fetched live.
 
-IsThereAnyDeal throttles hard, so a full refresh takes a few minutes; the app keeps the last one
-in its cache and refreshes it in the background when it's older than STALE seconds.
+IsThereAnyDeal throttles hard, so a full refresh takes half a minute or more; the app keeps the last one
+in its cache and refreshes it in the background when it's older than stale() seconds.
 """
 import time
 import urllib.error

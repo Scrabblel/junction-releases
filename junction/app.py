@@ -11,6 +11,7 @@ import ctypes
 import json
 import logging
 import os
+import queue
 import subprocess
 import sys
 import threading
@@ -312,11 +313,13 @@ class Api:
 
     def get_price_history(self, itad_id):
         """A year of best prices for one Store game, for its page. None when it can't be fetched."""
+        itad_id = str(itad_id)
         try:
-            line = live_store.history(str(itad_id))
+            line = live_store.history(itad_id)
         except Exception:  # noqa: BLE001
             traceback.print_exc()
             return None
+        # Kept with the prices, so the page has it again if it reloads them.
         game = ((self._store or {}).get("games") or {}).get(itad_id)
         if game is not None and line is not None:
             game["history"] = line
@@ -565,6 +568,25 @@ def http_port():
     return None
 
 
+def _pad_sender(api):
+    """Controller presses go to the page from their own thread, so reading the controller never waits for the
+    page: a press made while the page is busy is handled right after it instead of being missed."""
+    presses = queue.Queue(maxsize=8)  # a few at most; holding a direction while the page is stuck mustn't pile up
+
+    def send():
+        while True:
+            api._js(f"window.junctionPad && junctionPad({json.dumps(presses.get())})")
+
+    threading.Thread(target=send, daemon=True).start()
+
+    def press(k):
+        try:
+            presses.put_nowait(k)
+        except queue.Full:
+            pass
+    return press
+
+
 def main():
     if "--quit" in sys.argv:
         return _ask_to_quit()
@@ -597,7 +619,7 @@ def main():
     threading.Thread(target=_listen_for_quit, args=(api,), daemon=True).start()
     # Controllers, read from Windows and passed to the page as button names.
     threading.Thread(target=pad.run, daemon=True, args=(
-        lambda k: api._js(f"window.junctionPad && junctionPad({json.dumps(k)})"),
+        _pad_sender(api),
         lambda on: api._js(f"window.junctionPadConnected && junctionPadConnected({json.dumps(on)})"))).start()
     # Keep the page's own storage (favourites, collections, covers) between runs.
     storage = os.path.join(os.path.dirname(config.CACHE_DIR), "webview")
