@@ -51,6 +51,8 @@ def _ts(value):
 class Itad:
     # ITAD documents 1000 requests per 5 minutes but throttles new keys far sooner; pace calls out.
     MIN_INTERVAL = 0.5
+    COOL_DOWN = 120   # seconds to stop asking after IsThereAnyDeal keeps turning requests away
+    _quiet_until = 0.0
 
     def __init__(self, key, log=None):
         self.key = key
@@ -71,6 +73,8 @@ class Itad:
         data = json.dumps(body).encode() if body is not None else None
         headers = dict(UA, **({"Content-Type": "application/json"} if data else {}))
         req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
+        if time.monotonic() < Itad._quiet_until:
+            raise urllib.error.URLError("IsThereAnyDeal asked Junction to wait; prices come back in a few minutes")
         for attempt in range(3):
             self._pace()
             try:
@@ -82,6 +86,8 @@ class Itad:
                     self.log(f"IsThereAnyDeal asked us to slow down; waiting {wait} s")
                     time.sleep(wait)
                     continue
+                if e.code == 429:
+                    Itad._quiet_until = time.monotonic() + max(self.COOL_DOWN, int(e.headers.get("Retry-After") or 0))
                 if e.code in (401, 403):
                     raise ValueError("IsThereAnyDeal turned down the API key. Check it was copied completely.") from None
                 raise

@@ -811,6 +811,20 @@ button.avatar svg { width: 18px; height: 18px; }
 .ctx.profile [aria-checked="true"] .pm-switch::after { translate: 14px 0; background: #1a1205; }
 .ctx.profile .pm-back { font-weight: 600; }
 .pm-sep { height: 1px; background: var(--rule); margin: 4px 2px 6px; }
+#signed-in.has-update { position: relative; overflow: visible; }
+#signed-in.has-update img { border-radius: 50%; }
+#signed-in.has-update::after { content: ""; position: absolute; top: -2px; right: -2px; width: 11px; height: 11px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 2px var(--ground); }
+.ctx.profile .pm-update { color: var(--signal); font-weight: 600; }
+.ctx.profile .pm-update .pm-ico { color: var(--signal); }
+.ctx.profile .pm-update .pm-val { color: #1a1205; background: var(--signal); padding: 3px 8px; border-radius: 999px; font-weight: 700; font-size: 11px; }
+.update-notes { max-height: 260px; overflow-y: auto; padding: 2px 16px; border-radius: 10px; background: var(--raised); font-size: 13.5px; line-height: 1.5; color: var(--ink-dim); }
+.update-notes h3 { margin: 12px 0 4px; font-size: 14px; color: var(--ink); }
+.update-notes p { margin: 8px 0; }
+.update-notes ul, .update-notes ol { margin: 4px 0 8px; padding-left: 20px; }
+.update-notes b { color: var(--ink); font-weight: 600; }
+.update-bar { height: 6px; border-radius: 999px; background: var(--raised-2); overflow: hidden; }
+.update-bar[hidden] { display: none; }
+.update-bar span { display: block; width: 0; height: 100%; background: var(--signal); transition: width .2s; }
 .pm-foot { padding: 10px 10px 4px; margin-top: 4px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-faint); }
 /* First start: the welcome steps */
 .dialog.setup { width: min(600px, calc(100vw - 32px)); padding: 28px; gap: 16px; }
@@ -1556,6 +1570,9 @@ const host = {
   async showWindow() { return this.inApp ? window.pywebview.api.show_window() : null; },
   async windowInfo() { return this.inApp ? window.pywebview.api.window_info() : null; },
   windowAction(what) { return this.inApp ? window.pywebview.api.window_action(what) : null; },
+  async updateInfo() { return this.inApp ? window.pywebview.api.update_info() : null; },
+  async checkUpdates() { return this.inApp ? window.pywebview.api.check_updates() : null; },
+  async installUpdate() { return this.inApp ? window.pywebview.api.install_update() : null; },
 };
 
 const LAUNCH_VIA = {
@@ -3415,6 +3432,8 @@ async function profileMenu(page = 'main') {
   const nKeys = info ? info.accounts.filter(a => a.key).length : 0;
   const pages = {
     main: { items: [
+      ...(updateState?.available ? [{ icon: PM.update, label: `Update to ${updateState.available.version}`, value: 'New', cls: 'pm-update',
+        run: () => (closeMenu(), updateDialog()) }] : []),
       { icon: PM.key, label: 'Accounts and keys', go: 'keys' },
       { icon: PM.sliders, label: 'Preferences', go: 'prefs' },
       { icon: PM.refresh, label: 'Rescan launchers', run: () => (closeMenu(), rescan()) },
@@ -3422,7 +3441,7 @@ async function profileMenu(page = 'main') {
     ] },
     keys: { title: 'Accounts and keys', items: [
       { icon: ICON.person, label: 'Steam accounts', value: info ? `${nKeys} of ${info.accounts.length} with a key` : '', run: () => (closeMenu(), keysDialog('steam')) },
-      { icon: ICON.tag, label: 'Prices (IsThereAnyDeal)', value: info ? keyVal(info.prices) : '', run: () => (closeMenu(), keysDialog('prices')) },
+      { icon: ICON.tag, label: 'Prices (IsThereAnyDeal)', value: !info ? '' : info.prices ? 'Your own key' : info.pricesBuiltIn ? 'Built in' : 'Not set', run: () => (closeMenu(), keysDialog('prices')) },
       { icon: ICON.image, label: 'Cover art (SteamGridDB)', value: info ? keyVal(info.art) : '', run: () => (closeMenu(), keysDialog('art')) },
     ] },
     prefs: { title: 'Preferences', items: [
@@ -3443,6 +3462,17 @@ async function profileMenu(page = 'main') {
     help: { title: 'Help', items: [
       { icon: PM.spark, label: 'Set up Junction again', run: () => (closeMenu(), setupWizard()) },
       { icon: PM.report, label: 'Problem report', run: () => (closeMenu(), reportDialog()) },
+      { icon: PM.update, label: 'Check for updates', value: updateState?.available ? `${updateState.available.version} is out`
+          : updateState?.checked ? 'Up to date' : '',
+        run: async b => {
+          const v = b.querySelector('.pm-val');
+          if (!host.inApp) { v.textContent = 'Only in the app'; return; }
+          v.textContent = 'Checking…';
+          const info = await host.checkUpdates().catch(() => null);
+          if (info) junctionUpdate(info);
+          if (info?.available) { closeMenu(); return updateDialog(); }
+          v.textContent = !info || info.error ? 'Couldn’t check' : 'Up to date';
+        } },
     ] },
   };
   const me = accounts().find(a => a.steamId === lib.steamSignedIn);
@@ -3462,7 +3492,7 @@ async function profileMenu(page = 'main') {
           <span><b>${me ? esc(me.name) : 'Junction'}</b><small>${me ? 'Signed in to Steam' : lib.steamSignedIn ? 'Steam account not in Junction' : 'Not signed in to Steam'}</small></span></div>`
       : `<button class="pm-back" data-pm-back>${ic(ICON.back)}${esc(p.title)}</button><div class="pm-sep"></div>`) +
       items.map((it, i) => it.heading ? `<div class="ctx-label">${esc(it.label)}</div>`
-        : `<button data-pm="${i}" role="${it.on != null ? 'menuitemcheckbox' : it.radio != null ? 'menuitemradio' : 'menuitem'}"
+        : `<button data-pm="${i}" ${it.cls ? `class="${it.cls}"` : ''} role="${it.on != null ? 'menuitemcheckbox' : it.radio != null ? 'menuitemradio' : 'menuitem'}"
             ${it.on != null ? `aria-checked="${!!it.on}"` : it.radio != null ? `aria-checked="${it.radio}"` : ''} ${it.go ? 'aria-haspopup="menu"' : ''}>
             ${it.icon ? ic(it.icon) : ''}<span class="pm-label">${esc(it.label)}</span>
             ${it.on != null ? '<span class="pm-switch" aria-hidden="true"></span>'
@@ -3507,6 +3537,7 @@ const PM = {
   help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17.2h.01"/></svg>',
   spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>',
   report: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
+  update: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
 };
 
@@ -3550,7 +3581,11 @@ function keySection(kind, info) {
   }
   if (kind === 'prices') return `
       <h2>Prices key</h2>
-      <p class="hint">The Store’s prices come from IsThereAnyDeal. Its key is free: sign in at ${keyLink('prices')}, register an app (any name), and copy its API key.</p>
+      ${info.pricesBuiltIn
+        ? `<p class="hint">The Store’s prices come from IsThereAnyDeal. Junction comes with a key for it, so prices work without one of your own.
+            Everyone shares that key, so if prices ever load slowly or stop, you can use your own: it’s free at ${keyLink('prices')}
+            (register an app with any name and copy its API key). Remove yours to go back to the built-in key.</p>`
+        : `<p class="hint">The Store’s prices come from IsThereAnyDeal. Its key is free: sign in at ${keyLink('prices')}, register an app (any name), and copy its API key.</p>`}
       ${keyForm('prices', 'IsThereAnyDeal API key', info.prices)}`;
   return `
       <h2>Cover art key</h2>
@@ -3670,7 +3705,9 @@ async function setupWizard() {
   closeMenu();
   const info = await host.settings();
   host.setOption('setupDone', true);
-  const steps = ['welcome', info.accounts.length && 'steam', 'prices', 'ready'].filter(Boolean);
+  // With a prices key built in, there's nothing to set up for the Store.
+  const steps = ['welcome', info.accounts.length && 'steam', !info.pricesBuiltIn && 'prices', 'ready'].filter(Boolean);
+  const extra = steps.length - 2;
   const found = Object.entries(lib.games.reduce((m, g) => ((m[g.launcher] = (m[g.launcher] || 0) + 1), m), {}))
     .sort((a, b) => b[1] - a[1]);
   const body = {
@@ -3678,7 +3715,7 @@ async function setupWizard() {
       <div class="setup-logo">${$('.brand svg').outerHTML}</div>
       <h2>Welcome to Junction</h2>
       <p class="hint">Every game from every launcher in one place, and the lowest price in euros across the official stores.
-        Two quick, optional steps and you’re ready.</p>
+        ${extra === 2 ? 'Two quick, optional steps and you’re ready.' : extra === 1 ? 'One quick, optional step and you’re ready.' : 'You’re almost ready.'}</p>
       ${found.length ? `<div class="setup-found" aria-label="Found on this PC">
         ${found.map(([l, n]) => `<span class="setup-launcher" style="${lineVar(l)}"><i></i>${esc(lib.launchers[l] || l)} <b>${n} ${n === 1 ? 'game' : 'games'}</b></span>`).join('')}
       </div>` : '<p class="hint">Junction didn’t find any launchers yet. Install one, then choose Rescan launchers under your profile picture.</p>'}`,
@@ -4707,6 +4744,93 @@ window.junctionProgress = msg => {
 };
 
 applyTheme();
+// ---------- updates: a newer Junction on GitHub ----------
+// The app checks GitHub now and then and says so here. A dot on your picture, one toast per version,
+// and "Update to …" at the top of the menu; the dialog downloads it and the installer does the rest.
+let updateState = null;
+window.junctionUpdate = info => {
+  updateState = info;
+  const rel = info?.available;
+  $('#signed-in').classList.toggle('has-update', !!rel);
+  if (rel && prefs.updateToasted !== rel.version) {
+    prefs.updateToasted = rel.version;
+    savePrefs();
+    toast(`Junction ${rel.version} is out. Open the menu under your picture to update.`);
+  }
+};
+const updateMB = n => (n / 1048576).toFixed(1);
+// Release notes are written in GitHub's Markdown; this shows the common parts (headings, lists, bold).
+function mdLite(text) {
+  const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`(.+?)`/g, '<code>$1</code>');
+  let html = '', list = null;
+  const close = () => { if (list) { html += `</${list}>`; list = null; } };
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    let m;
+    if (!line) { close(); continue; }
+    if ((m = line.match(/^#{1,6}\s+(.*)/))) { close(); html += `<h3>${inline(m[1])}</h3>`; continue; }
+    if ((m = line.match(/^(?:[-*]|\d+\.)\s+(.*)/))) {
+      const kind = /^\d/.test(line) ? 'ol' : 'ul';
+      if (list !== kind) { close(); html += `<${kind}>`; list = kind; }
+      html += `<li>${inline(m[1])}</li>`;
+      continue;
+    }
+    close();
+    html += `<p>${inline(line)}</p>`;
+  }
+  close();
+  return html;
+}
+function updateDialog() {
+  const rel = updateState?.available;
+  if (!rel) return;
+  const can = updateState.canInstall;
+  $('#layer').innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="dialog keys update" role="dialog" aria-modal="true" aria-labelledby="update-title">
+        <h2 id="update-title">Junction ${esc(rel.version)} is out</h2>
+        <p class="hint">You have ${esc(updateState.current)}. ${can
+          ? `The update is ${updateMB(rel.size || 0)} MB. Junction closes, updates and opens again by itself. Your games, keys and settings stay as they are.`
+          : 'This copy runs from source, so get the new installer from the release page.'}</p>
+        <div class="update-notes">${mdLite(rel.notes) || '<p>No notes for this version.</p>'}</div>
+        <div class="update-bar" hidden><span></span></div>
+        <p class="key-msg" aria-live="polite"></p>
+        <div class="row-btns">
+          <button class="btn" type="button" id="update-later">Later</button>
+          <button class="btn primary" type="button" id="update-now">${can ? 'Update now' : 'Open the release page'}</button>
+        </div>
+      </div>
+    </div>`;
+  const msg = $('#layer .key-msg'), now = $('#update-now'), later = $('#update-later'), bar = $('#layer .update-bar');
+  later.onclick = closeLayer;
+  $('#scrim').onclick = e => { if (e.target.id === 'scrim' && !now.disabled) closeLayer(); };
+  now.onclick = async () => {
+    if (!can) return host.openUrl(rel.page);
+    now.disabled = later.disabled = true;
+    bar.hidden = false;
+    msg.className = 'key-msg';
+    msg.textContent = 'Downloading…';
+    const res = await host.installUpdate().catch(() => null);
+    if (res?.ok) return;
+    now.disabled = later.disabled = false;
+    bar.hidden = true;
+    msg.className = 'key-msg bad';
+    msg.textContent = res?.error || 'Junction couldn’t download the update. Try again later.';
+  };
+  now.focus();
+}
+window.junctionUpdateProgress = p => {
+  const bar = $('#layer .update-bar span'), msg = $('#layer .update .key-msg');
+  if (!bar || !msg) return;
+  if (p.stage === 'downloading') {
+    bar.style.width = `${p.total ? Math.round(p.done / p.total * 100) : 0}%`;
+    msg.textContent = `Downloading… ${updateMB(p.done)} of ${updateMB(p.total)} MB`;
+  } else if (p.stage === 'installing') {
+    bar.style.width = '100%';
+    msg.textContent = 'Installing. Junction closes now and opens again in a moment.';
+  }
+};
+
 // ---------- the window's own title bar (only in the app) ----------
 async function ownTitleBar() {
   const info = await host.windowInfo().catch(() => null);
@@ -4734,6 +4858,7 @@ $('#win-ctl').addEventListener('click', e => {
     <p>The first scan takes a minute or two; after that Junction opens straight away.</p></div></div>`;
   await host.ready();
   ownTitleBar();
+  host.updateInfo().then(i => i && junctionUpdate(i)).catch(() => {});
   try {
     lib = await host.library();
   } catch {

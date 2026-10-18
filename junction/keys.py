@@ -30,6 +30,42 @@ def _accounts(settings):
     return settings.setdefault("steamAccounts", [])
 
 
+# ---------- the IsThereAnyDeal key Junction comes with ----------
+# tools/build.py writes it into junction/_builtin.py (never in git), lightly masked so it isn't plain text in
+# the files. That isn't secrecy: anyone with the installer can recover it. It's IsThereAnyDeal's "app key" for
+# Junction, which their terms allow apps to carry; people can still use their own key instead.
+_MASK = b"junction-prices"
+
+
+def mask(key):
+    import base64
+    raw = key.encode()
+    return base64.b64encode(bytes(b ^ _MASK[i % len(_MASK)] for i, b in enumerate(raw[::-1]))).decode()
+
+
+def _unmask(text):
+    import base64
+    try:
+        raw = base64.b64decode(text)
+        return bytes(b ^ _MASK[i % len(_MASK)] for i, b in enumerate(raw)).decode()[::-1]
+    except (ValueError, UnicodeDecodeError):
+        return None
+
+
+def builtin_prices_key():
+    try:
+        from ._builtin import ITAD
+    except ImportError:
+        return None
+    return _unmask(ITAD) or None
+
+
+def prices_key(settings=None):
+    """Your own IsThereAnyDeal key if you added one, otherwise the one Junction comes with ("" if neither)."""
+    s = settings if settings is not None else config.load_settings()
+    return (s.get("itadApiKey") or "").strip() or builtin_prices_key() or ""
+
+
 def overview():
     """What the settings dialogs show: every Steam account (in settings or signed in on this PC)."""
     s = config.load_settings()
@@ -50,7 +86,8 @@ def overview():
             accounts.append({"steamId": sid, "name": u.get("persona") or u.get("account") or sid, "key": None, "onPc": True})
     return {"accounts": accounts, "signedIn": signed_in,
             "removed": [{"steamId": sid, "name": name or (on_pc.get(sid) or {}).get("persona") or sid} for sid, name in hidden.items()],
-            "prices": _tail(s.get("itadApiKey")), "art": _tail(s.get("steamGridDbKey"))}
+            "prices": _tail(s.get("itadApiKey")), "pricesBuiltIn": bool(builtin_prices_key()),
+            "art": _tail(s.get("steamGridDbKey"))}
 
 
 def _check_steam(key, steamid):

@@ -13,7 +13,7 @@ import re
 import sys
 import time
 
-from . import config
+from . import config, keys
 
 LOG_DIR = os.path.join(os.path.dirname(config.CACHE_DIR), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "junction.log")
@@ -75,7 +75,7 @@ _KEYLIKE = [
 def redact(text, settings=None):
     settings = settings if settings is not None else config.load_settings()
     secrets = [a.get("apiKey") for a in settings.get("steamAccounts") or []]
-    secrets += [settings.get("itadApiKey"), settings.get("steamGridDbKey")]
+    secrets += [settings.get("itadApiKey"), settings.get("steamGridDbKey"), keys.builtin_prices_key()]
     for s in filter(None, secrets):
         text = text.replace(s, "[key]")
     for i, rx in enumerate(_KEYLIKE):
@@ -110,7 +110,7 @@ def report(lib=None, extra=None):
     ]
     accs = settings.get("steamAccounts") or []
     lines.append(f"Keys: Steam {sum(1 for a in accs if a.get('apiKey'))} of {len(accs)} accounts · "
-                 f"prices {'yes' if settings.get('itadApiKey') else 'no'} · cover art {'yes' if settings.get('steamGridDbKey') else 'no'}")
+                 f"prices {'own key' if settings.get('itadApiKey') else 'built in' if keys.builtin_prices_key() else 'no'} · cover art {'yes' if settings.get('steamGridDbKey') else 'no'}")
     for k, v in (extra or {}).items():
         lines.append(f"{k}: {v}")
     if lib:

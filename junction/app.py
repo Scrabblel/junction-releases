@@ -21,7 +21,7 @@ import webbrowser
 
 import webview
 
-from . import config, keys, launchers, library, live_store, logs, pad, playtime, startup, steam_switch, titlebar
+from . import config, keys, launchers, library, live_store, logs, pad, playtime, startup, steam_switch, titlebar, updates
 
 LIB_VERSION = 1          # bump when the cached library's shape changes
 ACH_TTL = 10 * 60        # seconds a game's achievements stay cached
@@ -73,6 +73,7 @@ class Api:
         self._quitting = False
         self._own_frame = False  # True once Junction draws its own title bar
         self._tracker = playtime.Tracker(self._played)
+        self._updates = updates.Updater(lambda info: self._js(f"window.junctionUpdate && junctionUpdate({json.dumps(info)})"))
 
     # ---------- talking back to the page ----------
 
@@ -304,7 +305,7 @@ class Api:
             if self._store is None:
                 return self._build_store()
             age = config.cache_age("store.json")
-            if age is not None and age > live_store.STALE and not self._store_refreshing:
+            if age is not None and age > live_store.stale() and not self._store_refreshing:
                 self._store_refreshing = True
                 threading.Thread(target=self._refresh_store, daemon=True).start()
             return self._store
@@ -457,10 +458,24 @@ class Api:
     def set_art_key(self, key):
         return self._after_key(keys.set_art_key(key), lambda: self._background(rescan=True))
 
+    # ---------- updates ----------
+
+    def update_info(self):
+        return self._updates.info
+
+    def check_updates(self):
+        return self._updates.check()
+
+    def install_update(self):
+        return self._updates.install(
+            progress=lambda p: self._js(f"window.junctionUpdateProgress && junctionUpdateProgress({json.dumps(p)})"),
+            quit_app=self._quit)
+
     def open_url(self, url):
-        """Open one of the key sites in the person's browser."""
+        """Open one of the key sites, or Junction's release page, in the person's browser."""
         u = urllib.parse.urlparse(str(url))
-        if u.scheme != "https" or u.hostname not in KEY_SITES:
+        releases = u.hostname == "github.com" and u.path.lower().startswith(f"/{updates.RELEASES}/")
+        if u.scheme != "https" or not (u.hostname in KEY_SITES or releases):
             return {"error": "Junction only opens the sites where you make your keys."}
         webbrowser.open(url)
         return {"ok": True}
@@ -565,6 +580,7 @@ def main():
         window.events.maximized += api._window_state
         window.events.restored += api._window_state
     threading.Thread(target=api._watch, daemon=True).start()
+    api._updates.start()
     threading.Thread(target=_listen_for_second_start, args=(api,), daemon=True).start()
     threading.Thread(target=_listen_for_quit, args=(api,), daemon=True).start()
     # Controllers, read from Windows and passed to the page as button names.

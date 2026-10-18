@@ -53,6 +53,8 @@ Name: "{autodesktop}\Junction"; Filename: "{app}\Junction.exe"; Tasks: desktopic
 
 [Run]
 Filename: "{app}\Junction.exe"; Description: "{cm:LaunchProgram,Junction}"; Flags: nowait postinstall skipifsilent
+; An update started from inside Junction runs silently with /relaunch=1: open Junction again afterwards.
+Filename: "{app}\Junction.exe"; Flags: nowait; Check: Relaunch
 
 [Code]
 const
@@ -95,6 +97,11 @@ begin
   Exe := ExpandConstant('{app}\Junction.exe');
   if FileExists(Exe) then
     Exec(Exe, '--quit', '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
+function Relaunch: Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:relaunch|0}') = '1');
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
