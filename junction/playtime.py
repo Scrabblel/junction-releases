@@ -1,7 +1,7 @@
 """Play time for games that no launcher counts: Junction times the games it starts itself.
 
 Steam counts its own games, and GOG Galaxy counts the ones it starts. For everything else (Epic,
-Ubisoft, EA, Battle.net, Xbox, games you added yourself), Junction watches for a program running
+Ubisoft, EA, Battle.net, Rockstar, Xbox, games you added yourself), Junction watches for a program running
 from the game's folder after you press Play, and adds up how long it runs.
 
 The totals are kept in %APPDATA%\\Junction\\playtime.json, next to the settings, so clearing the

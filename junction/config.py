@@ -4,8 +4,8 @@
   nothing in it is ever part of the app itself.
 - Cache (last scan, store prices, lookups): %LOCALAPPDATA%\\Junction\\cache.
 
-While developing from this folder, a local_settings.json next to the code is used when the
-per-user settings file doesn't exist yet.
+While developing from this folder (not as Junction.exe), a local_settings.json next to the code is
+used instead whenever it exists, so running the installed app never takes the developer's keys away.
 
 JUNCTION_HOME=<folder> keeps all of it (settings, cache, logs, play time) in that one folder instead,
 as a separate copy of Junction: for testing a build without touching anyone's real settings.
@@ -23,6 +23,9 @@ SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
 CACHE_DIR = os.path.join(HOME or os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), APP_NAME), "cache")
 # Only one Junction runs at a time; a separate copy (JUNCTION_HOME) counts as another app.
 INSTANCE = APP_NAME + (f"-{zlib.crc32(os.path.abspath(HOME).lower().encode()):08x}" if HOME else "")
+# The page's local address. It has to stay the same between runs, because the page saves favourites,
+# collections and covers per address; a separate copy gets an address of its own.
+HTTP_PORT = 42001 if not HOME else 42101 + zlib.crc32(os.path.abspath(HOME).lower().encode()) % 800
 DEV_SETTINGS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "local_settings.json")
 
 
@@ -33,7 +36,7 @@ def resource(*parts):
 
 
 def settings_path():
-    if HOME or os.path.isfile(SETTINGS_FILE) or getattr(sys, "frozen", False):
+    if HOME or getattr(sys, "frozen", False):
         return SETTINGS_FILE
     return DEV_SETTINGS if os.path.isfile(DEV_SETTINGS) else SETTINGS_FILE
 

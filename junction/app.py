@@ -469,8 +469,9 @@ class Api:
 # Only one Junction at a time: starting it again brings the open one to the front.
 _kernel = ctypes.WinDLL("kernel32", use_last_error=True)
 _kernel.CreateMutexW.restype = _kernel.CreateEventW.restype = _kernel.OpenEventW.restype = ctypes.c_void_p
+_kernel.OpenMutexW.restype = ctypes.c_void_p
 _kernel.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
-_kernel.SetEvent.argtypes = [ctypes.c_void_p]
+_kernel.SetEvent.argtypes = _kernel.CloseHandle.argtypes = [ctypes.c_void_p]
 _instance = None
 
 
@@ -493,7 +494,53 @@ def _listen_for_second_start(api):
         api.show_window()
 
 
+def _listen_for_quit(api):
+    ev = _kernel.CreateEventW(None, False, False, f"Local\\{config.INSTANCE}Quit")
+    if ev:
+        _kernel.WaitForSingleObject(ev, 0xFFFFFFFF)
+        logging.getLogger("junction").info("Asked to quit (installer)")
+        api._quit()
+
+
+def _ask_to_quit(wait=15):
+    """`Junction.exe --quit`, which the installer runs: closes a running Junction and waits until it's gone."""
+    ev = _kernel.OpenEventW(0x0002, False, f"Local\\{config.INSTANCE}Quit")  # EVENT_MODIFY_STATE
+    if ev:
+        _kernel.SetEvent(ev)
+    # The single-instance mutex lasts as long as that Junction does.
+    end = time.time() + wait
+    while time.time() < end:
+        mutex = _kernel.OpenMutexW(0x00100000, False, f"Local\\{config.INSTANCE}App")  # SYNCHRONIZE
+        if not mutex:
+            return
+        _kernel.CloseHandle(mutex)
+        time.sleep(0.2)
+
+
+def http_port():
+    """The port the page is served on: Junction's usual one, unless another program already holds it.
+
+    Then this run takes a free port instead. Otherwise the window would open that program's page and hand it
+    Junction's API. (The page's saved favourites and covers belong to the usual port, so they're back next run.)"""
+    import socket
+    for port in (config.HTTP_PORT, 0):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            s.bind(("127.0.0.1", port))
+            if port != config.HTTP_PORT:
+                logging.getLogger("junction").warning("Port %s is taken by another program; using %s", config.HTTP_PORT, s.getsockname()[1])
+            return s.getsockname()[1]
+        except OSError:
+            continue
+        finally:
+            s.close()
+    return None
+
+
 def main():
+    if "--quit" in sys.argv:
+        return _ask_to_quit()
     in_tray = "--tray" in sys.argv  # started with Windows: stay in the tray
     if not _first_instance(quiet=in_tray):
         return
@@ -519,13 +566,14 @@ def main():
         window.events.restored += api._window_state
     threading.Thread(target=api._watch, daemon=True).start()
     threading.Thread(target=_listen_for_second_start, args=(api,), daemon=True).start()
+    threading.Thread(target=_listen_for_quit, args=(api,), daemon=True).start()
     # Controllers, read from Windows and passed to the page as button names.
     threading.Thread(target=pad.run, daemon=True, args=(
         lambda k: api._js(f"window.junctionPad && junctionPad({json.dumps(k)})"),
         lambda on: api._js(f"window.junctionPadConnected && junctionPadConnected({json.dumps(on)})"))).start()
     # Keep the page's own storage (favourites, collections, covers) between runs.
     storage = os.path.join(os.path.dirname(config.CACHE_DIR), "webview")
-    webview.start(private_mode=False, storage_path=storage, icon=icon)
+    webview.start(private_mode=False, storage_path=storage, icon=icon, http_port=http_port())
     if api._tray:
         api._tray.stop()
     logging.getLogger("junction").info("Junction closed")

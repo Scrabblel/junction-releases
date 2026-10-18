@@ -34,6 +34,7 @@
   --line-ubisoft: #1fc1c4;
   --line-ea: #ff5d55;
   --line-battlenet: #6f7dff;
+  --line-rockstar: #ff8a3d;
   --line-xbox: #9bd14a;
   --line-manual: #e38fd9;
 
@@ -61,7 +62,7 @@
   --install: #1d4f8f; --install-deep: #173f73; --on-install: #ffffff; --good: #138a4a;
   --cut-bg: #d6f0dd; --cut-ink: #165c33;
   --line-steam: #2a78bd; --line-epic: #59626e; --line-gog: #8547dc; --line-ubisoft: #0d8c8f;
-  --line-ea: #e0453d; --line-battlenet: #4f5ee8; --line-xbox: #4a8a10; --line-manual: #c25bb5;
+  --line-ea: #e0453d; --line-battlenet: #4f5ee8; --line-rockstar: #c45a10; --line-xbox: #4a8a10; --line-manual: #c25bb5;
   --title-shadow: none;
   --wash-mid: 28%; --wash-mid-at: 36%; --wash-end: 60%; --wash-bottom: 40%; --wash-bottom-at: 22%; --wash-bottom-end: 46%; --shade: 30%;
 }
@@ -74,7 +75,7 @@
     --install: #1d4f8f; --install-deep: #173f73; --on-install: #ffffff; --good: #138a4a;
     --cut-bg: #d6f0dd; --cut-ink: #165c33;
     --line-steam: #2a78bd; --line-epic: #59626e; --line-gog: #8547dc; --line-ubisoft: #0d8c8f;
-    --line-ea: #e0453d; --line-battlenet: #4f5ee8; --line-xbox: #4a8a10; --line-manual: #c25bb5;
+    --line-ea: #e0453d; --line-battlenet: #4f5ee8; --line-rockstar: #c45a10; --line-xbox: #4a8a10; --line-manual: #c25bb5;
     --title-shadow: none;
     --wash-mid: 28%; --wash-mid-at: 36%; --wash-end: 60%; --wash-bottom: 40%; --wash-bottom-at: 22%; --wash-bottom-end: 46%; --shade: 30%;
   }
@@ -1559,7 +1560,7 @@ const host = {
 
 const LAUNCH_VIA = {
   steam: 'Steam', epic: 'the Epic Games Launcher', gog: 'GOG Galaxy', ubisoft: 'Ubisoft Connect',
-  ea: 'the EA app', battlenet: 'Battle.net', xbox: 'the Xbox app', manual: 'its own program',
+  ea: 'the EA app', battlenet: 'Battle.net', rockstar: 'the Rockstar Games Launcher', xbox: 'the Xbox app', manual: 'its own program',
 };
 // What INSTALL does per launcher: [game page explanation, toast once started].
 const INSTALL_VIA = {
@@ -1576,13 +1577,19 @@ const OWNED_FROM = {
 // ---------- per-viewer preferences (favourites, hidden games, collections, layout, theme) ----------
 const PREFS_KEY = 'junction.prefs.v1';
 // Which launcher's copy a game uses when you own it on several, first wins. Installed copies always go first.
-const LAUNCHER_ORDER = ['steam', 'gog', 'epic', 'ubisoft', 'ea', 'battlenet', 'xbox', 'manual'];
+const LAUNCHER_ORDER = ['steam', 'gog', 'epic', 'ubisoft', 'ea', 'battlenet', 'rockstar', 'xbox', 'manual'];
 function loadPrefs() {
   const defaults = { favorites: [], hidden: [], shown: [], manual: [], sort: 'recent', scope: 'all',
                      wishlist: [], unwished: [], showOwned: false,
                      launcherOrder: LAUNCHER_ORDER.slice(), collections: [], density: 'covers', theme: 'dark',
                      uninstalledOpen: true, showFilters: false, accountsOpen: false, playWith: {}, wishAdded: {}, wishSort: 'cut' };
-  try { return Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY)) || {}); }
+  try {
+    const p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY)) || {});
+    for (const l of LAUNCHER_ORDER) {
+      if (!p.launcherOrder.includes(l)) p.launcherOrder.splice(Math.min(LAUNCHER_ORDER.indexOf(l), p.launcherOrder.length), 0, l);
+    }
+    return p;
+  }
   catch { return defaults; }
 }
 function savePrefs() { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {} }
@@ -1760,7 +1767,7 @@ function coverArt(g) {
 }
 
 // ---------- launchers, friends, DLC sales and disk space ----------
-const LAUNCHER_SHORT = { steam: 'Steam', epic: 'Epic', gog: 'GOG', ubisoft: 'Ubisoft', ea: 'EA', battlenet: 'Battle.net', xbox: 'Xbox', manual: 'Own' };
+const LAUNCHER_SHORT = { steam: 'Steam', epic: 'Epic', gog: 'GOG', ubisoft: 'Ubisoft', ea: 'EA', battlenet: 'Battle.net', rockstar: 'Rockstar', xbox: 'Xbox', manual: 'Own' };
 // Launcher logos: one-colour marks from Simple Icons (CC0).
 const LOGO = {
   steam: 'M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z',
@@ -1769,6 +1776,7 @@ const LOGO = {
   ubisoft: 'M23.561 11.988C23.301-.304 6.954-4.89.656 6.634c.282.206.661.477.943.672a11.747 11.747 0 00-.976 3.067 11.885 11.885 0 00-.184 2.071C.439 18.818 5.621 24 12.005 24c6.385 0 11.556-5.17 11.556-11.556v-.455zm-20.27 2.06c-.152 1.246-.054 1.636-.054 1.788l-.282.098c-.108-.206-.37-.932-.488-1.908C2.163 10.308 4.7 6.96 8.57 6.33c3.544-.52 6.937 1.68 7.728 4.758l-.282.098c-.087-.087-.228-.336-.77-.878-4.281-4.281-11.002-2.32-11.956 3.74zm11.002 2.081a3.145 3.145 0 01-2.59 1.355 3.15 3.15 0 01-3.155-3.155 3.159 3.159 0 012.927-3.144c1.018-.043 1.972.51 2.416 1.398a2.58 2.58 0 01-.455 2.95c.293.205.575.4.856.595zm6.58.12c-1.669 3.782-5.106 5.766-8.77 5.712-7.034-.347-9.083-8.466-4.38-11.393l.207.206c-.076.108-.358.325-.791 1.182-.51 1.041-.672 2.081-.607 2.732.369 5.67 8.314 6.83 11.045 1.214C21.057 8.217 11.822.401 3.626 6.374l-.184-.184C5.599 2.808 9.816 1.3 13.837 2.309c6.147 1.55 9.453 7.956 7.035 13.94z',
   ea: 'M16.635 6.162l-5.928 9.377H4.24l1.508-2.3h4.024l1.474-2.335H2.264L.79 13.239h2.156L0 17.84h12.072l4.563-7.259 1.652 2.66h-1.401l-1.473 2.299h4.347l1.473 2.3H24zm-11.461.107L3.7 8.604l9.52-.035 1.474-2.3z',
   battlenet: 'M18.94 8.296C15.9 6.892 11.534 6 7.426 6.332c.206-1.36.714-2.308 1.548-2.508 1.148-.275 2.4.48 3.594 1.854.782.102 1.71.28 2.355.429C12.747 2.013 9.828-.282 7.607.565c-1.688.644-2.553 2.97-2.448 6.094-2.2.468-3.915 1.3-5.013 2.495-.056.065-.181.227-.137.305.034.058.146-.008.194-.04 1.274-.89 2.904-1.373 5.027-1.676.303 3.333 1.713 7.56 4.055 10.952-1.28.502-2.356.536-2.946-.087-.812-.856-.784-2.318-.19-4.04a26.764 26.764 0 0 1-.807-2.254c-2.459 3.934-2.986 7.61-1.143 9.11 1.402 1.14 3.847.725 6.502-.926 1.505 1.672 3.083 2.74 4.667 3.094.084.015.287.043.332-.034.034-.06-.08-.124-.131-.149-1.408-.657-2.64-1.828-3.964-3.515 2.735-1.929 5.691-5.263 7.457-8.988 1.076.86 1.64 1.773 1.398 2.595-.336 1.131-1.615 1.84-3.403 2.185a27.697 27.697 0 0 1-1.548 1.826c4.634.16 8.08-1.22 8.458-3.565.286-1.786-1.295-3.696-4.053-5.17.696-2.139.832-4.04.346-5.588-.029-.08-.106-.27-.196-.27-.068 0-.067.13-.063.187.135 1.547-.263 3.2-1.062 5.19zm-8.533 9.869c-1.96-3.145-3.09-6.849-3.082-10.594 3.702-.124 7.474.748 10.714 2.627-1.743 3.269-4.385 6.1-7.633 7.966h.001z',
+  rockstar: 'M5.971 6.816h3.241c1.469 0 2.741-.448 2.741-2.084 0-1.3-1.117-1.576-2.19-1.576H6.748l-.777 3.66Zm12.834 8.753h5.168l-4.664 3.228.755 5.087-4.041-3.07L10.599 24l2.536-5.392s-2.95-3.075-2.947-3.075c-.198-.262-.265-.936-.265-1.226 0-.367.024-.739.049-1.134.028-.451.058-.933.058-1.476 0-1.338-.59-2.038-2.036-2.038H5.283l-1.18 5.525H.026L3.269 0h7.672c2.852 0 5.027.702 5.027 3.936 0 2.276-1.12 3.894-3.592 4.233v.045c1.162.276 1.598 1.062 1.598 2.527 0 .585-.018 1.098-.034 1.581-.015.428-.03.834-.03 1.243 0 .525.137 1.382.48 1.968h.567l3.028-5.06.82 5.096Zm-1.233-2.948-2.187 3.654h-3.457l2.103 2.189-1.73 3.672 3.777-2.218 2.976 2.263-.553-3.731 3.093-2.139h-3.43l-.592-3.69Z',
   xbox: 'M4.102 21.033C6.211 22.881 8.977 24 12 24c3.026 0 5.789-1.119 7.902-2.967 1.877-1.912-4.316-8.709-7.902-11.417-3.582 2.708-9.779 9.505-7.898 11.417zm11.16-14.406c2.5 2.961 7.484 10.313 6.076 12.912C23.002 17.48 24 14.861 24 12.004c0-3.34-1.365-6.362-3.57-8.536 0 0-.027-.022-.082-.042-.063-.022-.152-.045-.281-.045-.592 0-1.985.434-4.805 3.246zM3.654 3.426c-.057.02-.082.041-.086.042C1.365 5.642 0 8.664 0 12.004c0 2.854.998 5.473 2.661 7.533-1.401-2.605 3.579-9.951 6.08-12.91-2.82-2.813-4.216-3.245-4.806-3.245-.131 0-.223.021-.281.046v-.002zM12 3.551S9.055 1.828 6.755 1.746c-.903-.033-1.454.295-1.521.339C7.379.646 9.659 0 11.984 0H12c2.334 0 4.605.646 6.766 2.085-.068-.046-.615-.372-1.52-.339C14.946 1.828 12 3.545 12 3.545v.006z',
 };
 const launcherIcon = l => LOGO[l]
@@ -2520,6 +2528,7 @@ function shopLine(name) {
   if (n.includes('ubisoft')) return 'ubisoft';
   if (/\bea\b|electronic arts|origin/.test(n)) return 'ea';
   if (n.includes('battle.net') || n.includes('blizzard')) return 'battlenet';
+  if (n.includes('rockstar')) return 'rockstar';
   if (n.includes('microsoft') || n.includes('xbox')) return 'xbox';
   return null;
 }

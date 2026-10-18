@@ -17,6 +17,7 @@ LAUNCHERS = {
     "ubisoft": "Ubisoft Connect",
     "ea": "EA app",
     "battlenet": "Battle.net",
+    "rockstar": "Rockstar Games",
     "xbox": "Xbox",
     "manual": "Added by you",
 }
@@ -367,6 +368,31 @@ def find_battlenet():
     return games
 
 
+# ---------- Rockstar Games Launcher ----------
+
+def find_rockstar():
+    """Games installed from Rockstar's own store. Only those leave an `uninstall.exe -uninstall=<title>` entry;
+    Rockstar games bought on Steam or Epic are found there instead, so nothing is listed twice."""
+    folder = (_reg_values(HKLM, r"SOFTWARE\WOW6432Node\Rockstar Games\Launcher") or {}).get("InstallFolder")
+    patcher = os.path.join(folder, "LauncherPatcher.exe") if folder else None
+    games = []
+    for sub, v in _uninstall_entries():
+        m = re.search(r"rockstar games\\launcher\\uninstall\.exe\"?\s.*?-uninstall=(\w+)", v.get("UninstallString") or "", re.I)
+        if not m or m.group(1).lower() == "launcher":
+            continue
+        title = m.group(1).lower()
+        exe = _exe_from_icon(v.get("DisplayIcon"))
+        install = (v.get("InstallLocation") or "").strip().strip('"').rstrip("\\") or (os.path.dirname(exe) if exe else None)
+        if patcher and os.path.isfile(patcher):  # what Rockstar's own desktop shortcuts run
+            launch = {"type": "cmd", "target": f'"{patcher}" -minmodeApp={title}'}
+        elif exe:  # Rockstar games hand off to the launcher themselves when started directly
+            launch = {"type": "exe", "target": exe, "cwd": os.path.dirname(exe)}
+        else:
+            continue
+        games.append(_game("rockstar", title, v["DisplayName"], launch=launch, install_dir=install))
+    return games
+
+
 # ---------- Xbox / Microsoft Store (PC Game Pass) ----------
 
 def _local(tag):
@@ -427,7 +453,7 @@ def find_xbox():
 
 FINDERS = {
     "steam": find_steam, "epic": find_epic, "gog": find_gog, "ubisoft": find_ubisoft,
-    "ea": find_ea, "battlenet": find_battlenet, "xbox": find_xbox,
+    "ea": find_ea, "battlenet": find_battlenet, "rockstar": find_rockstar, "xbox": find_xbox,
 }
 
 
