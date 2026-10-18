@@ -826,6 +826,8 @@ button.avatar svg { width: 18px; height: 18px; }
 .update-bar[hidden] { display: none; }
 .update-bar span { display: block; width: 0; height: 100%; background: var(--signal); transition: width .2s; }
 .store-wait { margin: 0 0 14px; }
+/* Views whose page runs under the top bar (for their big banner): a page without a banner starts below the bar. */
+.app:is([data-view="store"], [data-view="home"], [data-view="game"]) .page.no-hero { padding-top: calc(var(--top-h, 66px) + 28px); }
 .pm-foot { padding: 10px 10px 4px; margin-top: 4px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-faint); }
 /* First start: the welcome steps */
 .dialog.setup { width: min(600px, calc(100vw - 32px)); padding: 28px; gap: 16px; }
@@ -2585,16 +2587,21 @@ function updatedLabel() {
   const d = new Date(store.fetchedAt * 1000);
   return `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 }
+// Only for the Store and Wishlist pages: they show the wait, or the error, in place of the page.
 async function ensureStore() {
   if (store) return true;
+  const view = state.view;
   $('#main').innerHTML = `
-    <div class="page" aria-busy="true" aria-label="Loading prices">
+    <div class="page no-hero" aria-busy="true" aria-label="Loading prices">
       <p class="hint store-wait">Fetching prices from the stores. The first time takes about a minute.</p>
       <div><div class="sk sk-title"></div><div class="sk sk-line"></div></div>
       <div class="deal-grid">${'<div class="sk sk-card"></div>'.repeat(12)}</div>
     </div>`;
-  if (await loadStoreQuiet()) return true;
-  $('#main').innerHTML = `<div class="page"><div class="empty-state">
+  const ok = await loadStoreQuiet();
+  // Moved on to another page while prices loaded: that page is already drawn; leave it alone.
+  if (state.view !== view) return false;
+  if (ok) return true;
+  $('#main').innerHTML = `<div class="page no-hero"><div class="empty-state">
     <p>Junction couldn’t load prices right now. If it keeps happening, send a problem report (profile picture → Help).</p>
     <button class="btn" type="button" id="store-retry">Try again</button></div></div>`;
   $('#store-retry').onclick = () => render();
@@ -4149,7 +4156,13 @@ function resetLibraryFilters() {
 }
 // From a library game to its prices in the Store.
 async function comparePrices(t) {
-  if (!(await ensureStore())) return;
+  if (!store) {
+    const view = state.view;
+    toast('Fetching prices…');
+    const ok = await loadStoreQuiet();
+    if (state.view !== view) return;
+    if (!ok) return toast('Junction couldn’t load prices right now. Try again in a minute.');
+  }
   const n = normTitle(t.name);
   const sg = Object.values(store.games).find(x => t.steamAppId && x.steamAppId === t.steamAppId)
     || Object.values(store.games).find(x => normTitle(x.title) === n);

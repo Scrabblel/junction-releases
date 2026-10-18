@@ -52,7 +52,7 @@ def main():
     data = stores.build_store(itad, library, account_info)
     # A year of prices for the games people look at most. ITAD throttles hard, so only these;
     # the app loads the history of any other game when its page opens.
-    wanted = list(dict.fromkeys(data["frontDeals"][:40] + data["catalog"][:20] + data["wishlist"]))
+    wanted = list(dict.fromkeys(data["frontDeals"][:40] + data["catalog"][:20] + [w["id"] for w in data["wishlist"]]))
     print(f"Fetching price history for {len(wanted)} games", flush=True)
     for itad_id in wanted:
         try:

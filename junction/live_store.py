@@ -35,7 +35,7 @@ def build(games, accounts, settings=None, progress=None):
     data = stores.build_store(itad, games, account_info)
 
     # A year of prices for the games people look at most; any other game loads its history when opened.
-    wanted = list(dict.fromkeys(data["frontDeals"][:40] + data["catalog"][:20] + data["wishlist"]))
+    wanted = list(dict.fromkeys(data["frontDeals"][:40] + data["catalog"][:20] + [w["id"] for w in data["wishlist"]]))
     for itad_id in wanted:
         try:
             line = stores.best_price_line(itad.history(itad_id))
