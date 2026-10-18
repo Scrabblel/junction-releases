@@ -310,6 +310,18 @@ class Api:
                 threading.Thread(target=self._refresh_store, daemon=True).start()
             return self._store
 
+    def get_price_history(self, itad_id):
+        """A year of best prices for one Store game, for its page. None when it can't be fetched."""
+        try:
+            line = live_store.history(str(itad_id))
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+            return None
+        game = ((self._store or {}).get("games") or {}).get(itad_id)
+        if game is not None and line is not None:
+            game["history"] = line
+        return line
+
     def search_prices(self, query):
         try:
             return live_store.search(query)

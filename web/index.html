@@ -825,9 +825,9 @@ button.avatar svg { width: 18px; height: 18px; }
 .update-bar { height: 6px; border-radius: 999px; background: var(--raised-2); overflow: hidden; }
 .update-bar[hidden] { display: none; }
 .update-bar span { display: block; width: 0; height: 100%; background: var(--signal); transition: width .2s; }
-.store-wait { margin: 0 0 14px; }
+.store-wait { margin: 10px 0 0; }
 /* Views whose page runs under the top bar (for their big banner): a page without a banner starts below the bar. */
-.app:is([data-view="store"], [data-view="home"], [data-view="game"]) .page.no-hero { padding-top: calc(var(--top-h, 66px) + 28px); }
+.app:is([data-view="store"], [data-view="wishlist"], [data-view="home"], [data-view="game"]) .page.no-hero { padding-top: calc(var(--top-h, 66px) + 28px); }
 .pm-foot { padding: 10px 10px 4px; margin-top: 4px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-faint); }
 /* First start: the welcome steps */
 .dialog.setup { width: min(600px, calc(100vw - 32px)); padding: 28px; gap: 16px; }
@@ -1531,6 +1531,10 @@ const host = {
     if (this.inApp) return window.pywebview.api.get_achievements(appid ?? null);
     const res = await fetch('achievements.json');
     return res.json();
+  },
+  async priceHistory(id) {
+    if (this.inApp) return window.pywebview.api.get_price_history(id);
+    return null;
   },
   async store() {
     if (this.inApp) return window.pywebview.api.get_store();
@@ -2593,15 +2597,17 @@ async function ensureStore() {
   const view = state.view;
   $('#main').innerHTML = `
     <div class="page no-hero" aria-busy="true" aria-label="Loading prices">
-      <p class="hint store-wait">Fetching prices from the stores. The first time takes about a minute.</p>
-      <div><div class="sk sk-title"></div><div class="sk sk-line"></div></div>
+      <div class="page-head"><div>
+        <h1>${sectionOf(view) === 'wishlist' ? 'Wishlist' : 'Store'}</h1>
+        <p class="hint store-wait">Fetching prices from the stores. The first time takes a minute or two.</p>
+      </div></div>
       <div class="deal-grid">${'<div class="sk sk-card"></div>'.repeat(12)}</div>
     </div>`;
   const ok = await loadStoreQuiet();
   // Moved on to another page while prices loaded: that page is already drawn; leave it alone.
   if (state.view !== view) return false;
   if (ok) return true;
-  $('#main').innerHTML = `<div class="page no-hero"><div class="empty-state">
+  $('#main').innerHTML = `<div class="page no-hero"><div class="page-head"><h1>${sectionOf(view) === 'wishlist' ? 'Wishlist' : 'Store'}</h1></div><div class="empty-state">
     <p>Junction couldn’t load prices right now. If it keeps happening, send a problem report (profile picture → Help).</p>
     <button class="btn" type="button" id="store-retry">Try again</button></div></div>`;
   $('#store-retry').onclick = () => render();
@@ -2917,6 +2923,7 @@ function renderPrice(sg) {
     : { wishlist: 'Wishlist', browse: 'Browse all' }[state.view.from] || 'Store';
   const shots = sg.screenshots || [];
   const mine = sg.owned.length ? libraryTitleFor(sg) : null;
+  const fetchHistory = host.inApp && !sg.history && !sg.historyAsked;
   const facts = [
     sg.released && releasedLabel(sg.released),
     sg.score != null && sg.scoreCount > 0 && `${sg.score}% positive on Steam${sg.scoreCount ? ` (${sg.scoreCount.toLocaleString('en-GB')} reviews)` : ''}`,
@@ -2973,12 +2980,21 @@ function renderPrice(sg) {
       </section>
       <section class="section">
         <h2>Best price this year</h2>
-        ${historyChart(sg)}
+        <div id="price-history">${fetchHistory ? '<p class="note">Loading price history…</p>' : historyChart(sg)}</div>
       </section>
       <p class="note">Prices via IsThereAnyDeal · ${updatedLabel()}</p>
     </div>`;
   $('#main').scrollTop = 0;
   tintFrom(shots[0] || sg.image, `price:${sg.id}`);
+  if (fetchHistory) {
+    sg.historyAsked = true;
+    host.priceHistory(sg.id).catch(() => null).then(h => {
+      if (h) sg.history = h; else sg.historyAsked = false;  // failed: try again next time the page opens
+      const box = $('#price-history');
+      if (!box || state.view.name !== 'price' || state.view.id !== sg.id) return;
+      box.innerHTML = h ? historyChart(sg) : '<p class="note">Couldn’t load the price history right now.</p>';
+    });
+  }
 }
 
 // The cheapest first-party price over the last year, as a step line.
@@ -4055,6 +4071,7 @@ async function render() {
   $('#app').dataset.view = state.view.name;
   document.querySelectorAll('.nav button').forEach(b => b.toggleAttribute('aria-current', b.dataset.nav === section));
   document.querySelectorAll('.nav button[aria-current]').forEach(b => b.setAttribute('aria-current', 'page'));
+  slideMarker($('.nav'), 'nav');
   closeMenu();
   // Fade new pages in, but not re-renders of the same page (filters, toggles).
   const key = `${state.view.name}:${state.view.id || ''}`, main = $('#main');

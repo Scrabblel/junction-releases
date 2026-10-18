@@ -12,6 +12,11 @@ STALE = 6 * 3600          # with your own key
 STALE_SHARED = 12 * 3600  # with the key Junction comes with, which everyone shares
 SEARCH_TTL = 3600
 _searches = {}
+# Price history is one IsThereAnyDeal call per game, so the build fetches it only for the games the Store
+# shows first; any other game's comes when its page is opened (history()).
+HISTORY_FRONT, HISTORY_CATALOG = 16, 8
+HISTORY_TTL = 6 * 3600
+_histories = {}
 
 
 def stale(settings=None):
@@ -35,7 +40,8 @@ def build(games, accounts, settings=None, progress=None):
     data = stores.build_store(itad, games, account_info)
 
     # A year of prices for the games people look at most; any other game loads its history when opened.
-    wanted = list(dict.fromkeys(data["frontDeals"][:40] + data["catalog"][:20] + [w["id"] for w in data["wishlist"]]))
+    # Not the wishlists: they can hold hundreds of games, and IsThereAnyDeal throttles long before that.
+    wanted = list(dict.fromkeys(data["frontDeals"][:HISTORY_FRONT] + data["catalog"][:HISTORY_CATALOG]))
     for itad_id in wanted:
         try:
             line = stores.best_price_line(itad.history(itad_id))
@@ -45,7 +51,8 @@ def build(games, accounts, settings=None, progress=None):
             data["games"][itad_id]["history"] = line
 
     # Screenshots, straight from Steam, for the same games and the top sellers.
-    steam_of = {data["games"][i]["steamAppId"]: i for i in wanted + data["topSellers"] if data["games"][i].get("steamAppId")}
+    shown = wanted + [w["id"] for w in data["wishlist"]] + data["topSellers"]
+    steam_of = {data["games"][i]["steamAppId"]: i for i in shown if data["games"][i].get("steamAppId")}
     try:
         for appid, m in extras.steam_media(list(steam_of), shots=3).items():
             if m["screenshots"]:
@@ -60,6 +67,21 @@ def build(games, accounts, settings=None, progress=None):
     except (urllib.error.URLError, ValueError):
         pass
     return data
+
+
+def history(itad_id, settings=None):
+    """One game's best price over the last year, [[unix time, price], ...]; None without a prices key."""
+    hit = _histories.get(itad_id)
+    if hit and time.time() - hit[0] < HISTORY_TTL:
+        return hit[1]
+    key = keys.prices_key(settings if settings is not None else config.load_settings())
+    if not key:
+        return None
+    line = stores.best_price_line(stores.Itad(key).history(itad_id))
+    _histories[itad_id] = (time.time(), line)
+    if len(_histories) > 500:
+        _histories.pop(next(iter(_histories)))
+    return line
 
 
 def search(query, settings=None):
