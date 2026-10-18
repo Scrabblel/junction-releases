@@ -476,18 +476,18 @@ _instance = None
 
 def _first_instance(quiet):
     global _instance
-    _instance = _kernel.CreateMutexW(None, False, "Local\\JunctionApp")
+    _instance = _kernel.CreateMutexW(None, False, f"Local\\{config.INSTANCE}App")
     if ctypes.get_last_error() != 183:  # ERROR_ALREADY_EXISTS
         return True
     if not quiet:
-        ev = _kernel.OpenEventW(0x0002, False, "Local\\JunctionShow")  # EVENT_MODIFY_STATE
+        ev = _kernel.OpenEventW(0x0002, False, f"Local\\{config.INSTANCE}Show")  # EVENT_MODIFY_STATE
         if ev:
             _kernel.SetEvent(ev)
     return False
 
 
 def _listen_for_second_start(api):
-    ev = _kernel.CreateEventW(None, False, False, "Local\\JunctionShow")
+    ev = _kernel.CreateEventW(None, False, False, f"Local\\{config.INSTANCE}Show")
     while ev:
         _kernel.WaitForSingleObject(ev, 0xFFFFFFFF)
         api.show_window()

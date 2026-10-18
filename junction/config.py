@@ -6,16 +6,23 @@
 
 While developing from this folder, a local_settings.json next to the code is used when the
 per-user settings file doesn't exist yet.
+
+JUNCTION_HOME=<folder> keeps all of it (settings, cache, logs, play time) in that one folder instead,
+as a separate copy of Junction: for testing a build without touching anyone's real settings.
 """
 import json
 import os
 import sys
+import zlib
 
 APP_NAME = "Junction"
 VERSION = "0.9.0"
-SETTINGS_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), APP_NAME)
+HOME = os.environ.get("JUNCTION_HOME")
+SETTINGS_DIR = HOME or os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), APP_NAME)
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
-CACHE_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), APP_NAME, "cache")
+CACHE_DIR = os.path.join(HOME or os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), APP_NAME), "cache")
+# Only one Junction runs at a time; a separate copy (JUNCTION_HOME) counts as another app.
+INSTANCE = APP_NAME + (f"-{zlib.crc32(os.path.abspath(HOME).lower().encode()):08x}" if HOME else "")
 DEV_SETTINGS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "local_settings.json")
 
 
@@ -26,7 +33,7 @@ def resource(*parts):
 
 
 def settings_path():
-    if os.path.isfile(SETTINGS_FILE) or getattr(sys, "frozen", False):
+    if HOME or os.path.isfile(SETTINGS_FILE) or getattr(sys, "frozen", False):
         return SETTINGS_FILE
     return DEV_SETTINGS if os.path.isfile(DEV_SETTINGS) else SETTINGS_FILE
 
