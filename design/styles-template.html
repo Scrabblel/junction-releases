@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Junction style options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=DotGothic16&family=Press+Start+2P&family=Chakra+Petch:wght@400;600&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Work+Sans:wght@400;500&display=swap">
+<style>
+body { margin: 0; background: #1a1a1a; color: #ddd; font: 15px/1.5 system-ui, sans-serif; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 28px 16px 60px; display: grid; gap: 44px; }
+.label { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.label b { font-size: 20px; color: #fff; }
+.label span { color: #999; font-size: 14px; }
+.win { border-radius: 10px; overflow: hidden; box-shadow: 0 20px 50px -20px #000; display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: auto 1fr; min-height: 560px; }
+.win .top { grid-column: 1 / -1; display: flex; align-items: center; gap: 22px; padding: 12px 18px; }
+.win .side { padding: 14px 12px; }
+.win .main { padding: 22px 26px; display: grid; gap: 22px; align-content: start; min-width: 0; }
+img { display: block; }
+.covers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.covers img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
+@media (max-width: 760px) { .win { grid-template-columns: 1fr; } .win .side { display: none; } .covers { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ===== 1. Railway junction ===== */
+.rw { background: #0b1220; color: #dfe6ee; font-family: Barlow, sans-serif; }
+.rw .top { background: #0f1a2b; border-bottom: 3px solid #ffb000; }
+.rw .logo { display: flex; align-items: center; gap: 10px; font: 700 21px/1 "Barlow Condensed"; letter-spacing: .28em; color: #fff; }
+.rw nav { display: flex; gap: 2px; }
+.rw nav a { font: 600 15px/1 "Barlow Condensed"; letter-spacing: .14em; padding: 8px 12px; color: #9fb0c6; text-decoration: none; }
+.rw nav a.on { background: #ffb000; color: #0b1220; }
+.rw .clock { margin-left: auto; font: 22px/1 DotGothic16; color: #ffb000; letter-spacing: .08em; }
+.rw .side { background: #0f1a2b; border-right: 1px solid #1d2a40; }
+.rw .side h4 { font: 600 12px/1 "Barlow Condensed"; letter-spacing: .2em; color: #6f819a; margin: 6px 0 10px; }
+.rw .stops { position: relative; display: grid; gap: 2px; margin: 0 0 16px; padding: 0; list-style: none; }
+.rw .stops li { position: relative; padding: 4px 0 4px 26px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rw .stops li::before { content: ""; position: absolute; left: 7px; top: 0; bottom: 0; width: 4px; background: var(--c); }
+.rw .stops li::after { content: ""; position: absolute; left: 3px; top: 50%; translate: 0 -50%; width: 8px; height: 8px; border-radius: 50%; background: #0f1a2b; border: 2px solid var(--c); }
+.rw .stops li.off { color: #6f819a; }
+.rw .board { background: #05080d; border: 2px solid #1d2a40; border-radius: 4px; padding: 14px 16px; }
+.rw .board h2 { margin: 0 0 10px; display: flex; justify-content: space-between; font: 700 18px/1 "Barlow Condensed"; letter-spacing: .3em; color: #fff; }
+.rw .board h2 span { font: 15px DotGothic16; letter-spacing: .1em; color: #6f819a; }
+.rw .row { display: grid; grid-template-columns: 70px minmax(0, 1fr) 110px 110px; gap: 12px; align-items: center; padding: 7px 0; border-top: 1px dashed #1d2a40; font: 17px/1 DotGothic16; color: #ffb000; letter-spacing: .06em; }
+.rw .row .plat { color: #9fd2ff; }
+.rw .row .go { justify-self: end; background: #ffb000; color: #05080d; padding: 5px 10px; font: 700 13px/1 "Barlow Condensed"; letter-spacing: .14em; }
+.rw .sec { font: 600 13px/1 "Barlow Condensed"; letter-spacing: .24em; color: #6f819a; display: flex; align-items: center; gap: 10px; }
+.rw .sec::after { content: ""; flex: 1; height: 2px; background: repeating-linear-gradient(90deg, #1d2a40 0 10px, transparent 10px 16px); }
+.rw .covers figure { margin: 0; position: relative; }
+.rw .covers figure::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--c); }
+.rw .covers figcaption { position: absolute; top: 6px; left: 6px; font: 700 11px/1 "Barlow Condensed"; letter-spacing: .12em; background: #0b1220; color: #fff; padding: 3px 5px; border-left: 3px solid var(--c); }
+
+/* ===== 2. Retro arcade ===== */
+.ar { background: #0a0614; color: #e9e4ff; font-family: "Chakra Petch", sans-serif; position: relative; }
+.ar::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgb(255 255 255 / .035) 0 1px, transparent 1px 3px); }
+.ar .top { background: #120a24; border-bottom: 2px solid #ff3ea5; }
+.ar .logo { font: 16px/1 "Press Start 2P"; color: #ff3ea5; text-shadow: 0 0 10px #ff3ea5; }
+.ar nav { display: flex; gap: 14px; }
+.ar nav a { font: 9px/1 "Press Start 2P"; color: #8a7fb8; text-decoration: none; padding: 6px 0; }
+.ar nav a.on { color: #2de2e6; text-shadow: 0 0 8px #2de2e6; }
+.ar .coin { margin-left: auto; font: 10px/1 "Press Start 2P"; color: #ffe14d; }
+.ar .side { background: #0e0820; border-right: 2px solid #2a1a52; }
+.ar .side h4 { font: 8px/1 "Press Start 2P"; color: #2de2e6; margin: 6px 0 12px; }
+.ar .side ul { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.ar .side li::before { content: "▶ "; color: #ff3ea5; font-size: 10px; visibility: hidden; }
+.ar .side li.sel { color: #fff; } .ar .side li.sel::before { visibility: visible; }
+.ar .side li.off { color: #6b5f99; }
+.ar .hero { position: relative; border: 2px solid #2de2e6; box-shadow: 0 0 18px -4px #2de2e6; }
+.ar .hero img { width: 100%; height: 190px; object-fit: cover; filter: saturate(1.3) contrast(1.05); }
+.ar .hero .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px; display: flex; align-items: end; justify-content: space-between; background: linear-gradient(transparent, #0a0614); }
+.ar .hero h2 { margin: 0; font: 13px/1.5 "Press Start 2P"; color: #fff; text-shadow: 2px 2px 0 #ff3ea5; }
+.ar .start { font: 10px/1 "Press Start 2P"; background: #ffe14d; color: #1a0f00; padding: 10px 12px; animation: blink 1.2s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .55; } }
+.ar .sec { font: 9px/1 "Press Start 2P"; color: #ff3ea5; }
+.ar .covers img { border: 2px solid #2a1a52; image-rendering: auto; }
+.ar .covers img:first-child { border-color: #ff3ea5; box-shadow: 0 0 14px -2px #ff3ea5; }
+.ar .scores { font: 9px/2.2 "Press Start 2P"; color: #e9e4ff; display: grid; grid-template-columns: 30px 1fr auto; column-gap: 10px; }
+.ar .scores .n { color: #2de2e6; } .ar .scores .v { color: #ffe14d; }
+
+/* ===== 3. Editorial magazine ===== */
+.ed { background: #14110e; color: #efe6d8; font-family: "Work Sans", sans-serif; }
+.ed .top { border-bottom: 1px solid #3a322a; padding-block: 16px; }
+.ed .logo { font: italic 400 26px/1 Fraunces; letter-spacing: -.01em; }
+.ed nav { display: flex; gap: 20px; }
+.ed nav a { font-size: 14px; color: #a99c8a; text-decoration: none; }
+.ed nav a.on { color: #efe6d8; border-bottom: 1px solid #d9643a; padding-bottom: 2px; }
+.ed .side { border-right: 1px solid #3a322a; }
+.ed .side h4 { font: 400 11px/1 "Work Sans"; letter-spacing: .18em; text-transform: uppercase; color: #a99c8a; margin: 8px 0 12px; }
+.ed .side ul { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 6px; font: 400 15px/1.3 Fraunces; }
+.ed .side li.off { color: #7d7264; }
+.ed .feature { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 22px; align-items: end; }
+.ed .feature img { width: 100%; height: 230px; object-fit: cover; }
+.ed .kicker { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: #d9643a; }
+.ed .feature h2 { margin: 6px 0 10px; font: 600 38px/1.02 Fraunces; letter-spacing: -.02em; }
+.ed .feature p { margin: 0 0 14px; color: #a99c8a; font: italic 400 16px/1.4 Fraunces; }
+.ed .btn { display: inline-block; border: 1px solid #efe6d8; padding: 9px 18px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; }
+.ed .sec { font: italic 400 22px/1 Fraunces; border-top: 1px solid #3a322a; padding-top: 14px; display: flex; justify-content: space-between; align-items: baseline; }
+.ed .sec span { font: 400 12px "Work Sans"; letter-spacing: .14em; text-transform: uppercase; color: #a99c8a; font-style: normal; }
+.ed .covers figure { margin: 0; display: grid; gap: 6px; }
+.ed .covers figcaption { font: 400 14px/1.2 Fraunces; }
+.ed .covers figcaption span { display: block; font: 400 11px "Work Sans"; letter-spacing: .12em; text-transform: uppercase; color: #a99c8a; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<section>
+  <div class="label"><b>1 · Railway junction</b><span>Departure-board numbers, launchers as rail lines with station dots, signal amber.</span></div>
+  <div class="win rw">
+    <div class="top">
+      <div class="logo">
+        <svg width="34" height="22" viewBox="0 0 34 22" fill="none" stroke-width="3" stroke-linecap="round"><path d="M2 3 C 12 3, 14 11, 20 11" stroke="#4ea3e8"/><path d="M2 11 H 20" stroke="#a874f5"/><path d="M2 19 C 12 19, 14 11, 20 11" stroke="#ff5d55"/><path d="M20 11 H 32" stroke="#ffb000"/><circle cx="20" cy="11" r="3" fill="#fff" stroke="none"/></svg>
+        JUNCTION
+      </div>
+      <nav><a class="on">LIBRARY</a><a>STORE</a><a>WISHLIST</a><a>STATS</a></nav>
+      <span class="clock">20:49</span>
+    </div>
+    <aside class="side">
+      <h4>INSTALLED · 14</h4>
+      <ul class="stops">
+        <li style="--c:#4ea3e8">Counter-Strike 2</li>
+        <li style="--c:#4ea3e8">Red Dead Redemption 2</li>
+        <li style="--c:#a874f5">Cyberpunk 2077</li>
+        <li style="--c:#a874f5">The Witcher 3</li>
+        <li style="--c:#1fc1c4">Ghost Recon Breakpoint</li>
+        <li style="--c:#9bd14a">Forza Horizon 6</li>
+      </ul>
+      <h4>NOT INSTALLED · 404</h4>
+      <ul class="stops">
+        <li class="off" style="--c:#cfd5dd">Alan Wake</li>
+        <li class="off" style="--c:#4ea3e8">Among Us</li>
+        <li class="off" style="--c:#1fc1c4">Anno 1602</li>
+      </ul>
+    </aside>
+    <main class="main">
+      <div class="board">
+        <h2>DEPARTURES <span>14 READY</span></h2>
+        <div class="row"><span>TODAY</span><span>RED DEAD REDEMPTION 2</span><span class="plat">STEAM</span><span class="go">PLAY ▸</span></div>
+        <div class="row"><span>TODAY</span><span>COUNTER-STRIKE 2</span><span class="plat">STEAM</span><span class="go">PLAY ▸</span></div>
+        <div class="row"><span>27 SEP</span><span>SCHEDULE I</span><span class="plat">STEAM</span><span class="go">PLAY ▸</span></div>
+      </div>
+      <div class="sec">ALL LINES</div>
+      <div class="covers">
+        <figure style="--c:#4ea3e8"><img src="{{C1}}" alt=""><figcaption>STEAM</figcaption></figure>
+        <figure style="--c:#4ea3e8"><img src="{{C2}}" alt=""><figcaption>STEAM</figcaption></figure>
+        <figure style="--c:#a874f5"><img src="{{C3}}" alt=""><figcaption>GOG</figcaption></figure>
+        <figure style="--c:#a874f5"><img src="{{C4}}" alt=""><figcaption>GOG</figcaption></figure>
+        <figure style="--c:#4ea3e8"><img src="{{C5}}" alt=""><figcaption>STEAM</figcaption></figure>
+      </div>
+    </main>
+  </div>
+</section>
+
+<section>
+  <div class="label"><b>2 · Retro arcade</b><span>Neon pink and cyan, pixel headings, scanlines, "press start" energy.</span></div>
+  <div class="win ar">
+    <div class="top">
+      <div class="logo">JUNCTION</div>
+      <nav><a class="on">LIBRARY</a><a>STORE</a><a>WISH</a><a>STATS</a></nav>
+      <span class="coin">1UP 8268H</span>
+    </div>
+    <aside class="side">
+      <h4>INSTALLED 14</h4>
+      <ul>
+        <li class="sel">Red Dead Redemption 2</li>
+        <li>Counter-Strike 2</li>
+        <li>Cyberpunk 2077</li>
+        <li>The Witcher 3</li>
+        <li>Forza Horizon 6</li>
+      </ul>
+      <h4>NOT INSTALLED 404</h4>
+      <ul><li class="off">Alan Wake</li><li class="off">Among Us</li><li class="off">Anno 1602</li></ul>
+    </aside>
+    <main class="main">
+      <div class="hero">
+        <img src="{{HERO}}" alt="">
+        <div class="cap"><h2>CONTINUE?<br>RED DEAD II</h2><span class="start">PRESS START</span></div>
+      </div>
+      <div class="sec">SELECT GAME</div>
+      <div class="covers"><img src="{{C1}}" alt=""><img src="{{C2}}" alt=""><img src="{{C3}}" alt=""><img src="{{C4}}" alt=""><img src="{{C5}}" alt=""></div>
+      <div class="sec">HIGH SCORES</div>
+      <div class="scores"><span class="n">1ST</span><span>COUNTER-STRIKE 2</span><span class="v">2951H</span><span class="n">2ND</span><span>ROCKET LEAGUE</span><span class="v">572H</span></div>
+    </main>
+  </div>
+</section>
+
+<section>
+  <div class="label"><b>3 · Editorial magazine</b><span>Big serif headlines, warm paper tones, games presented like features.</span></div>
+  <div class="win ed">
+    <div class="top">
+      <div class="logo">Junction</div>
+      <nav><a class="on">Library</a><a>Store</a><a>Wishlist</a><a>Stats</a></nav>
+    </div>
+    <aside class="side">
+      <h4>Installed</h4>
+      <ul><li>Red Dead Redemption 2</li><li>Counter-Strike 2</li><li>Cyberpunk 2077</li><li>The Witcher 3</li><li>Forza Horizon 6</li></ul>
+      <h4>On the shelf</h4>
+      <ul><li class="off">Alan Wake</li><li class="off">Among Us</li><li class="off">Anno 1602</li></ul>
+    </aside>
+    <main class="main">
+      <div class="feature">
+        <img src="{{HERO}}" alt="">
+        <div>
+          <div class="kicker">Tonight's pick</div>
+          <h2>Red Dead Redemption II</h2>
+          <p>34 hours in, last played today.</p>
+          <span class="btn">Play</span>
+        </div>
+      </div>
+      <div class="sec">Your shelf <span>418 games</span></div>
+      <div class="covers">
+        <figure><img src="{{C1}}" alt=""><figcaption>Counter-Strike 2<span>Steam</span></figcaption></figure>
+        <figure><img src="{{C2}}" alt=""><figcaption>Schedule I<span>Steam</span></figcaption></figure>
+        <figure><img src="{{C3}}" alt=""><figcaption>Cyberpunk 2077<span>GOG</span></figcaption></figure>
+        <figure><img src="{{C4}}" alt=""><figcaption>The Witcher 3<span>GOG</span></figcaption></figure>
+        <figure><img src="{{C5}}" alt=""><figcaption>PUBG<span>Steam</span></figcaption></figure>
+      </div>
+    </main>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

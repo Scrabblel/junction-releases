@@ -1,0 +1,287 @@
+"""Games owned on GOG, Epic and Ubisoft that aren't installed, read from the launchers' own files.
+
+No login and no API key: each launcher keeps a copy of your library on disk.
+- GOG Galaxy: its SQLite database (storage/galaxy-2.0.db).
+- Epic Games Launcher: its catalogue cache (Data/Catalog/catcache.bin, base64 JSON).
+- Ubisoft Connect: its ownership cache (cache/ownership/<user>, signed protobuf), with names
+  from cache/configuration/configurations. The ownership file also holds CD keys; only
+  product IDs and add-on flags are read from it, nothing else.
+
+These copies are only as fresh as the last time each launcher was opened and signed in.
+"""
+import base64
+import datetime
+import glob
+import json
+import os
+import re
+import shutil
+import sqlite3
+import struct
+import tempfile
+
+from .art import normalize
+from .launchers import HKLM, _game, _reg_values
+
+# Epic library entries that are tools or extras rather than games.
+EPIC_SKIP_NAME = re.compile(r"\b(editor|resource archiver|content|soundtrack|art ?book|wallpaper|map pack)\b|beta$", re.I)
+# Where Ubisoft Connect loads the pictures named in its configuration cache.
+UBISOFT_ASSETS = "https://ubistatic3-a.akamaihd.net/orbit/uplay_launcher_3_0/assets/"
+
+
+# ---------- GOG Galaxy ----------
+
+def _galaxy_db():
+    return os.path.join(os.environ.get("PROGRAMDATA", r"C:\ProgramData"), "GOG.com", "Galaxy", "storage", "galaxy-2.0.db")
+
+
+def gog_owned():
+    """[(product id, title, cover url)] for GOG games in this PC's Galaxy library, DLC and hidden duplicates left out."""
+    path = _galaxy_db()
+    if not os.path.isfile(path):
+        return []
+    # Galaxy keeps the database open while it runs, so read a copy.
+    with tempfile.TemporaryDirectory() as tmp:
+        copy = os.path.join(tmp, "galaxy.db")
+        shutil.copyfile(path, copy)
+        db = sqlite3.connect(copy)
+        try:
+            rows = db.execute("""
+                select lr.releaseKey, gp.value from LibraryReleases lr
+                join GamePieces gp on gp.releaseKey = lr.releaseKey
+                join GamePieceTypes t on t.id = gp.gamePieceTypeId and t.type = 'title'
+                left join ReleaseProperties rp on rp.releaseKey = lr.releaseKey
+                where lr.releaseKey like 'gog\\_%' escape '\\'
+                  and coalesce(rp.isDlc, 0) = 0 and coalesce(rp.isVisibleInLibrary, 1) = 1
+                group by lr.releaseKey""").fetchall()
+            covers = dict(db.execute("""
+                select gp.releaseKey, gp.value from GamePieces gp
+                join GamePieceTypes t on t.id = gp.gamePieceTypeId and t.type = 'originalImages'""").fetchall())
+        finally:
+            db.close()
+    games = []
+    for key, value in rows:
+        try:
+            title = json.loads(value).get("title")
+        except ValueError:
+            continue
+        try:
+            cover = json.loads(covers.get(key) or "{}").get("verticalCover")
+        except ValueError:
+            cover = None
+        if title:
+            games.append((key.split("_", 1)[1], title, cover))
+    return games
+
+
+# ---------- Epic Games ----------
+
+def epic_owned():
+    """[(appName, namespace, catalogItemId, title, cover url)] for games in the Epic launcher's catalogue cache."""
+    base = (_reg_values(HKLM, r"SOFTWARE\WOW6432Node\Epic Games\EpicGamesLauncher") or {}).get("AppDataPath")
+    path = os.path.join(base or r"C:\ProgramData\Epic\EpicGamesLauncher\Data", "Catalog", "catcache.bin")
+    if not os.path.isfile(path):
+        return []
+    with open(path, "rb") as f:
+        items = json.loads(base64.b64decode(f.read()))
+    games = []
+    for i in items:
+        if not any(c.get("path") == "games" for c in i.get("categories") or []):
+            continue
+        if (i.get("mainGameItem") or {}).get("id"):  # DLC
+            continue
+        app = next((r.get("appId") for r in i.get("releaseInfo") or [] if r.get("appId")), None)
+        # The cache stores ™ and ® as "?" ("LEGO? Batman?"); a "?" straight after a word is one of those.
+        title = re.sub(r"(?<=\w)\?(?=[\s:]|$)", "", i.get("title") or "")
+        cover = next((k.get("url") for k in i.get("keyImages") or [] if k.get("type") == "DieselGameBoxTall"), None)
+        if app and title and not EPIC_SKIP_NAME.search(title):
+            games.append((app, i["namespace"], i["id"], title, cover))
+    return games
+
+
+# ---------- Ubisoft Connect ----------
+
+def _varint(b, i):
+    result = shift = 0
+    while True:
+        c = b[i]
+        i += 1
+        result |= (c & 0x7F) << shift
+        shift += 7
+        if c < 0x80:
+            return result, i
+
+
+def _protobuf(b):
+    """Decode one protobuf message into [(field, wire type, value)] without a schema."""
+    i, out = 0, []
+    while i < len(b):
+        key, i = _varint(b, i)
+        field, wire = key >> 3, key & 7
+        if wire == 0:
+            value, i = _varint(b, i)
+        elif wire == 2:
+            n, i = _varint(b, i)
+            value, i = b[i:i + n], i + n
+        elif wire == 5:
+            value, i = b[i:i + 4], i + 4
+        elif wire == 1:
+            value, i = b[i:i + 8], i + 8
+        else:
+            raise ValueError(f"unknown protobuf wire type {wire}")
+        out.append((field, wire, value))
+    if i != len(b):
+        raise ValueError("truncated protobuf")
+    return out
+
+
+def _ubisoft_dir():
+    path = (_reg_values(HKLM, r"SOFTWARE\WOW6432Node\Ubisoft\Launcher") or {}).get("InstallDir")
+    path = path or r"C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher"
+    return path if os.path.isdir(path) else None
+
+
+def _ubisoft_names(base):
+    """{product id: (display name, bought on another platform, cover url)} from the launcher's configuration cache."""
+    path = os.path.join(base, "cache", "configuration", "configurations")
+    if not os.path.isfile(path):
+        return {}
+    with open(path, "rb") as f:
+        records = _protobuf(f.read())
+    names = {}
+    for _, wire, value in records:
+        if wire != 2:
+            continue
+        rec = {field: v for field, _, v in _protobuf(value)}
+        if 1 not in rec or 3 not in rec:
+            continue
+        y = rec[3].decode("utf-8", "replace").replace("\r\n", "\n")
+        root = re.search(r"^root:\n((?:[ \t].*\n?|\n)*)", y, re.M)
+        if not root:
+            continue
+        block = root.group(1)
+        top = dict(re.findall(r"^  (\w+): *(.*)$", block, re.M))  # only the 2-space keys of root
+        name = (top.get("display_name") or top.get("name") or "").strip().strip("\"'")
+        loc = re.search(r"^localizations:\n  default:\n((?:    .*\n?)*)", y, re.M)
+
+        def localized(value):
+            value = (value or "").strip().strip("\"'")
+            m = loc and value and re.search(r"^    " + re.escape(value) + r": *(.+)$", loc.group(1), re.M)
+            return m.group(1).strip().strip("\"'") if m else value
+
+        name, thumb = localized(name), localized(top.get("thumb_image"))
+        cover = UBISOFT_ASSETS + thumb if re.fullmatch(r"\w+\.(jpg|png)", thumb) else None
+        if name and not re.fullmatch(r"l\d+", name):
+            names[rec[1]] = (name, "third_party_platform" in top, cover)
+    return names
+
+
+def ubisoft_owned():
+    """[(product id, name, cover url)] for games (not add-ons) in Ubisoft Connect's ownership cache."""
+    base = _ubisoft_dir()
+    if not base:
+        return []
+    names = _ubisoft_names(base)
+    games, seen = [], set()
+    for path in glob.glob(os.path.join(base, "cache", "ownership", "*")):
+        with open(path, "rb") as f:
+            data = f.read()
+        # 4-byte version, 256-byte signature, 4-byte length, then the protobuf.
+        if len(data) < 264 or struct.unpack_from("<I", data, 260)[0] != len(data) - 264:
+            continue
+        for field, wire, value in _protobuf(data[264:]):
+            if field != 1 or wire != 2:
+                continue
+            ints = {}
+            for f2, w2, v2 in _protobuf(value):
+                if w2 == 0:
+                    ints.setdefault(f2, v2)
+            pid = ints.get(1)
+            if pid is None or ints.get(6, 0) != 0 or pid in seen:  # field 6 set = add-on
+                continue
+            name, elsewhere, cover = names.get(pid, (None, False, None))
+            if name and not elsewhere:  # bought on Steam/Epic: those launchers already list it
+                seen.add(pid)
+                games.append((str(pid), name, cover))
+    return games
+
+
+# ---------- merge ----------
+
+def _add(games, launcher, key, name, install_uri, cover_url):
+    g = _game(launcher, key, name, launch={"type": "uri", "target": install_uri})
+    g["installed"] = False
+    g["coverUrl"] = cover_url  # the launcher's own cover, used before Steam's
+    games.append(g)
+    return g
+
+
+def add_owned(games):
+    """Add the uninstalled games owned on GOG, Epic and Ubisoft to `games` (from launchers.find_all).
+
+    Returns {launcher: {"games": owned count, "added": not-installed count, "error"?: str}}.
+    """
+    sources = {
+        "gog": (gog_owned, lambda gid, title, cover: (gid, title, f"goggalaxy://openGameView/{gid}", cover)),
+        "epic": (epic_owned, lambda app, ns, cid, title, cover: (
+            app, title, f"com.epicgames.launcher://apps/{ns}%3A{cid}%3A{app}?action=install", cover)),
+        "ubisoft": (ubisoft_owned, lambda pid, name, cover: (pid, name, f"uplay://install/{pid}", cover)),
+    }
+    summary = {}
+    for launcher, (reader, shape) in sources.items():
+        s = summary[launcher] = {"games": 0, "added": 0}
+        try:
+            owned = reader()
+        except Exception as e:  # noqa: BLE001 - a changed file format must not break the scan
+            s["error"] = f"{type(e).__name__}: {e}"
+            continue
+        have = {g["id"] for g in games if g["launcher"] == launcher}
+        have_names = {normalize(g["name"]) for g in games if g["launcher"] == launcher}
+        for row in owned:
+            key, name, uri, cover = shape(*row)
+            s["games"] += 1
+            if f"{launcher}:{key}" in have or normalize(name) in have_names:
+                continue
+            _add(games, launcher, key, name, uri, cover)
+            have_names.add(normalize(name))
+            s["added"] += 1
+    games.sort(key=lambda g: g["name"].lower())
+    return summary
+
+
+if __name__ == "__main__":
+    import sys
+    sys.stdout.reconfigure(encoding="utf-8")
+    for label, rows in (("GOG", gog_owned()), ("Epic", epic_owned()), ("Ubisoft", ubisoft_owned())):
+        print(f"{label}: {len(rows)}")
+        for r in rows:
+            print("   ", r[-2], "|", (r[-1] or "no cover")[:70])
+
+
+def gog_playtime():
+    """{GOG product id: (minutes played, last played unix time)} from GOG Galaxy's own tracking."""
+    path = _galaxy_db()
+    if not os.path.isfile(path):
+        return {}
+    with tempfile.TemporaryDirectory() as tmp:
+        copy = os.path.join(tmp, "galaxy.db")
+        shutil.copyfile(path, copy)
+        db = sqlite3.connect(copy)
+        try:
+            minutes = dict(db.execute("select releaseKey, sum(minutesInGame) from GameTimes group by releaseKey").fetchall())
+            last = dict(db.execute("select gameReleaseKey, max(lastPlayedDate) from LastPlayedDates group by gameReleaseKey").fetchall())
+        finally:
+            db.close()
+    out = {}
+    for key in set(minutes) | set(last):
+        if not key.startswith("gog_"):
+            continue
+        when = None
+        if last.get(key):
+            try:
+                when = int(datetime.datetime.strptime(last[key][:19], "%Y-%m-%d %H:%M:%S")
+                           .replace(tzinfo=datetime.timezone.utc).timestamp())
+            except ValueError:
+                pass
+        out[key[4:]] = (int(minutes.get(key) or 0), when)
+    return out

@@ -1,0 +1,12 @@
+local_settings.json
+__pycache__/
+build/
+dist/
+.cache/
+web/library.json
+web/store.json
+web/achievements.json
+web/art/
+web/ach/
+web/shots/
+*.log

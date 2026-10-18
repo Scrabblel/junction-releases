@@ -1,0 +1,396 @@
+<title>Junction Style Options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;700;800&family=Big+Shoulders+Display:wght@600;800&family=Karla:wght@400;600&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600&family=Anton&family=Archivo:wght@400;600;800&family=Bowlby+One+SC&display=swap">
+<style>
+/* Layout: one long sheet, five full-width mock screens of the same Library, each labelled. Single dark look on purpose. */
+:root {
+  color-scheme: dark;
+  --sheet: #121316;
+  --sheet-ink: #e8e9ec;
+  --sheet-dim: #8d919a;
+  --sheet-rule: #26282e;
+  --ui: system-ui, "Segoe UI", sans-serif;
+}
+body { background: var(--sheet); color: var(--sheet-ink); font: 15px/1.5 var(--ui); }
+.sheet { max-width: 1120px; margin: 0 auto; padding-block: 32px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 56px; }
+.intro h1 { margin: 0 0 6px; font: 700 26px/1.2 var(--ui); }
+.intro p { margin: 0; color: var(--sheet-dim); max-width: 62ch; }
+.opt { display: grid; gap: 12px; }
+.opt header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.opt header b { font-size: 21px; }
+.opt header span { color: var(--sheet-dim); }
+.screen { position: relative; border-radius: 10px; overflow: hidden; min-height: 520px; box-shadow: 0 24px 60px -30px #000; }
+img { display: block; max-width: 100%; }
+.cv { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
+
+/* ---------- A. Console home ---------- */
+.con { font-family: "Hanken Grotesk", var(--ui); color: #fff; background: #0c0f14; display: grid; grid-template-rows: auto 1fr auto; }
+.con .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.con::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgb(6 8 12 / .92) 0%, rgb(6 8 12 / .55) 45%, rgb(6 8 12 / .1) 75%), linear-gradient(0deg, rgb(6 8 12 / .95) 0%, transparent 45%); }
+.con > *:not(.bg) { position: relative; z-index: 1; }
+.con .bar { display: flex; align-items: center; gap: 26px; padding: 20px 28px; font-weight: 500; }
+.con .bar .me { width: 30px; height: 30px; border-radius: 50%; background: #ffb21d; color: #1a1205; display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+.con .bar span { opacity: .6; font-size: 15px; } .con .bar span.on { opacity: 1; }
+.con .bar .t { margin-left: auto; opacity: .8; font-variant-numeric: tabular-nums; }
+.con .focus { padding: 0 28px; align-self: center; max-width: 440px; display: grid; gap: 14px; }
+.con .focus img.logo { width: 300px; }
+.con .focus p { margin: 0; opacity: .8; }
+.con .btns { display: flex; gap: 10px; }
+.con .play { background: #fff; color: #0c0f14; font-weight: 800; padding: 12px 34px; border-radius: 999px; }
+.con .more { background: rgb(255 255 255 / .16); padding: 12px 18px; border-radius: 999px; font-weight: 700; }
+.con .row { display: flex; gap: 14px; padding: 24px 28px 26px; align-items: end; overflow: hidden; }
+.con .row img { width: 92px; border-radius: 12px; flex: none; }
+.con .row img.sel { width: 128px; outline: 3px solid #fff; outline-offset: 4px; }
+
+/* ---------- B. Collector's shelf ---------- */
+.shf { font-family: Karla, var(--ui); color: #f1e9dc; background: #23180f; display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+.shf .wall { padding: 26px 28px; display: grid; gap: 18px; align-content: start; background:
+  repeating-linear-gradient(90deg, rgb(255 255 255 / .02) 0 2px, transparent 2px 9px), linear-gradient(#2b1f15, #1d140c); }
+.shf h3 { margin: 0; font: 800 15px/1 "Big Shoulders Display", sans-serif; letter-spacing: .26em; color: #c9a77a; }
+.shf .plank { display: flex; align-items: end; gap: 3px; padding: 0 10px; height: 200px; border-bottom: 12px solid #6b4a2b; box-shadow: 0 10px 0 -2px #3b2716; }
+.shf .spine { width: 34px; height: var(--h, 180px); background: var(--c); color: var(--ink, #fff); display: flex; align-items: center; justify-content: space-between; flex-direction: column; padding: 8px 0; border-radius: 2px 2px 0 0; box-shadow: inset -4px 0 0 rgb(0 0 0 / .18), inset 2px 0 0 rgb(255 255 255 / .12); }
+.shf .spine b { writing-mode: vertical-rl; rotate: 180deg; font: 800 14px/1 "Big Shoulders Display", sans-serif; letter-spacing: .06em; white-space: nowrap; }
+.shf .spine i { font: 600 9px/1 Karla; font-style: normal; writing-mode: vertical-rl; rotate: 180deg; opacity: .8; letter-spacing: .1em; }
+.shf .spine.out { translate: 0 -14px; }
+.shf .case { padding: 26px 22px; background: #160f09; display: grid; gap: 14px; align-content: start; border-left: 1px solid #3b2716; }
+.shf .case img { border-radius: 4px; box-shadow: 0 18px 30px -12px #000; rotate: -2deg; }
+.shf .case h4 { margin: 0; font: 800 30px/1 "Big Shoulders Display", sans-serif; }
+.shf .case p { margin: 0; color: #c9b79e; font-size: 14px; }
+.shf .case .go { justify-self: start; background: #e7b75f; color: #2a1a08; font-weight: 600; padding: 9px 18px; border-radius: 3px; }
+
+/* ---------- C. Tactical HUD ---------- */
+.hud { font-family: Rajdhani, var(--ui); color: #cfe3ee; background: #0b1419; display: grid; grid-template-columns: 230px minmax(0, 1fr); background-image: linear-gradient(rgb(120 200 230 / .05) 1px, transparent 1px), linear-gradient(90deg, rgb(120 200 230 / .05) 1px, transparent 1px); background-size: 28px 28px; }
+.hud .mono { font-family: "JetBrains Mono", monospace; }
+.hud aside { border-right: 1px solid #23414f; padding: 22px 18px; display: grid; gap: 6px; align-content: start; }
+.hud aside .h { font: 600 11px/1 "JetBrains Mono", monospace; color: #6fa7bd; letter-spacing: .14em; margin: 10px 0 6px; }
+.hud aside div { display: flex; justify-content: space-between; font-weight: 600; font-size: 15px; padding: 4px 8px; }
+.hud aside div.sel { background: rgb(111 214 255 / .12); box-shadow: inset 2px 0 0 #6fd6ff; color: #fff; }
+.hud aside div span { font: 11px "JetBrains Mono"; color: #6fa7bd; }
+.hud main { padding: 22px 26px; display: grid; gap: 18px; align-content: start; }
+.hud .frame { position: relative; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 22px; padding: 18px; border: 1px solid #23414f; }
+.hud .frame::before, .hud .frame::after { content: ""; position: absolute; width: 16px; height: 16px; border-color: #6fd6ff; border-style: solid; }
+.hud .frame::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; } .hud .frame::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+.hud .frame h4 { margin: 0 0 4px; font: 700 30px/1 Rajdhani; letter-spacing: .04em; text-transform: uppercase; color: #fff; }
+.hud .stat { display: grid; grid-template-columns: 110px minmax(0, 1fr) 60px; gap: 10px; align-items: center; font: 12px "JetBrains Mono"; color: #8fbfd2; margin-top: 8px; }
+.hud .seg { display: grid; grid-template-columns: repeat(20, 1fr); gap: 2px; height: 8px; }
+.hud .seg i { background: #1d3540; } .hud .seg i.f { background: #6fd6ff; }
+.hud .launch { margin-top: 16px; display: inline-flex; gap: 10px; align-items: center; border: 1px solid #6fd6ff; color: #fff; padding: 8px 18px; font: 700 15px/1 Rajdhani; letter-spacing: .2em; clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); background: rgb(111 214 255 / .14); }
+.hud .grid5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.hud .grid5 img { border: 1px solid #23414f; filter: saturate(.75); }
+
+/* ---------- D. Launcher poster ---------- */
+.pst { font-family: Archivo, var(--ui); background: #f2f0ea; color: #111; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: minmax(70px, auto); }
+.pst > div { padding: 16px 18px; min-width: 0; }
+.pst .mast { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; border-bottom: 4px solid #111; padding-block: 12px; }
+.pst .mast b { font: 400 34px/1 Anton, sans-serif; letter-spacing: .02em; }
+.pst .mast nav { display: flex; gap: 18px; font-weight: 800; font-size: 13px; letter-spacing: .08em; }
+.pst .mast nav u { text-decoration-thickness: 3px; text-underline-offset: 4px; }
+.pst .big { grid-column: 1 / 8; grid-row: span 4; background: #ff4b2b; color: #111; display: grid; align-content: space-between; }
+.pst .big .k { font-weight: 800; letter-spacing: .1em; font-size: 12px; }
+.pst .big h4 { margin: 0; font: 400 clamp(46px, 7vw, 86px)/.9 Anton, sans-serif; text-transform: uppercase; }
+.pst .big .meta { display: flex; justify-content: space-between; font-weight: 800; }
+.pst .art { grid-column: 8 / -1; grid-row: span 4; padding: 0; background: #111; }
+.pst .art img { width: 100%; height: 100%; object-fit: cover; }
+.pst .blk { grid-column: span 3; display: grid; align-content: space-between; color: #fff; }
+.pst .blk b { font: 400 30px/1 Anton, sans-serif; }
+.pst .blk span { font-weight: 800; font-size: 12px; letter-spacing: .1em; }
+
+/* ---------- E. Trading cards ---------- */
+.crd { font-family: Karla, var(--ui); color: #f4f1ff; background: radial-gradient(120% 90% at 50% 0%, #2a1f52 0%, #14102a 60%, #0d0a1c 100%); padding: 24px 28px; display: grid; gap: 20px; align-content: start; }
+.crd .top { display: flex; justify-content: space-between; align-items: baseline; }
+.crd .top b { font: 400 22px/1 "Bowlby One SC", sans-serif; letter-spacing: .04em; }
+.crd .top span { color: #a99fd6; font-size: 14px; }
+.crd .hand { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+.card { background: var(--rim); padding: 6px; border-radius: 12px; display: grid; gap: 6px; box-shadow: 0 16px 30px -18px #000; }
+.card .face { position: relative; border-radius: 7px; overflow: hidden; }
+.card .face::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / .35) 48%, transparent 60%); mix-blend-mode: overlay; }
+.card .nm { font: 400 12px/1.1 "Bowlby One SC", sans-serif; color: #12091f; padding: 2px 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .st { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: #2b1f45; padding: 0 4px 4px; }
+.card.leg { --rim: linear-gradient(140deg, #ffd66b, #ff8a3d 40%, #ffd66b 70%, #e0a52c); rotate: -3deg; }
+.card.epic { --rim: linear-gradient(140deg, #c7a6ff, #8a5cff 50%, #d8c4ff); }
+.card.rare { --rim: linear-gradient(140deg, #9fe0ff, #4aa8ff 50%, #bfeaff); }
+.card.com { --rim: linear-gradient(140deg, #d9d6e4, #a9a4ba); }
+.crd .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: #a99fd6; }
+.crd .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+
+/* ---------- A2. Home rows ---------- */
+.home2 { grid-template-rows: auto auto 1fr; min-height: 0; }
+.home2::after { background: linear-gradient(90deg, rgb(6 8 12 / .9) 0%, rgb(6 8 12 / .45) 50%, rgb(6 8 12 / .1) 80%), linear-gradient(0deg, #06080c 0%, #06080c 48%, rgb(6 8 12 / .2) 72%, transparent 100%); }
+.home2 .bg { height: 62%; }
+.con .srch { font-size: 18px; margin-right: 14px; opacity: .9; }
+.con .focus.small { padding-block: 34px 10px; max-width: 520px; }
+.con .focus.small img.logo { width: 250px; }
+.rows { display: grid; gap: 22px; padding: 18px 0 26px 28px; overflow: hidden; }
+.rows h5 { margin: 0 0 10px; font: 700 16px/1 "Hanken Grotesk", sans-serif; color: #fff; display: flex; gap: 10px; align-items: baseline; }
+.rows h5 i { font-style: normal; font-weight: 500; font-size: 13px; color: rgb(255 255 255 / .55); }
+.tiles { display: flex; gap: 12px; align-items: end; }
+.tiles img, .tiles .all { width: 104px; aspect-ratio: 2 / 3; border-radius: 10px; flex: none; object-fit: cover; }
+.tiles.big img { width: 132px; }
+.tiles img.sel { outline: 3px solid #fff; outline-offset: 4px; }
+.tiles img.off { filter: saturate(.55) brightness(.8); }
+.tiles .all { display: grid; place-content: center; text-align: center; gap: 4px; background: rgb(255 255 255 / .1); border: 1px solid rgb(255 255 255 / .18); color: rgb(255 255 255 / .8); font-weight: 600; font-size: 13px; }
+.tiles .all b { font-size: 24px; color: #fff; }
+
+/* ---------- A3. Library grid ---------- */
+.libv { grid-template-rows: auto auto auto 1fr auto; }
+.libv .bg { filter: blur(40px) saturate(1.2); scale: 1.3; opacity: .55; }
+.libv::after { background: rgb(6 8 12 / .72); }
+.lhead { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 28px 14px; flex-wrap: wrap; }
+.lhead h4 { margin: 0; font: 800 30px/1 "Hanken Grotesk", sans-serif; }
+.lhead h4 span { font-weight: 500; font-size: 15px; color: rgb(255 255 255 / .6); margin-left: 8px; }
+.seg { display: flex; background: rgb(255 255 255 / .1); border-radius: 999px; padding: 3px; font-weight: 600; font-size: 14px; }
+.seg span { padding: 6px 14px; border-radius: 999px; color: rgb(255 255 255 / .7); }
+.seg span.on { background: #fff; color: #0c0f14; }
+.fbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 28px 16px; border-bottom: 1px solid rgb(255 255 255 / .1); }
+.chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: rgb(255 255 255 / .08); font-size: 13px; font-weight: 600; color: rgb(255 255 255 / .8); }
+.chip i { width: 8px; height: 8px; border-radius: 50%; }
+.chip.on { background: #fff; color: #0c0f14; }
+.fbar .sep { width: 1px; height: 22px; background: rgb(255 255 255 / .15); margin-inline: 4px; }
+.drop { padding: 6px 12px; border-radius: 8px; border: 1px solid rgb(255 255 255 / .18); font-size: 13px; font-weight: 600; color: rgb(255 255 255 / .85); }
+.lbody { display: grid; grid-template-columns: minmax(0, 1fr) 26px; gap: 10px; padding: 16px 12px 0 28px; min-height: 0; }
+.lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 18px 14px; align-content: start; }
+.lgrid h6 { grid-column: 1 / -1; margin: 4px 0 -6px; font: 800 20px/1 "Hanken Grotesk", sans-serif; color: rgb(255 255 255 / .9); }
+.lgrid figure { margin: 0; display: grid; gap: 6px; min-width: 0; }
+.lgrid img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; }
+.lgrid img.off { filter: saturate(.55) brightness(.82); }
+.lgrid figcaption { font-size: 12.5px; line-height: 1.25; color: rgb(255 255 255 / .72); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lgrid figure.sel img { outline: 3px solid #fff; outline-offset: 3px; }
+.lgrid figure.sel figcaption { color: #fff; font-weight: 700; }
+.lgrid figure.sel small { display: block; font-weight: 500; color: rgb(255 255 255 / .6); }
+.azr { display: grid; align-content: start; gap: 1px; font: 700 11px/1 "Hanken Grotesk", sans-serif; text-align: center; color: rgb(255 255 255 / .6); }
+.azr span { padding: 3px 0; border-radius: 4px; }
+.azr span.on { background: #fff; color: #0c0f14; }
+.azr span.no { opacity: .3; }
+.hint { padding: 14px 28px 18px; font-size: 13px; color: rgb(255 255 255 / .55); border-top: 1px solid rgb(255 255 255 / .08); margin-top: 18px; }
+
+@media (max-width: 760px) {
+  .lbody { grid-template-columns: minmax(0, 1fr); padding-right: 16px; } .azr { display: none; } .fbar .drop, .fbar .sep { display: none; } .tiles img, .tiles .all { width: 88px; } .tiles.big img { width: 104px; }
+  .shf, .hud { grid-template-columns: minmax(0, 1fr); }
+  .shf .case, .hud aside { display: none; }
+  .hud .frame { grid-template-columns: 110px minmax(0, 1fr); }
+  .hud .grid5, .crd .hand { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hud .grid5 img:nth-child(n+4), .crd .hand .card:nth-child(n+4) { display: none; }
+  .pst .big, .pst .art { grid-column: 1 / -1; grid-row: auto; }
+  .pst .art { height: 200px; }
+  .pst .blk { grid-column: span 6; }
+  .con .focus img.logo { width: 220px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card .face::after { animation: foil 4s ease-in-out infinite; background-size: 200% 100%; }
+  @keyframes foil { 50% { background-position: 100% 0; } }
+}
+</style>
+
+<div class="sheet">
+  <div class="intro">
+    <h1>Five directions for Junction</h1>
+    <p>Each one is the same Library screen with your real games, so you can compare the feel rather than the features. Pick one, or mix parts of two. A2 and A3 show how option A copes with all 418 games.</p>
+  </div>
+
+  <section class="opt">
+    <header><b>A · Console home</b><span>Like a PS5 or Xbox dashboard: your game's art fills the screen, a row of tiles along the bottom, almost no chrome.</span></header>
+    <div class="screen con">
+      <img class="bg" src="art/1174180_hero.jpg" alt="">
+      <div class="bar"><div class="me">S</div><span class="on">Library</span><span>Store</span><span>Wishlist</span><span>Stats</span><span class="t">20:49</span></div>
+      <div class="focus">
+        <img class="logo" src="art/1174180_logo.png" alt="Red Dead Redemption 2">
+        <p>34 hours played · last played today · Steam</p>
+        <div class="btns"><span class="play">Play</span><span class="more">···</span></div>
+      </div>
+      <div class="row">
+        <img class="sel" src="art/1174180_cover.jpg" alt=""><img src="art/730_cover.jpg" alt=""><img src="art/3164500_cover.jpg" alt=""><img src="art/1091500_cover.jpg" alt=""><img src="art/292030_cover.jpg" alt=""><img src="art/578080_cover.jpg" alt=""><img src="art/2483190_cover.jpg" alt=""><img src="art/2231380_cover.jpg" alt="">
+      </div>
+    </div>
+  </section>
+
+  <section class="opt">
+    <header><b>A2 · Home, with all your games behind it</b><span>Home only holds rows you scroll sideways. The art behind follows whatever you point at, and every row ends in "See all".</span></header>
+    <div class="screen con home2">
+      <img class="bg" src="art/1174180_hero.jpg" alt="">
+      <div class="bar">
+        <div class="me">S</div><span class="on">Home</span><span>Library</span><span>Store</span><span>Wishlist</span><span>Stats</span>
+        <span class="t"><span class="srch" aria-hidden="true">⌕</span> 20:49</span>
+      </div>
+      <div class="focus small">
+        <img class="logo" src="art/1174180_logo.png" alt="Red Dead Redemption 2">
+        <p>34 hours played · last played today · Steam · 3 of 51 achievements</p>
+        <div class="btns"><span class="play">Play</span><span class="more">···</span></div>
+      </div>
+      <div class="rows">
+        <div class="r">
+          <h5>Continue playing</h5>
+          <div class="tiles big">
+            <img class="sel" src="art/1174180_cover.jpg" alt=""><img src="art/730_cover.jpg" alt=""><img src="art/3164500_cover.jpg" alt=""><img src="art/578080_cover.jpg" alt=""><img src="art/2483190_cover.jpg" alt=""><img src="art/2231380_cover.jpg" alt="">
+          </div>
+        </div>
+        <div class="r">
+          <h5>Installed <i>14</i></h5>
+          <div class="tiles">
+            <img src="art/1091500_cover.jpg" alt=""><img src="art/292030_cover.jpg" alt=""><img src="art/730_cover.jpg" alt=""><img src="art/3164500_cover.jpg" alt=""><img src="art/578080_cover.jpg" alt=""><img src="art/2483190_cover.jpg" alt=""><img src="art/2231380_cover.jpg" alt="">
+            <span class="all">See all<b>14</b></span>
+          </div>
+        </div>
+        <div class="r">
+          <h5>Never played <i>best reviewed first</i></h5>
+          <div class="tiles">
+            <img class="off" src="{{u:Stardew Valley}}" alt=""><img class="off" src="{{u:Overlord}}" alt=""><img class="off" src="{{u:Life is Strange 2}}" alt=""><img class="off" src="{{u:METAL GEAR SOLID V: GROUND ZEROES}}" alt=""><img class="off" src="{{u:Styx: Master of Shadows}}" alt=""><img class="off" src="{{u:Minion Masters}}" alt=""><img class="off" src="{{u:Sniper: Ghost Warrior}}" alt="">
+            <span class="all">See all<b>32</b></span>
+          </div>
+        </div>
+        <div class="r">
+          <h5>Backlog <i>your collection</i></h5>
+          <div class="tiles">
+            <img class="off" src="{{u:Alan Wake}}" alt=""><img class="off" src="{{u:Alien: Isolation}}" alt=""><img class="off" src="{{u:A Plague Tale: Innocence}}" alt=""><img class="off" src="{{u:Assassin's Creed Mirage}}" alt=""><img class="off" src="{{u:Borderlands 3}}" alt="">
+            <span class="all">See all<b>9</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="opt">
+    <header><b>A3 · Library, every game in one place</b><span>One tab away from Home. Filters along the top, an A–Z rail on the side, names under every cover. Ctrl K searches everything from anywhere.</span></header>
+    <div class="screen con libv">
+      <img class="bg" src="{{u:Alan Wake}}" alt="">
+      <div class="bar">
+        <div class="me">S</div><span>Home</span><span class="on">Library</span><span>Store</span><span>Wishlist</span><span>Stats</span>
+        <span class="t"><span class="srch" aria-hidden="true">⌕</span> 20:49</span>
+      </div>
+      <div class="lhead">
+        <h4>Library <span>418 games</span></h4>
+        <div class="seg"><span>Installed 14</span><span class="on">All 418</span></div>
+      </div>
+      <div class="fbar">
+        <span class="chip"><i style="background:#4ea3e8"></i>Steam 241</span>
+        <span class="chip on"><i style="background:#cfd5dd"></i>Epic Games 145</span>
+        <span class="chip"><i style="background:#1fc1c4"></i>Ubisoft 36</span>
+        <span class="chip"><i style="background:#a874f5"></i>GOG 12</span>
+        <span class="chip"><i style="background:#9bd14a"></i>Xbox 2</span>
+        <span class="chip"><i style="background:#6f7dff"></i>Battle.net 2</span>
+        <span class="chip"><i style="background:#ff5d55"></i>EA 1</span>
+        <span class="sep"></span>
+        <span class="drop">Genre ▾</span><span class="drop">Collection ▾</span><span class="drop">Steam account ▾</span><span class="drop">Sort: Name ▾</span>
+      </div>
+      <div class="lbody">
+        <div class="lgrid">
+          <h6>A</h6>
+          <figure><img class="off" src="{{u:A Plague Tale: Innocence}}" alt=""><figcaption>A Plague Tale: Innocence</figcaption></figure>
+          <figure><img class="off" src="{{u:ABZU}}" alt=""><figcaption>ABZU</figcaption></figure>
+          <figure><img class="off" src="{{u:Absolute Drift}}" alt=""><figcaption>Absolute Drift</figcaption></figure>
+          <figure class="sel"><img src="{{u:Alan Wake}}" alt=""><figcaption>Alan Wake <small>Epic Games · Install</small></figcaption></figure>
+          <figure><img class="off" src="{{u:Alan Wake's American Nightmare}}" alt=""><figcaption>Alan Wake's American Nightmare</figcaption></figure>
+          <figure><img class="off" src="{{u:Alien: Isolation}}" alt=""><figcaption>Alien: Isolation</figcaption></figure>
+          <figure><img class="off" src="{{u:Amnesia: The Dark Descent}}" alt=""><figcaption>Amnesia: The Dark Descent</figcaption></figure>
+          <figure><img class="off" src="{{u:Anno 1602}}" alt=""><figcaption>Anno 1602</figcaption></figure>
+          <figure><img class="off" src="{{u:Assassin's Creed Syndicate}}" alt=""><figcaption>Assassin's Creed Syndicate</figcaption></figure>
+          <figure><img class="off" src="{{u:Assassin's Creed Valhalla}}" alt=""><figcaption>Assassin's Creed Valhalla</figcaption></figure>
+          <figure><img class="off" src="{{u:Assassin's Creed Unity}}" alt=""><figcaption>Assassin's Creed Unity</figcaption></figure>
+          <figure><img class="off" src="{{u:Assassin's Creed Origins}}" alt=""><figcaption>Assassin's Creed Origins</figcaption></figure>
+          <h6>B</h6>
+          <figure><img class="off" src="{{u:Batman: Arkham Knight}}" alt=""><figcaption>Batman: Arkham Knight</figcaption></figure>
+          <figure><img class="off" src="{{u:BioShock Infinite}}" alt=""><figcaption>BioShock Infinite</figcaption></figure>
+          <figure><img class="off" src="{{u:Borderlands 2}}" alt=""><figcaption>Borderlands 2</figcaption></figure>
+          <figure><img class="off" src="{{u:Borderlands 3}}" alt=""><figcaption>Borderlands 3</figcaption></figure>
+          <figure><img class="off" src="{{u:Brothers - A Tale of Two Sons}}" alt=""><figcaption>Brothers: A Tale of Two Sons</figcaption></figure>
+          <figure><img class="off" src="{{u:Bridge Constructor: The Walking Dead}}" alt=""><figcaption>Bridge Constructor: The Walking Dead</figcaption></figure>
+        </div>
+        <nav class="azr" aria-label="Jump to letter"><span>#</span><span class="on">A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span><span>J</span><span>K</span><span>L</span><span>M</span><span>N</span><span>O</span><span>P</span><span>Q</span><span>R</span><span>S</span><span>T</span><span>U</span><span>V</span><span>W</span><span class="no">X</span><span>Y</span><span>Z</span></nav>
+      </div>
+      <div class="hint">Type a letter to jump there · Ctrl K searches your games and the store · arrow keys and a controller work too</div>
+    </div>
+  </section>
+
+  <section class="opt">
+    <header><b>B · Collector's shelf</b><span>Your library as game cases on a shelf: spines coloured by launcher, the chosen one pulled out.</span></header>
+    <div class="screen shf">
+      <div class="wall">
+        <h3>INSTALLED · 14</h3>
+        <div class="plank">
+          <div class="spine out" style="--c:#b8121a;--h:186px"><i>STEAM</i><b>RED DEAD REDEMPTION II</b></div>
+          <div class="spine" style="--c:#e59b1c;--h:170px;--ink:#1d1206"><i>STEAM</i><b>COUNTER-STRIKE 2</b></div>
+          <div class="spine" style="--c:#f4e94a;--h:176px;--ink:#1a1a05"><i>GOG</i><b>CYBERPUNK 2077</b></div>
+          <div class="spine" style="--c:#2b3a3a;--h:190px"><i>GOG</i><b>THE WITCHER 3</b></div>
+          <div class="spine" style="--c:#4c5a2c;--h:166px"><i>STEAM</i><b>PUBG</b></div>
+          <div class="spine" style="--c:#1d5f9e;--h:180px"><i>XBOX</i><b>FORZA HORIZON 6</b></div>
+          <div class="spine" style="--c:#2c2c34;--h:172px"><i>UBI</i><b>GHOST RECON</b></div>
+          <div class="spine" style="--c:#7a2bd0;--h:160px"><i>STEAM</i><b>SCHEDULE I</b></div>
+        </div>
+        <h3>NOT INSTALLED · 404</h3>
+        <div class="plank" style="height:130px">
+          <div class="spine" style="--c:#5c4a3a;--h:118px"><i>EPIC</i><b>ALAN WAKE</b></div>
+          <div class="spine" style="--c:#c4302b;--h:110px"><i>STEAM</i><b>AMONG US</b></div>
+          <div class="spine" style="--c:#3d5a7a;--h:122px"><i>UBI</i><b>ANNO 1602</b></div>
+          <div class="spine" style="--c:#8c6b3a;--h:114px"><i>EPIC</i><b>BORDERLANDS 2</b></div>
+        </div>
+      </div>
+      <div class="case">
+        <img src="art/1174180_cover.jpg" alt="">
+        <h4>Red Dead Redemption 2</h4>
+        <p>34 hours · played today · Steam</p>
+        <span class="go">Play</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="opt">
+    <header><b>C · Tactical HUD</b><span>Like a sci-fi game's own menus: corner brackets, readouts in monospace, segmented bars for play time and achievements.</span></header>
+    <div class="screen hud">
+      <aside>
+        <div class="h">// INSTALLED 14</div>
+        <div class="sel">RED DEAD REDEMPTION 2 <span>STM</span></div>
+        <div>COUNTER-STRIKE 2 <span>STM</span></div>
+        <div>CYBERPUNK 2077 <span>GOG</span></div>
+        <div>THE WITCHER 3 <span>GOG</span></div>
+        <div>FORZA HORIZON 6 <span>XBX</span></div>
+        <div class="h">// NOT INSTALLED 404</div>
+        <div>ALAN WAKE <span>EPC</span></div>
+        <div>ANNO 1602 <span>UBI</span></div>
+      </aside>
+      <main>
+        <div class="frame">
+          <img class="cv" src="art/1174180_cover.jpg" alt="">
+          <div>
+            <div class="mono" style="font-size:12px;color:#6fa7bd">SELECTED // STEAM · APP 1174180</div>
+            <h4>Red Dead Redemption 2</h4>
+            <div class="stat"><span>PLAY TIME</span><span class="seg"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span>34 H</span></div>
+            <div class="stat"><span>ACHIEVEMENTS</span><span class="seg"><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span>3/51</span></div>
+            <div class="stat"><span>LAST SESSION</span><span></span><span>TODAY</span></div>
+            <span class="launch">LAUNCH ▸</span>
+          </div>
+        </div>
+        <div class="grid5"><img class="cv" src="art/730_cover.jpg" alt=""><img class="cv" src="art/3164500_cover.jpg" alt=""><img class="cv" src="art/1091500_cover.jpg" alt=""><img class="cv" src="art/292030_cover.jpg" alt=""><img class="cv" src="art/578080_cover.jpg" alt=""></div>
+      </main>
+    </div>
+  </section>
+
+  <section class="opt">
+    <header><b>D · Launcher poster</b><span>Loud and graphic like a gig poster: huge condensed type, flat blocks of colour, one block per launcher.</span></header>
+    <div class="screen pst">
+      <div class="mast"><b>JUNCTION</b><nav><u>LIBRARY</u><span>STORE</span><span>WISHLIST</span><span>STATS</span></nav></div>
+      <div class="big"><span class="k">PLAYING NOW</span><h4>Red Dead Redemption 2</h4><div class="meta"><span>34 HRS</span><span>PLAY ▸</span></div></div>
+      <div class="art"><img src="art/1174180_cover.jpg" alt=""></div>
+      <div class="blk" style="background:#1b5fd1"><b>241</b><span>STEAM</span></div>
+      <div class="blk" style="background:#111"><b>145</b><span>EPIC GAMES</span></div>
+      <div class="blk" style="background:#7b3fe4"><b>12</b><span>GOG</span></div>
+      <div class="blk" style="background:#0e9aa0"><b>36</b><span>UBISOFT</span></div>
+    </div>
+  </section>
+
+  <section class="opt">
+    <header><b>E · Trading cards</b><span>Every game is a collectible card. The rim shows how far you've got: gold at 100% achievements or 500+ hours, then purple, blue and grey.</span></header>
+    <div class="screen crd">
+      <div class="top"><b>YOUR COLLECTION</b><span>418 cards · 7 gold</span></div>
+      <div class="hand">
+        <div class="card leg"><div class="face"><img class="cv" src="art/730_cover.jpg" alt=""></div><div class="nm">Counter-Strike 2</div><div class="st"><span>2,951 h</span><span>Steam</span></div></div>
+        <div class="card epic"><div class="face"><img class="cv" src="art/578080_cover.jpg" alt=""></div><div class="nm">PUBG</div><div class="st"><span>238 h</span><span>Steam</span></div></div>
+        <div class="card rare"><div class="face"><img class="cv" src="art/1174180_cover.jpg" alt=""></div><div class="nm">Red Dead Redemption 2</div><div class="st"><span>34 h</span><span>Steam</span></div></div>
+        <div class="card rare"><div class="face"><img class="cv" src="art/3164500_cover.jpg" alt=""></div><div class="nm">Schedule I</div><div class="st"><span>21 h</span><span>Steam</span></div></div>
+        <div class="card com"><div class="face"><img class="cv" src="art/292030_cover.jpg" alt=""></div><div class="nm">The Witcher 3</div><div class="st"><span>New</span><span>GOG</span></div></div>
+      </div>
+      <div class="legend"><span><i style="background:#ffc14d"></i>Gold</span><span><i style="background:#8a5cff"></i>Purple</span><span><i style="background:#4aa8ff"></i>Blue</span><span><i style="background:#a9a4ba"></i>Grey</span></div>
+    </div>
+  </section>
+</div>
