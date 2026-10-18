@@ -825,6 +825,7 @@ button.avatar svg { width: 18px; height: 18px; }
 .update-bar { height: 6px; border-radius: 999px; background: var(--raised-2); overflow: hidden; }
 .update-bar[hidden] { display: none; }
 .update-bar span { display: block; width: 0; height: 100%; background: var(--signal); transition: width .2s; }
+.store-wait { margin: 0 0 14px; }
 .pm-foot { padding: 10px 10px 4px; margin-top: 4px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-faint); }
 /* First start: the welcome steps */
 .dialog.setup { width: min(600px, calc(100vw - 32px)); padding: 28px; gap: 16px; }
@@ -2588,11 +2589,16 @@ async function ensureStore() {
   if (store) return true;
   $('#main').innerHTML = `
     <div class="page" aria-busy="true" aria-label="Loading prices">
+      <p class="hint store-wait">Fetching prices from the stores. The first time takes about a minute.</p>
       <div><div class="sk sk-title"></div><div class="sk sk-line"></div></div>
       <div class="deal-grid">${'<div class="sk sk-card"></div>'.repeat(12)}</div>
     </div>`;
   if (await loadStoreQuiet()) return true;
-  $('#main').innerHTML = `<div class="page"><p class="empty">Couldn't load prices. Check your internet connection and open the Store again.</p></div>`;
+  $('#main').innerHTML = `<div class="page"><div class="empty-state">
+    <p>Junction couldn’t load prices right now. If it keeps happening, send a problem report (profile picture → Help).</p>
+    <button class="btn" type="button" id="store-retry">Try again</button></div></div>`;
+  $('#store-retry').onclick = () => render();
+  $('#store-retry').focus({ preventScroll: true });
   return false;
 }
 
@@ -3437,6 +3443,17 @@ async function profileMenu(page = 'main') {
       { icon: PM.key, label: 'Accounts and keys', go: 'keys' },
       { icon: PM.sliders, label: 'Preferences', go: 'prefs' },
       { icon: PM.refresh, label: 'Rescan launchers', run: () => (closeMenu(), rescan()) },
+      // Asks GitHub right away, instead of waiting for the next check. With an update found, "Update to …" above replaces it.
+      ...(updateState?.available ? [] : [{ icon: PM.update, label: 'Check for updates', value: updateState?.checked && !updateState.error ? 'Up to date' : '',
+        run: async b => {
+          const v = b.querySelector('.pm-val');
+          if (!host.inApp) { v.textContent = 'Only in the app'; return; }
+          v.textContent = 'Checking…';
+          const info = await host.checkUpdates().catch(() => null);
+          if (info) junctionUpdate(info);
+          if (info?.available) { closeMenu(); return updateDialog(); }
+          v.textContent = !info || info.error ? 'Couldn’t check' : 'Up to date';
+        } }]),
       { icon: PM.help, label: 'Help', go: 'help' },
     ] },
     keys: { title: 'Accounts and keys', items: [
@@ -3462,17 +3479,6 @@ async function profileMenu(page = 'main') {
     help: { title: 'Help', items: [
       { icon: PM.spark, label: 'Set up Junction again', run: () => (closeMenu(), setupWizard()) },
       { icon: PM.report, label: 'Problem report', run: () => (closeMenu(), reportDialog()) },
-      { icon: PM.update, label: 'Check for updates', value: updateState?.available ? `${updateState.available.version} is out`
-          : updateState?.checked ? 'Up to date' : '',
-        run: async b => {
-          const v = b.querySelector('.pm-val');
-          if (!host.inApp) { v.textContent = 'Only in the app'; return; }
-          v.textContent = 'Checking…';
-          const info = await host.checkUpdates().catch(() => null);
-          if (info) junctionUpdate(info);
-          if (info?.available) { closeMenu(); return updateDialog(); }
-          v.textContent = !info || info.error ? 'Couldn’t check' : 'Up to date';
-        } },
     ] },
   };
   const me = accounts().find(a => a.steamId === lib.steamSignedIn);

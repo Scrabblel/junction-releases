@@ -59,9 +59,28 @@ def write_builtin_key():
     print(f"Built-in prices key: included (ends in {key[-4:]})", flush=True)
 
 
+def check_code():
+    """Stop the build on mistakes Python only notices when that code runs (an unknown or shadowed name, say).
+    Uses pyflakes (pip install pyflakes); unused imports and the like don't stop it."""
+    try:
+        out = subprocess.run([sys.executable, "-m", "pyflakes", "junction", "Junction.pyw"],
+                             cwd=ROOT, capture_output=True, text=True).stdout
+    except OSError:
+        out = None
+    if out is None or "No module named pyflakes" in out:
+        print("pyflakes isn't installed, so the code wasn't checked (pip install pyflakes).", flush=True)
+        return
+    harmless = ("imported but unused", "is assigned to but never used", "redefinition of unused", "f-string is missing placeholders")
+    problems = [line for line in out.splitlines() if line.strip() and not any(h in line for h in harmless)]
+    if problems:
+        sys.exit("The code check found mistakes; nothing was built:\n  " + "\n  ".join(problems))
+    print("Code check: no mistakes found", flush=True)
+
+
 def main():
     v = version()
     print(f"Building Junction {v}", flush=True)
+    check_code()
     write_builtin_key()
     subprocess.run([sys.executable, "-m", "PyInstaller", "Junction.spec", "--noconfirm"], cwd=ROOT, check=True)
     if "--exe-only" in sys.argv:

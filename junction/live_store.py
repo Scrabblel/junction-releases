@@ -29,8 +29,8 @@ def build(games, accounts, settings=None, progress=None):
     key = keys.prices_key(settings)
     if not key:
         return None
-    keys = {str(a["steamId"]): a.get("apiKey", "") for a in steam_owned.steam_accounts(settings)}
-    account_info = [dict(a, apiKey=keys.get(a["steamId"], "")) for a in accounts]
+    steam_keys = {str(a["steamId"]): a.get("apiKey", "") for a in steam_owned.steam_accounts(settings)}
+    account_info = [dict(a, apiKey=steam_keys.get(a["steamId"], "")) for a in accounts]
     itad = stores.Itad(key, log=progress)
     data = stores.build_store(itad, games, account_info)
 
