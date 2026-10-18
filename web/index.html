@@ -885,6 +885,18 @@ a.pill { text-decoration: none; }
 .hrow h2 i { font-style: normal; font-weight: 500; font-size: 13px; color: var(--ink-faint); }
 .tiles { display: flex; gap: 14px; overflow-x: auto; padding: 10px var(--gutter-r) 14px calc(var(--gutter-l) + 16px); scroll-padding-inline: calc(var(--gutter-l) + 16px); scrollbar-width: none; scroll-snap-type: x proximity; }
 .tiles::-webkit-scrollbar { display: none; }
+/* Arrow buttons on sideways rows, for the mouse; shown while you point at the row, and only the way it can go. */
+.has-arrows { position: relative; }
+.strip-arrow { position: absolute; z-index: 3; translate: 0 -50%; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer; color: var(--ink); background: color-mix(in srgb, var(--ground) 82%, transparent);
+  backdrop-filter: blur(8px); box-shadow: 0 4px 18px rgb(0 0 0 / .35); opacity: 0; transition: opacity .15s, background-color .15s, color .15s; }
+.strip-arrow.prev { left: calc(var(--gutter-l) + 4px); }
+.strip-arrow.next { right: calc(var(--gutter-r) + 4px); }
+.strip-arrow svg { width: 20px; height: 20px; }
+.has-arrows:hover > .strip-arrow { opacity: 1; }
+.strip-arrow:hover { background: var(--ink); color: var(--ground); }
+.strip-arrow[hidden] { display: none; }
+@media (hover: none) { .strip-arrow { display: none; } }
 .rows .all-games { margin-inline: calc(var(--gutter-l) + 16px) var(--gutter-r); }
 .home .downloads { position: relative; z-index: 1; padding: 0 var(--gutter-r) 10px calc(var(--gutter-l) + 8px); max-width: 520px; }
 
@@ -944,6 +956,10 @@ a.pill { text-decoration: none; }
 .lgrid.compact { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 16px 12px; }
 .lgrid.compact .cap { font-size: 11.5px; }
 .lgrid .tile { width: auto; }
+/* The Library can hold hundreds of games: the browser skips laying out and painting the ones off screen.
+   Each one's size is guessed until it has been on screen once, then remembered ("auto"). */
+.lgrid > .tile { content-visibility: auto; contain-intrinsic-size: auto 124px auto 231px; }
+.lrow { content-visibility: auto; contain-intrinsic-size: auto 600px auto 52px; }
 .letter { grid-column: 1 / -1; margin: 12px 0 -6px; font: 800 22px/1 var(--font-display); color: var(--ink); scroll-margin-top: 84px; }
 .list-view .letter { margin: 0; padding: 14px 14px 6px; font-size: 16px; border-top: 1px solid var(--rule); }
 .azr { position: sticky; top: 76px; display: grid; gap: 1px; }
@@ -1774,9 +1790,28 @@ function sorted(games, how) {
 }
 const findGame = id => titles.find(t => t.id === id) || titleOf.get(id);
 // The library entry for a store game, so the Store can say "you own this" and link to it.
+// Remembers what make() built until one of deps() changes (by identity), so pages that ask the same
+// question for every game don't scan the whole library or store each time.
+function memo(deps, make) {
+  let last = null, value;
+  return () => {
+    const d = deps();
+    if (!last || d.some((x, i) => x !== last[i])) { last = d; value = make(); }
+    return value;
+  };
+}
+const libraryIndex = memo(() => [titles], () => {
+  const byApp = new Map(), byName = new Map();
+  for (const t of titles) {
+    if (t.steamAppId && !byApp.has(t.steamAppId)) byApp.set(t.steamAppId, t);
+    const n = normTitle(t.name);
+    if (!byName.has(n)) byName.set(n, t);
+  }
+  return { byApp, byName };
+});
 function libraryTitleFor(sg) {
-  const n = normTitle(sg.title);
-  return titles.find(t => sg.steamAppId && t.steamAppId === sg.steamAppId) || titles.find(t => normTitle(t.name) === n) || null;
+  const { byApp, byName } = libraryIndex();
+  return (sg.steamAppId && byApp.get(sg.steamAppId)) || byName.get(normTitle(sg.title)) || null;
 }
 
 // ---------- art ----------
@@ -1847,13 +1882,24 @@ function friendsLine(appid) {
 }
 // Store games in the same series as a game you own (a sequel, prequel or spin-off) that are on sale and you don't own.
 const seriesKey = name => normTitle(name).replace(/\b(\d+|ii|iii|iv|v|vi|vii|viii|ix|x)\b.*$/, '').split(' ').slice(0, 3).join(' ').trim();
+// Store games on sale that you don't own, by series, biggest discount first.
+const seriesOnSale = memo(() => [store, titles, [...state.shops].join()], () => {
+  const bySeries = new Map();
+  for (const sg of Object.values(store.games)) {
+    if (sg.owned.length || !(bestDeal(sg)?.cut > 0) || libraryTitleFor(sg)) continue;
+    const k = seriesKey(sg.title);
+    if (!bySeries.has(k)) bySeries.set(k, []);
+    bySeries.get(k).push(sg);
+  }
+  for (const list of bySeries.values()) list.sort((a, b) => bestDeal(b).cut - bestDeal(a).cut);
+  return bySeries;
+});
 function seriesSales(t) {
   if (!store) return [];
   const k = seriesKey(t.name);
   if (k.length < 4) return [];
-  return Object.values(store.games).filter(sg => !sg.owned.length && bestDeal(sg)?.cut > 0 && seriesKey(sg.title) === k
-    && editionBase(sg.title) !== editionBase(t.name)
-    && !libraryTitleFor(sg)).sort((a, b) => bestDeal(b).cut - bestDeal(a).cut);
+  const base = editionBase(t.name);
+  return (seriesOnSale().get(k) || []).filter(sg => editionBase(sg.title) !== base);
 }
 // Small "DLC -60%" / "Series -75%" badges on Library covers, added once the data is there.
 function paintSaleBadges() {
@@ -2177,11 +2223,79 @@ function jumpTo(letter) {
   const el = document.getElementById(`letter-${letter}`);
   if (!el) return;
   el.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  // Covers passed on the way take their real size as they come on screen, which can move the letter a little.
+  const main = $('#main'), until = Date.now() + 2000;
+  const snap = () => { main.removeEventListener('scrollend', snap); if (Date.now() < until && el.isConnected) el.scrollIntoView({ block: 'start' }); };
+  main.addEventListener('scrollend', snap);
+  setTimeout(() => main.removeEventListener('scrollend', snap), 2000);
   el.nextElementSibling?.focus({ preventScroll: true });
 }
 
+// ---------- sideways rows: arrow buttons for the mouse (keys and controllers already move along them) ----------
+const stripSizes = new ResizeObserver(entries => entries.forEach(e => updateArrows(e.target)));
+function updateArrows(strip) {
+  const [prev, next] = strip.arrows || [];
+  if (!prev || !strip.isConnected) return;
+  prev.hidden = strip.scrollLeft <= 4;
+  next.hidden = strip.scrollLeft >= strip.scrollWidth - strip.clientWidth - 4;
+  prev.style.top = next.style.top = `${strip.offsetTop + strip.offsetHeight / 2}px`;
+}
+function addArrows() {
+  for (const strip of document.querySelectorAll('#main .tiles, #main .rail')) {
+    if (strip.arrows) { updateArrows(strip); continue; }
+    const box = strip.parentElement;
+    box.classList.add('has-arrows');
+    strip.arrows = [-1, 1].map(dir => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `strip-arrow ${dir < 0 ? 'prev' : 'next'}`;
+      b.tabIndex = -1;
+      b.setAttribute('aria-hidden', 'true');
+      b.hidden = true;
+      b.innerHTML = `<svg viewBox="0 0 24 24"><path d="${dir < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      b.onclick = e => { e.stopPropagation(); strip.scrollBy({ left: dir * strip.clientWidth * .8, behavior: 'smooth' }); };
+      box.append(b);
+      return b;
+    });
+    strip.addEventListener('scroll', () => updateArrows(strip), { passive: true });
+    stripSizes.observe(strip);
+    updateArrows(strip);
+  }
+}
+// Rows are drawn (and filled in) at many moments; check for new ones once per frame after any change.
+new MutationObserver(() => {
+  if (addArrows.queued) return;
+  addArrows.queued = true;
+  requestAnimationFrame(() => { addArrows.queued = false; addArrows(); });
+}).observe($('#main'), { childList: true, subtree: true });
+
 // ---------- arrow keys and controllers move between games ----------
+// The top bar: the tabs, then your picture, friends, search, theme and refresh.
+const barItems = () => [...document.querySelectorAll('.topbar .nav button, .topbar .top-right button')]
+  .filter(el => el.offsetParent !== null && !el.disabled);
+// Nearest in that direction. Up and down always go to the row right next to this one (never past it),
+// and then to the item in that row closest to straight above or below.
+function nearestIn(items, cur, dir) {
+  const r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const ahead = items.filter(el => el !== cur).map(el => {
+    const b = el.getBoundingClientRect();
+    return { el, dx: b.left + b.width / 2 - cx, dy: b.top + b.height / 2 - cy, gap: Math.abs(b.top - r.top) };
+  }).filter(c => ({ left: c.dx < -4, right: c.dx > 4, up: c.dy < -4, down: c.dy > 4 })[dir]);
+  if (!ahead.length) return null;
+  if (dir === 'left' || dir === 'right') return ahead.reduce((a, c) => Math.abs(c.dx) + Math.abs(c.dy) * 6 < Math.abs(a.dx) + Math.abs(a.dy) * 6 ? c : a).el;
+  const rowGap = Math.min(...ahead.map(c => c.gap));
+  return ahead.filter(c => c.gap <= rowGap + 24).reduce((a, c) => Math.abs(c.dx) < Math.abs(a.dx) ? c : a).el;
+}
 function moveFocus(dir) {
+  // In the top bar: left and right move along it; down goes back to where you were on the page.
+  if (document.activeElement?.closest?.('.topbar')) {
+    if (dir === 'left' || dir === 'right') return nearestIn(barItems(), document.activeElement, dir)?.focus();
+    if (dir !== 'down') return;
+    const back = moveFocus.back;
+    document.activeElement.blur();
+    if (back?.isConnected && back.offsetParent !== null) { back.focus({ preventScroll: true }); return back.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+    return moveFocus('down');
+  }
   const items = [...document.querySelectorAll(`#main .tile, #main .lrow, #focus .pill, #main .play, #main .all-games, #main .hrow .line-chip, #main .gp-head .pill, #main .gp-tabs button, #main .lhead button,
     #main .fbar :is(button, select, input), #main .libchips button, #main .deal, #main .store-search input, #main .filters-toggle,
     #main .filter-panel :is(button, select, input), #main .results-bar :is(button, select), #main .btn.more`)]
@@ -2189,16 +2303,14 @@ function moveFocus(dir) {
   const cur = document.activeElement && items.includes(document.activeElement) ? document.activeElement : null;
   // With nothing chosen yet, start on the first game rather than the Library's Installed / All buttons.
   if (!cur) return (items.find(el => !el.closest('.lhead')) || items[0])?.focus();
-  const r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  const across = dir === 'left' || dir === 'right';
-  let best = null, score = Infinity;
-  for (const el of items) {
-    if (el === cur) continue;
-    const b = el.getBoundingClientRect(), dx = b.left + b.width / 2 - cx, dy = b.top + b.height / 2 - cy;
-    const ahead = { left: dx < -4, right: dx > 4, up: dy < -4, down: dy > 4 }[dir];
-    if (!ahead) continue;
-    const s = across ? Math.abs(dx) + Math.abs(dy) * 6 : Math.abs(dy) + Math.abs(dx) * 0.6;
-    if (s < score) { score = s; best = el; }
+  const best = nearestIn(items, cur, dir);
+  // Up from the top of the page goes into the top bar, starting on the tab you're on.
+  if (!best && dir === 'up') {
+    const tab = document.querySelector('.topbar .nav [aria-current="page"]') || barItems()[0];
+    if (!tab) return;
+    moveFocus.back = cur;
+    $('#app').classList.remove('top-hidden');
+    return tab.focus();
   }
   // On Home and the Store, moving down past the first row brings in the rest; moving up to the buttons puts them away.
   const h = introPage();
