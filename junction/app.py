@@ -568,6 +568,21 @@ def http_port():
     return None
 
 
+def page_url():
+    """web/index.html, with the version and the file's date in its address.
+
+    pywebview's server means to tell WebView2 not to keep the page, but those headers get lost on the way, so
+    after an update WebView2 could go on showing the previous version's page for hours. An address it has never
+    seen can't match an old copy.
+    """
+    path = config.resource("web", "index.html")
+    try:
+        stamp = int(os.path.getmtime(path))
+    except OSError:
+        stamp = 0
+    return f"{path}?v={config.VERSION}-{stamp}"
+
+
 def _pad_sender(api):
     """Controller presses go to the page from their own thread, so reading the controller never waits for the
     page: a press made while the page is busy is handled right after it instead of being missed."""
@@ -598,7 +613,7 @@ def main():
     icon = config.resource("web", "icon.ico")
     own_frame = titlebar.prepare()
     window = webview.create_window(
-        "Junction", url=config.resource("web", "index.html"), js_api=api, hidden=in_tray,
+        "Junction", url=page_url(), js_api=api, hidden=in_tray,
         width=1440, height=900, min_size=(900, 600), background_color="#0B0E13", text_select=False)
     api._window = window
     try:
