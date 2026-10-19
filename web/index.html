@@ -822,6 +822,8 @@ button.avatar svg { width: 18px; height: 18px; }
 .update-notes p { margin: 8px 0; }
 .update-notes ul, .update-notes ol { margin: 4px 0 8px; padding-left: 20px; }
 .update-notes b { color: var(--ink); font-weight: 600; }
+.whats-new .update-notes { max-height: min(52vh, 420px); }
+.whats-new .update-notes h3.wn-version { margin-top: 14px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
 .update-bar { height: 6px; border-radius: 999px; background: var(--raised-2); overflow: hidden; }
 .update-bar[hidden] { display: none; }
 .update-bar span { display: block; width: 0; height: 100%; background: var(--signal); transition: width .2s; }
@@ -1598,6 +1600,7 @@ const host = {
   async windowInfo() { return this.inApp ? window.pywebview.api.window_info() : null; },
   windowAction(what) { return this.inApp ? window.pywebview.api.window_action(what) : null; },
   async updateInfo() { return this.inApp ? window.pywebview.api.update_info() : null; },
+  async whatsNew() { return this.inApp ? window.pywebview.api.whats_new() : null; },
   async checkUpdates() { return this.inApp ? window.pywebview.api.check_updates() : null; },
   async installUpdate() { return this.inApp ? window.pywebview.api.install_update() : null; },
 };
@@ -4985,6 +4988,30 @@ window.junctionUpdateProgress = p => {
   }
 };
 
+// The first start after an update: what changed since the version that ran before.
+function whatsNewDialog(info) {
+  if (!info || $('#layer > *')) return;
+  const many = info.releases.length > 1;
+  const notes = info.releases.map(r => `${many ? `<h3 class="wn-version">${esc(r.version)}</h3>` : ''}${mdLite(r.notes) || '<p>No notes for this version.</p>'}`).join('');
+  $('#layer').innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="dialog keys update whats-new" role="dialog" aria-modal="true" aria-labelledby="wn-title">
+        <h2 id="wn-title">What’s new in Junction ${esc(info.version)}</h2>
+        <p class="hint">Junction updated from ${esc(info.from)}.</p>
+        ${notes ? `<div class="update-notes">${notes}</div>`
+          : `<p class="hint">Junction couldn’t load the notes right now. They’re on the release page.</p>`}
+        <div class="row-btns">
+          ${notes ? '' : '<button class="btn" type="button" id="wn-page">Release page</button>'}
+          <button class="btn primary" type="button" id="wn-ok">Got it</button>
+        </div>
+      </div>
+    </div>`;
+  $('#wn-ok').onclick = closeLayer;
+  if ($('#wn-page')) $('#wn-page').onclick = () => host.openUrl(info.page);
+  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  $('#wn-ok').focus();
+}
+
 // ---------- the window's own title bar (only in the app) ----------
 async function ownTitleBar() {
   const info = await host.windowInfo().catch(() => null);
@@ -5028,7 +5055,11 @@ $('#win-ctl').addEventListener('click', e => {
     if (!info || info.setupDone) return;
     if (info.prices || info.accounts.some(a => a.key)) return host.setOption('setupDone', true);
     setTimeout(setupWizard, 1200);  // after the opening animation
-  });
+  })
+    // Just updated: what's new, once the opening animation is over. (After the above: both save settings.)
+    .then(() => host.whatsNew())
+    .then(info => info && setTimeout(() => whatsNewDialog(info), 1500))
+    .catch(() => {});
   const tick = () => { $('#clock').textContent = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
   tick();
   setInterval(tick, 20000);

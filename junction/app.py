@@ -486,6 +486,34 @@ class Api:
             progress=lambda p: self._js(f"window.junctionUpdateProgress && junctionUpdateProgress({json.dumps(p)})"),
             quit_app=self._quit)
 
+    def whats_new(self):
+        """Once, on the first start after an update: the notes of every version since the one that ran before.
+        None otherwise (also on a brand-new install, which gets the welcome instead)."""
+        s = config.load_settings()
+        last = s.get("lastVersion")
+        if last == config.VERSION:
+            return None
+        s["lastVersion"] = config.VERSION
+        try:
+            config.save_settings(s)
+        except OSError:
+            return None
+        # Versions before 0.9.9 didn't remember theirs; someone already set up has updated from one of them.
+        if not last:
+            if not s.get("setupDone"):
+                return None
+            last = "0.9.8"
+        old, new = updates.parse_version(last), updates.parse_version(config.VERSION)
+        if not old or not new or old >= new:
+            return None
+        try:
+            releases = updates.notes_since(last)
+        except Exception as e:  # noqa: BLE001 - offline: still say it updated, the notes are on GitHub
+            logging.getLogger("junction").warning("Couldn't load what's new: %s", e)
+            releases = []
+        return {"version": config.VERSION, "from": last, "releases": releases,
+                "page": f"https://github.com/{updates.RELEASES}/releases"}
+
     def open_url(self, url):
         """Open one of the key sites, or Junction's release page, in the person's browser."""
         u = urllib.parse.urlparse(str(url))

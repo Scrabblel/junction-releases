@@ -27,6 +27,7 @@ from . import config
 log = logging.getLogger("junction")
 RELEASES = "scrabblel/junction-releases"
 LATEST = f"https://api.github.com/repos/{RELEASES}/releases/latest"
+RECENT = f"https://api.github.com/repos/{RELEASES}/releases?per_page=20"
 DOWNLOAD_PREFIX = f"https://github.com/{RELEASES}/releases/download/".lower()
 CHECK_EVERY = 6 * 3600   # seconds between checks while Junction stays open
 FIRST_CHECK = 20         # seconds after starting, so it never slows the start down
@@ -62,6 +63,21 @@ def latest(timeout=15):
         "size": asset and asset.get("size"),
         "sha256": digest[7:].lower() if digest.lower().startswith("sha256:") else None,
     }
+
+
+def notes_since(old, new=config.VERSION, timeout=15):
+    """What's new: the published releases after `old`, up to and including `new`, newest first.
+    [{version, title, notes, page}]; raises when GitHub can't be reached."""
+    with urllib.request.urlopen(urllib.request.Request(RECENT, headers=UA), timeout=timeout) as r:
+        releases = json.load(r)
+    lo, hi = parse_version(old), parse_version(new)
+    out = []
+    for rel in releases:
+        v = parse_version(rel.get("tag_name"))
+        if v and lo < v <= hi and not rel.get("draft") and not rel.get("prerelease"):
+            out.append((v, {"version": rel["tag_name"].strip().lstrip("vV"), "title": rel.get("name") or rel["tag_name"],
+                            "notes": (rel.get("body") or "").strip()[:6000], "page": rel.get("html_url")}))
+    return [r for _, r in sorted(out, key=lambda x: x[0], reverse=True)]
 
 
 class Updater:

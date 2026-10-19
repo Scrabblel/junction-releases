@@ -31,7 +31,11 @@ UninstallDisplayIcon={app}\Junction.exe
 UninstallDisplayName=Junction
 VersionInfoVersion={#AppVersion}
 VersionInfoProductName=Junction
-WizardStyle=modern
+; Dark, in Junction's own colours, with its title bar to match. The pictures come from tools/make_installer_art.py.
+WizardStyle=modern dark includetitlebar
+WizardBackColor=#12161d
+WizardImageFile=installer\wizard-100.bmp,installer\wizard-150.bmp,installer\wizard-200.bmp
+WizardSmallImageFile=installer\small-100.bmp,installer\small-150.bmp,installer\small-200.bmp
 Compression=lzma2/max
 SolidCompression=yes
 ; Junction is closed by the code below (Junction.exe --quit), not by Windows' Restart Manager.

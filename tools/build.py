@@ -1,7 +1,8 @@
 """Builds Junction for other people. From the project folder:
 
-    python tools/build.py              # Junction.exe, then the installer
-    python tools/build.py --exe-only   # just dist/Junction/Junction.exe
+    python tools/build.py                       # checks, Junction.exe, then the installer
+    python tools/build.py --exe-only            # just dist/Junction/Junction.exe
+    python tools/build.py --skip-store-check    # without building a new person's Store first (offline, say)
 
 Results: dist/Junction/Junction.exe and dist/JunctionSetup-<version>.exe. The version comes from
 junction/config.py (VERSION); raise it there before building a release. The installer needs Inno Setup 6.
@@ -77,11 +78,22 @@ def check_code():
     print("Code check: no mistakes found", flush=True)
 
 
+def check_store():
+    """Build a new person's Store through the app (tools/check_store.py, about half a minute), and stop the
+    build if it wouldn't load. It runs in its own Python, so it can't touch your own settings."""
+    if "--skip-store-check" in sys.argv:
+        print("Store check: skipped", flush=True)
+        return
+    if subprocess.run([sys.executable, os.path.join(ROOT, "tools", "check_store.py")], cwd=ROOT).returncode:
+        sys.exit("Nothing was built. (Offline? python tools/build.py --skip-store-check builds anyway.)")
+
+
 def main():
     v = version()
     print(f"Building Junction {v}", flush=True)
     check_code()
     write_builtin_key()
+    check_store()
     subprocess.run([sys.executable, "-m", "PyInstaller", "Junction.spec", "--noconfirm"], cwd=ROOT, check=True)
     if "--exe-only" in sys.argv:
         return
