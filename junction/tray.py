@@ -73,7 +73,7 @@ class _Menu:
         self.pic.MouseUp += self._mouse_up
         f.KeyDown += self._key
         f.Deactivate += lambda s, e: self.hide()
-        self.rows, self.boxes, self.hovered, self.scale = [], [], -1, 1.0
+        self.rows, self.boxes, self.hovered, self.scale, self.fonts = [], [], -1, 1.0, None
         # Windows 11 rounds the corners and draws a thin border in our colour; on Windows 10 the menu draws its own.
         hwnd = ctypes.c_void_p(f.Handle.ToInt64())
         dwm = ctypes.windll.dwmapi
@@ -83,11 +83,14 @@ class _Menu:
             border = ctypes.c_uint(RULE.R | RULE.G << 8 | RULE.B << 16)  # DWMWA_BORDER_COLOR, 0x00BBGGRR
             dwm.DwmSetWindowAttribute(hwnd, 34, ctypes.byref(border), 4)
 
-    def _fonts(self):
+    def _make_fonts(self):
+        """Regular, bold and label fonts at this screen's size: made once per opening, not on every redraw."""
+        for f in self.fonts or ():
+            f.Dispose()
         px = lambda n: float(n * self.scale)  # noqa: E731
-        return (Font("Segoe UI", px(14), FontStyle.Regular, GraphicsUnit.Pixel),
-                Font("Segoe UI Semibold", px(14), FontStyle.Regular, GraphicsUnit.Pixel),
-                Font("Segoe UI Semibold", px(11), FontStyle.Regular, GraphicsUnit.Pixel))
+        self.fonts = (Font("Segoe UI", px(14), FontStyle.Regular, GraphicsUnit.Pixel),
+                      Font("Segoe UI Semibold", px(14), FontStyle.Regular, GraphicsUnit.Pixel),
+                      Font("Segoe UI Semibold", px(11), FontStyle.Regular, GraphicsUnit.Pixel))
 
     def _px(self, n):
         return int(round(n * self.scale))
@@ -95,7 +98,8 @@ class _Menu:
     def show(self, rows, at):
         self.rows = rows
         self.scale = max(1.0, self.form.DeviceDpi / 96)
-        regular, bold, _ = self._fonts()
+        self._make_fonts()
+        regular, bold, _ = self.fonts
         pad, item_h, label_h, sep_h = self._px(6), self._px(34), self._px(26), self._px(9)
         widest = max([WinForms.TextRenderer.MeasureText(r[1], bold if r[3].get("bold") else regular).Width
                       for r in rows if r[0] == "item"] + [0])
@@ -125,17 +129,22 @@ class _Menu:
         w, h = self.form.Width, self.form.Height
         bmp = Bitmap(w, h, PixelFormat.Format24bppRgb)
         g = Graphics.FromImage(bmp)
+        used = [g]  # drawing objects hold Windows resources: freed as soon as the picture is done
+
+        def keep(obj):
+            used.append(obj)
+            return obj
         g.SmoothingMode = SmoothingMode.AntiAlias
         g.Clear(BACK)
         if not self.rounded:
-            g.DrawRectangle(Pen(RULE), 0, 0, w - 1, h - 1)
-        regular, bold, small = self._fonts()
+            g.DrawRectangle(keep(Pen(RULE)), 0, 0, w - 1, h - 1)
+        regular, bold, small = self.fonts
         flags = (WinForms.TextFormatFlags.VerticalCenter | WinForms.TextFormatFlags.Left
                  | WinForms.TextFormatFlags.EndEllipsis | WinForms.TextFormatFlags.NoPrefix)
         inset, text_x = self._px(6), self._px(28)
         for i, (r, (y, rh)) in enumerate(zip(self.rows, self.boxes)):
             if r[0] == "sep":
-                g.FillRectangle(SolidBrush(RULE), Rectangle(self._px(12), y + rh // 2, w - self._px(24), max(1, self._px(1))))
+                g.FillRectangle(keep(SolidBrush(RULE)), Rectangle(self._px(12), y + rh // 2, w - self._px(24), max(1, self._px(1))))
                 continue
             if r[0] == "label":
                 WinForms.TextRenderer.DrawText(g, r[1].upper(), small, Rectangle(text_x, y + self._px(4), w - text_x, rh - self._px(4)),
@@ -143,14 +152,15 @@ class _Menu:
                 continue
             back = HOVER if i == self.hovered else BACK
             if i == self.hovered:
-                g.FillPath(SolidBrush(HOVER), _rounded(inset, y + 1, w - 2 * inset, rh - 2, self._px(6)))
+                g.FillPath(keep(SolidBrush(HOVER)), keep(_rounded(inset, y + 1, w - 2 * inset, rh - 2, self._px(6))))
             line = r[3].get("line")
             if line is not None:  # the launcher's colour, like the lines in the app
                 bar = self._px(3)
-                g.FillPath(SolidBrush(line), _rounded(self._px(14), y + rh // 2 - self._px(7), bar, self._px(14), bar // 2))
+                g.FillPath(keep(SolidBrush(line)), keep(_rounded(self._px(14), y + rh // 2 - self._px(7), bar, self._px(14), bar // 2)))
             WinForms.TextRenderer.DrawText(g, r[1], bold if r[3].get("bold") else regular,
                                            Rectangle(text_x, y, w - text_x - self._px(14), rh), INK, back, flags)
-        g.Dispose()
+        for obj in used:
+            obj.Dispose()
         old = self.pic.Image
         self.pic.Image = bmp
         if old is not None:

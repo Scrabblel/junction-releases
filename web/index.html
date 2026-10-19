@@ -1403,7 +1403,13 @@ details.tech .tech-row .shop { font-size: 13px; color: var(--ink-dim); }
 /* Opening animation */
 .splash { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--ground); pointer-events: none;
   animation: sp-fade .45s 1.12s ease-out forwards; }
-.splash svg { width: min(30vmin, 220px); height: auto; overflow: visible; }
+.splash::before { content: ""; position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(closest-side at 50% 46%, color-mix(in srgb, var(--signal) 16%, transparent), color-mix(in srgb, var(--line-gog) 6%, transparent) 55%, transparent);
+  animation: sp-glow 1.1s .15s ease-out forwards; }
+.sp-stage { position: relative; display: grid; justify-items: center; gap: min(3vmin, 26px); animation: sp-zoom 1s cubic-bezier(.2, .7, .2, 1) both; }
+.splash svg { width: min(56vmin, 460px); height: auto; overflow: visible; }
+.sp-word { font: 800 min(6.4vmin, 54px)/1 var(--font-display); letter-spacing: .01em; color: var(--ink); opacity: 0;
+  animation: sp-word-in .4s .4s cubic-bezier(.2, .7, .2, 1) forwards, sp-word-out .26s .84s ease-in forwards; }
 .splash path { stroke-dasharray: 1; stroke-dashoffset: 1; }
 .sp-in { animation: sp-draw .5s cubic-bezier(.3, .7, .3, 1) forwards; }
 .sp-m { animation-delay: .06s; }
@@ -1413,6 +1419,10 @@ details.tech .tech-row .shop { font-size: 13px; color: var(--ink-dim); }
 .sp-out { animation: sp-draw .26s .5s cubic-bezier(.4, 0, .6, 1) forwards; }
 .sp-fly { transform-box: fill-box; transform-origin: 50% 0; animation: sp-fly .52s .86s cubic-bezier(.55, 0, .85, .35) forwards; }
 @keyframes sp-draw { to { stroke-dashoffset: 0; } }
+@keyframes sp-zoom { from { scale: .88; } to { scale: 1; } }
+@keyframes sp-glow { 45% { opacity: 1; } to { opacity: 0; } }
+@keyframes sp-word-in { from { opacity: 0; translate: 0 14px; } to { opacity: 1; translate: 0 0; } }
+@keyframes sp-word-out { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: 0 -18px; } }
 @keyframes sp-gather { from { translate: var(--from) 0; } to { translate: 0 0; } }
 @keyframes sp-fly {
   0% { transform: translateY(0) scaleY(1); }
@@ -1495,8 +1505,9 @@ html.win-max .win-ctl .wc-restore { display: block; }
     <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M.5.5l9 9M9.5.5l-9 9"/></svg>
   </button>
 </div>
-<!-- Opening: the three launcher lines come together into one, and it flies off the top of the screen. -->
+<!-- Opening: the three launcher lines come together into one, the name appears, and the line flies off the top. -->
 <div class="splash" id="splash" aria-hidden="true">
+  <div class="sp-stage">
   <svg viewBox="-12 -2 46 38" fill="none" stroke-width="3" stroke-linecap="round">
     <g class="sp-fly">
       <path class="sp-in sp-l" pathLength="1" d="M3 32 C 3 22, 11 20, 11 14" stroke="var(--line-steam)"/>
@@ -1505,6 +1516,8 @@ html.win-max .win-ctl .wc-restore { display: block; }
       <path class="sp-out" pathLength="1" d="M11 14 V 2" stroke="var(--signal)"/>
     </g>
   </svg>
+  <div class="sp-word">Junction</div>
+  </div>
 </div>
 <script>
 // Gone after the animation (or straight away for people who asked for less motion).
@@ -1629,6 +1642,7 @@ function loadPrefs() {
   const defaults = { favorites: [], hidden: [], shown: [], manual: [], sort: 'recent', scope: 'all',
                      wishlist: [], unwished: [], showOwned: false,
                      launcherOrder: LAUNCHER_ORDER.slice(), collections: [], density: 'covers', theme: 'dark',
+                     layout: 'console', style: 'junction',
                      uninstalledOpen: true, showFilters: false, accountsOpen: false, playWith: {}, wishAdded: {}, wishSort: 'cut' };
   try {
     const p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY)) || {});
@@ -1651,11 +1665,28 @@ const state = { view: { name: 'home' }, query: '', lines: new Set(), accounts: n
 let store = null;  // price data, loaded the first time the Store or Wishlist opens
 
 const THEMES = { dark: 'Dark', light: 'Light', system: 'Match Windows' };
+// Layouts arrange the pages (each draws its own Home, Library and game page; the Store, Wishlist, Stats, menus
+// and dialogs are shared). Styles are the look, and work with every layout: a style is CSS under
+// html[data-style="…"]. Only a style with `themes` has light and dark versions; the others are always dark.
+const LAYOUTS = {
+  console: { name: 'Console', home: () => renderHome(), library: () => renderLibrary(), game: g => renderGame(g) },
+};
+const STYLES = {
+  junction: { name: 'Junction', themes: true },
+};
+const layout = () => LAYOUTS[prefs.layout] || LAYOUTS.console;
+const style = () => (STYLES[prefs.style] ? prefs.style : 'junction');
+function applyLook() {
+  document.documentElement.dataset.layout = LAYOUTS[prefs.layout] ? prefs.layout : 'console';
+  document.documentElement.dataset.style = style();
+  applyTheme();
+}
 function applyTheme() {
-  if (prefs.theme === 'system') delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = prefs.theme;
+  const theme = STYLES[style()].themes ? prefs.theme : 'dark';
+  if (theme === 'system') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
   const b = document.getElementById('theme-btn');
-  if (b) { b.title = `Theme: ${THEMES[prefs.theme]}`; b.innerHTML = ICON[prefs.theme === 'system' ? 'auto' : prefs.theme === 'light' ? 'sun' : 'moon']; }
+  if (b) { b.title = `Theme: ${THEMES[prefs.theme]}`; b.innerHTML = ICON[prefs.theme === 'system' ? 'auto' : prefs.theme === 'light' ? 'sun' : 'moon']; b.hidden = !STYLES[style()].themes; }
 }
 
 // ---------- helpers ----------
@@ -3579,6 +3610,18 @@ async function profileMenu(page = 'main') {
     b.setAttribute('aria-checked', info[name]);
     toast(said[info[name] ? 1 : 0]);
   } });
+  // A Layout or Style list (only when there's a choice). A new layout redraws the page; a new style is only
+  // CSS, but it can bring the Theme choice in or out, so the menu opens again on the same page.
+  const lookChoices = (key, title, list) => Object.keys(list).length < 2 ? [] : [
+    { label: title, heading: true },
+    ...Object.entries(list).map(([k, o]) => ({ label: o.name, radio: (key === 'layout' ? document.documentElement.dataset.layout : style()) === k, group: key,
+      run: () => {
+        prefs[key] = k; savePrefs(); applyLook();
+        if (key === 'layout') return render();
+        // After this click has finished (it mustn't count as a click outside the new menu).
+        setTimeout(() => profileMenu('prefs').then(() => $('#ctx [data-group="style"][aria-checked="true"]')?.focus({ preventScroll: true })));
+      } })),
+  ];
   const nKeys = info ? info.accounts.filter(a => a.key).length : 0;
   const pages = {
     main: { items: [
@@ -3606,12 +3649,17 @@ async function profileMenu(page = 'main') {
       { icon: ICON.image, label: 'Cover art (SteamGridDB)', value: info ? keyVal(info.art) : '', run: () => (closeMenu(), keysDialog('art')) },
     ] },
     prefs: { title: 'Preferences', items: [
-      { label: 'Theme', heading: true },
-      ...Object.entries(THEMES).map(([k, name]) => ({ icon: ICON[k === 'system' ? 'auto' : k === 'light' ? 'sun' : 'moon'], label: name, radio: prefs.theme === k,
-        run: b => {
-          prefs.theme = k; savePrefs(); applyTheme();
-          b.closest('.ctx').querySelectorAll('[role="menuitemradio"]').forEach(x => x.setAttribute('aria-checked', x === b));
-        } })),
+      // Layout and Style show once there's more than one to choose from.
+      ...lookChoices('layout', 'Layout', LAYOUTS),
+      ...lookChoices('style', 'Style', STYLES),
+      ...(STYLES[style()].themes ? [
+        { label: 'Theme', heading: true },
+        ...Object.entries(THEMES).map(([k, name]) => ({ icon: ICON[k === 'system' ? 'auto' : k === 'light' ? 'sun' : 'moon'], label: name, radio: prefs.theme === k, group: 'theme',
+          run: b => {
+            prefs.theme = k; savePrefs(); applyTheme();
+            b.closest('.ctx').querySelectorAll('[data-group="theme"]').forEach(x => x.setAttribute('aria-checked', x === b));
+          } })),
+      ] : []),
       ...(info ? [
         { label: 'Junction', heading: true },
         info.tray && toggle('closeToTray', 'Keep in the tray when closed', info.closeToTray,
@@ -3643,7 +3691,7 @@ async function profileMenu(page = 'main') {
       : `<button class="pm-back" data-pm-back>${ic(ICON.back)}${esc(p.title)}</button><div class="pm-sep"></div>`) +
       items.map((it, i) => it.heading ? `<div class="ctx-label">${esc(it.label)}</div>`
         : `<button data-pm="${i}" ${it.cls ? `class="${it.cls}"` : ''} role="${it.on != null ? 'menuitemcheckbox' : it.radio != null ? 'menuitemradio' : 'menuitem'}"
-            ${it.on != null ? `aria-checked="${!!it.on}"` : it.radio != null ? `aria-checked="${it.radio}"` : ''} ${it.go ? 'aria-haspopup="menu"' : ''}>
+            ${it.on != null ? `aria-checked="${!!it.on}"` : it.radio != null ? `aria-checked="${it.radio}"` : ''} ${it.group ? `data-group="${it.group}"` : ''} ${it.go ? 'aria-haspopup="menu"' : ''}>
             ${it.icon ? ic(it.icon) : ''}<span class="pm-label">${esc(it.label)}</span>
             ${it.on != null ? '<span class="pm-switch" aria-hidden="true"></span>'
               : it.radio != null ? ic(PM.check, 'pm-check')
@@ -4215,11 +4263,11 @@ async function render() {
   }
   if (state.view.name === 'game') {
     const g = findGame(state.view.id);
-    if (g) return renderGame(g);
+    if (g) return layout().game(g);
     state.view = { name: 'home' };
   }
-  if (state.view.name === 'library') return renderLibrary();
-  renderHome();
+  if (state.view.name === 'library') return layout().library();
+  layout().home();
 }
 // The panel above the rows changes height from game to game (a logo or a long name, achievements, a
 // news line). When the page is scrolled down, scroll by the same amount so the rows stay where they are.
@@ -4458,6 +4506,7 @@ document.addEventListener('click', e => {
   if (t.id === 'search-store') { state.browse.q = state.query.trim(); state.browse.limit = 60; return go({ name: 'browse' }); }
   if (t.dataset.open) return open(t.dataset.open, undefined, t.dataset.tab);
   if (t.id === 'theme-btn') {
+    if (!STYLES[style()].themes) return toast(`The ${STYLES[style()].name} style is always dark.`);
     const order = ['dark', 'light', 'system'];
     prefs.theme = order[(order.indexOf(prefs.theme) + 1) % order.length];
     savePrefs(); applyTheme();
@@ -4900,7 +4949,7 @@ window.junctionProgress = msg => {
   if (el) el.textContent = msg;
 };
 
-applyTheme();
+applyLook();
 // ---------- updates: a newer Junction on GitHub ----------
 // The app checks GitHub now and then and says so here. A dot on your picture, one toast per version,
 // and "Update to …" at the top of the menu; the dialog downloads it and the installer does the rest.
