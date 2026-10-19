@@ -1,8 +1,9 @@
-"""Play time for games that no launcher counts: Junction times the games it starts itself.
+"""Play time for games that no launcher counts: Junction times them itself.
 
 Steam counts its own games, and GOG Galaxy counts the ones it starts. For everything else (Epic,
 Ubisoft, EA, Battle.net, Rockstar, Xbox, games you added yourself), Junction watches for a program running
-from the game's folder after you press Play, and adds up how long it runs.
+from the game's folder and adds up how long it runs: after you press Play, and also, while Junction is
+open or in the tray, when you start an installed game some other way (from its launcher or a shortcut).
 
 The totals are kept in %APPDATA%\\Junction\\playtime.json, next to the settings, so clearing the
 cache doesn't lose them.
@@ -21,6 +22,7 @@ START_WAIT = 4 * 60    # seconds a launcher may take (updates, sign-in) before t
 CHECK_EVERY = 10       # seconds between checks while a game runs
 SAVE_EVERY = 60        # seconds between saves, so a crash loses at most a minute
 GONE_AFTER = 2         # checks in a row without the game before the session ends
+LOOK_EVERY = 30        # seconds between looks for installed games started outside Junction
 SKIP_EXES = ("unins", "uninstall", "crashreport", "crashhandler", "redist", "vcredist", "dxsetup", "dotnet")
 
 _lock = threading.Lock()
@@ -71,7 +73,10 @@ def apply(lib):
     for g in lib.get("games") or []:
         e = data.get(g["id"])
         if e:
-            g = dict(g, playtimeMinutes=round((g.get("playtimeMinutes") or 0) + e.get("minutes", 0)) or None,
+            mine, theirs = e.get("minutes", 0), g.get("playtimeMinutes") or 0
+            # A launcher's own total (Ubisoft's stats) already holds the time Junction saw, so take the larger.
+            total = max(mine, theirs) if g.get("playtimeFrom") == "launcher" else mine + theirs
+            g = dict(g, playtimeMinutes=round(total) or None,
                      lastPlayed=max(g.get("lastPlayed") or 0, e.get("lastPlayed") or 0) or None)
         games.append(g)
     return dict(lib, games=games)
@@ -118,8 +123,23 @@ def _is_running(folder, programs=None):
     return False
 
 
+def _folders(games):
+    """{game id: install folder} for the installed games Junction may time without being asked: not a drive
+    root or a folder holding another game's folder, so one game never counts for another."""
+    out = {}
+    for g in games:
+        d = g.get("installDir")
+        if not g.get("installed") or not d or not counts(g):
+            continue
+        d = os.path.normcase(os.path.abspath(d)).rstrip("\\")
+        if d.count("\\") >= 1 and os.path.isdir(d):
+            out[g["id"]] = d
+    inside = {gid for gid, d in out.items() if any(o != d and o.startswith(d + "\\") for o in out.values())}
+    return {gid: d for gid, d in out.items() if gid not in inside}
+
+
 class Tracker:
-    """Times one session per game started from Junction. on_change() runs when a session starts or ends."""
+    """Times one session per game. on_change() runs when a session starts or ends."""
 
     def __init__(self, on_change=lambda: None):
         self.on_change = on_change
@@ -131,6 +151,26 @@ class Tracker:
             return
         self._watching.add(game["id"])
         threading.Thread(target=self._watch, args=(game["id"], game["installDir"]), daemon=True).start()
+
+    def look_around(self, games):
+        """In the background, notice installed games started outside Junction. `games()` gives the library's games."""
+        threading.Thread(target=self._look_loop, args=(games,), daemon=True).start()
+
+    def _look_loop(self, games):
+        while True:
+            time.sleep(LOOK_EVERY)
+            try:
+                folders = {gid: d for gid, d in _folders(games() or []).items() if gid not in self._watching}
+                if not folders:
+                    continue
+                programs = running_programs()
+                for gid, folder in folders.items():
+                    if _is_running(folder, programs):
+                        self._watching.add(gid)
+                        threading.Thread(target=self._watch, args=(gid, folder), daemon=True).start()
+            except Exception:  # noqa: BLE001 - never take the app down over a timer
+                import traceback
+                traceback.print_exc()
 
     def _watch(self, game_id, folder):
         try:

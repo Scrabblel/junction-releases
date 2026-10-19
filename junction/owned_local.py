@@ -8,6 +8,9 @@ No login and no API key: each launcher keeps a copy of your library on disk.
   product IDs and add-on flags are read from it, nothing else.
 
 These copies are only as fresh as the last time each launcher was opened and signed in.
+
+Play time comes from the same kind of files: GOG Galaxy's database, Ubisoft Connect's stats cache
+(cache/game_stats) and, for last played only, Battle.net's settings file.
 """
 import base64
 import datetime
@@ -256,6 +259,100 @@ if __name__ == "__main__":
         print(f"{label}: {len(rows)}")
         for r in rows:
             print("   ", r[-2], "|", (r[-1] or "no cover")[:70])
+
+
+UBI_TOTALS = ("timeplayed", "playtime", "totalplaytime", "totaltimeplayed")
+
+
+def _ubisoft_spaces(base):
+    """{space id: [product ids]}: a game's editions share one space, and its stats are kept per space."""
+    path = os.path.join(base, "cache", "configuration", "configurations")
+    if not os.path.isfile(path):
+        return {}
+    with open(path, "rb") as f:
+        records = _protobuf(f.read())
+    spaces = {}
+    for _, wire, value in records:
+        if wire != 2:
+            continue
+        rec = {field: v for field, _, v in _protobuf(value)}
+        if 1 not in rec or 3 not in rec:
+            continue
+        for space in set(re.findall(r"^\s*space_id: *['\"]?([0-9a-f-]{36})", rec[3].decode("utf-8", "replace"), re.M)):
+            spaces.setdefault(space, []).append(str(rec[1]))
+    return spaces
+
+
+def _ubisoft_time(cards):
+    """(seconds played, last changed unix time) from one game's stat cards, or None. Games name it differently:
+    one total ("TimePlayed", "Playtime"), or only parts such as solo, co-op and PvP play time, which are added up."""
+    timed = [c for c in cards if c.get("unit") == "Seconds" and "play" in (c.get("statName") or "").lower()]
+    total = [c for c in timed if c["statName"].lower() in UBI_TOTALS or c.get("displayName") == "Time Played"]
+    use = total[:1] or [c for c in timed if c["statName"].lower().endswith("playtime")]
+    try:
+        seconds = sum(float(c.get("value") or 0) for c in use)
+    except ValueError:
+        return None
+    if not use or seconds <= 0:
+        return None
+    when = None
+    for c in use:
+        try:
+            t = int(datetime.datetime.fromisoformat(c["lastModified"].replace("Z", "+00:00")).timestamp())
+            when = max(when or 0, t)
+        except (KeyError, ValueError, AttributeError):
+            pass
+    return seconds, when
+
+
+def ubisoft_playtime():
+    """{Ubisoft product id: (minutes played, last played unix time)} from Ubisoft Connect's stats cache.
+
+    Ubisoft Connect saves a game's stats when you look at them in the launcher, so not every game is
+    there, and the numbers are as fresh as that last look. Only cache/game_stats is read (never ownership).
+    """
+    base = _ubisoft_dir()
+    if not base:
+        return {}
+    spaces = None
+    out = {}
+    for path in glob.glob(os.path.join(base, "cache", "game_stats", "*")):
+        with open(path, "rb") as f:
+            data = f.read()
+        for _, wire, value in _protobuf(data):
+            if wire != 2:
+                continue
+            rec = {field: v for field, w, v in _protobuf(value) if w == 2}
+            try:
+                space = rec[1].decode()
+                got = _ubisoft_time(json.loads(rec[2])["Statscards"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            if not got:
+                continue
+            spaces = spaces if spaces is not None else _ubisoft_spaces(base)
+            for pid in spaces.get(space, ()):
+                out[pid] = (round(got[0] / 60), got[1])
+    return out
+
+
+def battlenet_last_played():
+    """{Battle.net game uid: last played unix time} from the Battle.net app's settings. It keeps no play time."""
+    path = os.path.join(os.environ.get("APPDATA", ""), "Battle.net", "Battle.net.config")
+    try:
+        with open(path, encoding="utf-8") as f:
+            games = json.load(f).get("Games") or {}
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for uid, v in games.items():
+        try:
+            when = int((v or {}).get("LastPlayed") or 0)
+        except (ValueError, TypeError, AttributeError):
+            continue
+        if when > 0:
+            out[uid.lower()] = when
+    return out
 
 
 def gog_playtime():

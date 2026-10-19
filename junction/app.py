@@ -22,7 +22,8 @@ import webbrowser
 
 import webview
 
-from . import config, keys, launchers, library, live_store, logs, pad, playtime, startup, steam_switch, titlebar, updates
+from . import (config, ea_account, epic_account, keys, launchers, library, live_store, logs, pad, playtime, signins,
+               startup, steam_switch, titlebar, updates)
 
 LIB_VERSION = 1          # bump when the cached library's shape changes
 ACH_TTL = 10 * 60        # seconds a game's achievements stay cached
@@ -30,6 +31,8 @@ WATCH_EVERY = 5          # seconds between checks for games installed or removed
 ENRICHED = ("friends", "friendOwners", "dlcSales", "news")
 # Pages the settings dialogs may open in the browser (where people make their keys).
 KEY_SITES = {"steamcommunity.com", "isthereanydeal.com", "www.steamgriddb.com"}
+# Launchers you can sign in to for their play time: (module, name).
+SIGN_INS = {"epic": (epic_account, "Epic"), "ea": (ea_account, "EA")}
 
 
 def _merge_extras(new, old):
@@ -43,6 +46,7 @@ def _merge_extras(new, old):
     for a in new.get("steamAccounts") or []:
         a.setdefault("avatar", pics.get(a["steamId"]))
     prev = {g["id"]: g for g in old.get("games") or []}
+    signed_in = signins.overview()  # after signing out, that store's numbers go
     for g in new["games"]:
         p = prev.get(g["id"])
         if not p:
@@ -50,8 +54,10 @@ def _merge_extras(new, old):
         for k in ("achievements", "sizeBytes"):
             if g.get(k) is None and p.get(k) is not None:
                 g[k] = p[k]
-        if g["launcher"] == "gog":  # GOG play time comes from enrich()
-            g["playtimeMinutes"] = g.get("playtimeMinutes") or p.get("playtimeMinutes")
+        if (p.get("playtimeFrom") or g["launcher"] in ("gog", "battlenet")) and (g["launcher"] not in SIGN_INS or g["launcher"] in signed_in):
+            # launcher play time comes from enrich()
+            if not g.get("playtimeMinutes") and p.get("playtimeMinutes"):
+                g["playtimeMinutes"], g["playtimeFrom"] = p["playtimeMinutes"], p.get("playtimeFrom")
             g["lastPlayed"] = g.get("lastPlayed") or p.get("lastPlayed")
 
 
@@ -74,6 +80,7 @@ class Api:
         self._quitting = False
         self._own_frame = False  # True once Junction draws its own title bar
         self._tracker = playtime.Tracker(self._played)
+        self._sign_in_lock = threading.Lock()
         self._updates = updates.Updater(lambda info: self._js(f"window.junctionUpdate && junctionUpdate({json.dumps(info)})"))
 
     # ---------- talking back to the page ----------
@@ -337,7 +344,7 @@ class Api:
         s = config.load_settings()
         return {**keys.overview(), "version": config.VERSION, "setupDone": bool(s.get("setupDone")),
                 "closeToTray": s.get("closeToTray", True), "startWithWindows": startup.enabled(),
-                "tray": self._tray is not None}
+                "tray": self._tray is not None, "signins": signins.overview()}
 
     def set_option(self, name, value):
         """The on/off settings: setupDone, closeToTray, startWithWindows."""
@@ -514,6 +521,45 @@ class Api:
         return {"version": config.VERSION, "from": last, "releases": releases,
                 "page": f"https://github.com/{updates.RELEASES}/releases"}
 
+    # ---------- launcher sign-ins (for their play time) ----------
+
+    def sign_in(self, store):
+        """Open the store's own sign-in page in a Junction window; returns {ok, name} once signed in, or {error}."""
+        module, label = SIGN_INS.get(store, (None, None))
+        if not module:
+            return {"error": "Junction can't sign in there yet."}
+        if not self._sign_in_lock.acquire(blocking=False):
+            return {"error": "A sign-in window is already open."}
+        self._forget_web_sign_ins()  # so the store asks who you are, instead of reusing the last account
+        try:
+            name = module.sign_in(lambda title, url: webview.create_window(
+                title, url, width=520, height=780, background_color="#12161d"))
+        except module.SignInError as e:
+            return {"error": str(e)}
+        except (urllib.error.URLError, OSError, TimeoutError):
+            return {"error": f"Junction couldn't reach {label}. Check your internet connection and try again."}
+        finally:
+            self._sign_in_lock.release()
+        threading.Thread(target=self._background, args=(False,), daemon=True).start()  # fetch the play time now
+        return {"ok": True, "name": name}
+
+    def sign_out(self, store):
+        module, _ = SIGN_INS.get(store, (None, None))
+        if module:
+            module.sign_out()
+            self._forget_web_sign_ins()
+            threading.Thread(target=self._background, args=(True,), daemon=True).start()
+        return {"ok": True, "signins": signins.overview()}
+
+    def _forget_web_sign_ins(self):
+        """Clear the cookies in Junction's browser storage, which the sign-in windows share: the stores' own "keep me
+        signed in" lives there. Junction's pages use none, and Junction's saved sign-ins aren't cookies."""
+        try:
+            if self._window:
+                self._window.clear_cookies()
+        except Exception:  # noqa: BLE001 - at worst the store remembers the last account
+            traceback.print_exc()
+
     def open_url(self, url):
         """Open one of the key sites, or Junction's release page, in the person's browser."""
         u = urllib.parse.urlparse(str(url))
@@ -657,6 +703,7 @@ def main():
         window.events.maximized += api._window_state
         window.events.restored += api._window_state
     threading.Thread(target=api._watch, daemon=True).start()
+    api._tracker.look_around(lambda: (api._lib or {}).get("games"))  # games started outside Junction
     api._updates.start()
     threading.Thread(target=_listen_for_second_start, args=(api,), daemon=True).start()
     threading.Thread(target=_listen_for_quit, args=(api,), daemon=True).start()

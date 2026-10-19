@@ -1760,6 +1760,9 @@ const host = {
   },
   // On/off settings (tray, start with Windows, setup done), and the problem report.
   async removeAccount(steamId) { return this.inApp ? window.pywebview.api.remove_steam_account(steamId) : null; },
+  // Launcher sign-ins (Epic, EA) for their play time: the sign-in happens on the store's own page, in a window of its own.
+  async signIn(store) { return this.inApp ? window.pywebview.api.sign_in(store) : { error: 'Only the Junction app can sign in.' }; },
+  async signOut(store) { return this.inApp ? window.pywebview.api.sign_out(store) : null; },
   async restoreAccount(steamId) { return this.inApp ? window.pywebview.api.restore_steam_account(steamId) : null; },
   async setOption(name, value) {
     return this.inApp ? window.pywebview.api.set_option(name, value) : null;
@@ -3952,6 +3955,7 @@ async function profileMenu(page = 'main') {
       { icon: ICON.person, label: 'Steam accounts', value: info ? `${nKeys} of ${info.accounts.length} with a key` : '', run: () => (closeMenu(), keysDialog('steam')) },
       { icon: ICON.tag, label: 'Prices (IsThereAnyDeal)', value: !info ? '' : info.prices ? 'Your own key' : info.pricesBuiltIn ? 'Built in' : 'Not set', run: () => (closeMenu(), keysDialog('prices')) },
       { icon: ICON.image, label: 'Cover art (SteamGridDB)', value: info ? keyVal(info.art) : '', run: () => (closeMenu(), keysDialog('art')) },
+      ...(info ? [{ label: 'Play time from launchers', heading: true }, signInRow(info, 'epic', 'Epic Games'), signInRow(info, 'ea', 'EA app')] : []),
     ] },
     prefs: { title: 'Preferences', items: [
       // Layout and Style show once there's more than one to choose from.
@@ -4194,6 +4198,25 @@ function wireKeys(dlg) {
   });
 }
 // Removing a Steam account asks first, on the same button, and says what it does.
+// A launcher sign-in in the profile menu: sign in on the store's own page; signed in, press twice to sign out.
+function signInRow(info, store, label) {
+  const s = info.signins?.[store];
+  const now = () => (!s ? 'Sign in' : s.expired ? 'Sign in again' : s.name);
+  return { icon: launcherIcon(store), label, value: now(), run: async b => {
+    const v = b.querySelector('.pm-val');
+    if (s && !s.expired) {
+      if (!b.dataset.sure) { b.dataset.sure = '1'; v.textContent = 'Sign out?'; return; }
+      await host.signOut(store).catch(() => null);
+      closeMenu();
+      return toast(`Signed out of ${label}. Its play time leaves your library in a moment.`, store);
+    }
+    v.textContent = 'Signing in…';
+    const res = await host.signIn(store).catch(() => null);
+    if (!res?.ok) { v.textContent = now(); return toast(res?.error || 'Junction couldn’t sign in. Try again.'); }
+    closeMenu();
+    toast(`Signed in as ${res.name}. ${label} play time shows up in a moment.`, store);
+  } };
+}
 async function removeAccount(btn) {
   const form = btn.closest('form'), msg = form.querySelector('.key-msg'), name = form.dataset.name;
   if (!btn.dataset.sure) {

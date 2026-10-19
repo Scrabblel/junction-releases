@@ -2,7 +2,7 @@
 
 Two steps, so the window has something to show quickly:
 - scan(): launchers, owned games, Steam accounts, art and store details. Takes seconds.
-- enrich(): achievements, disk space, GOG play time, DLC sales, friends, profile pictures and news.
+- enrich(): achievements, disk space, launcher play time, DLC sales, friends, profile pictures and news.
   Slower; runs in the background after a scan.
 
 Art stays as web addresses here (the app can load pictures from Steam itself); the artifact export
@@ -16,7 +16,7 @@ import time
 import urllib.error
 import urllib.request
 
-from . import art, config, extras, launchers, owned_local, steam_owned, steam_switch, stores
+from . import art, config, ea_account, epic_account, extras, launchers, owned_local, steam_owned, steam_switch, stores
 
 
 def _log(progress, msg):
@@ -189,17 +189,35 @@ def add_sizes(lib, max_age=86400):
     config.write_cache("sizes.json", known)
 
 
+def add_launcher_playtime(games):
+    """Play time the launchers count themselves: GOG Galaxy, Ubisoft Connect and (when signed in) Epic and EA, and
+    Battle.net's last played.
+    `playtimeFrom: "launcher"` tells playtime.apply() that this total already holds any time Junction counted."""
+    by_id, by_name = (lambda g: g["id"].split(":", 1)[1]), (lambda g: art.normalize(g["name"]))
+    readers = {"gog": (owned_local.gog_playtime, by_id), "ubisoft": (owned_local.ubisoft_playtime, by_id),
+               "epic": (epic_account.playtime, by_id), "ea": (ea_account.playtime, by_name),
+               "battlenet": (lambda: {k: (None, t) for k, t in owned_local.battlenet_last_played().items()}, by_id)}
+    for launcher, (read, key) in readers.items():
+        try:
+            times = read()
+        except Exception:  # noqa: BLE001 - a changed file format or an expired sign-in must not stop the rest
+            continue
+        for g in games:
+            hit = g["launcher"] == launcher and times.get(key(g))
+            if not hit:
+                continue
+            minutes, last = hit
+            if minutes:
+                g["playtimeMinutes"], g["playtimeFrom"] = minutes, "launcher"
+            g["lastPlayed"] = max(g.get("lastPlayed") or 0, last or 0) or None
+
+
 def add_extras(lib, settings=None, inline=web_uri, store_appids=(), progress=None):
-    """GOG play time, DLC on sale, Steam friends and your own profile pictures (also used by tools/export_extras.py)."""
+    """Launcher play time, DLC on sale, Steam friends and your own profile pictures (also used by tools/export_extras.py)."""
     settings = settings if settings is not None else config.load_settings()
     games = lib["games"]
 
-    gog = owned_local.gog_playtime()
-    for g in games:
-        if g["launcher"] == "gog" and g["id"].split(":", 1)[1] in gog:
-            minutes, last = gog[g["id"].split(":", 1)[1]]
-            g["playtimeMinutes"] = minutes or g.get("playtimeMinutes")
-            g["lastPlayed"] = last or g.get("lastPlayed")
+    add_launcher_playtime(games)
 
     _log(progress, "Checking DLC sales")
     appids = sorted({g["steamAppId"] for g in games if g["launcher"] == "steam" and g.get("steamAppId")
