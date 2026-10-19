@@ -457,6 +457,16 @@ FINDERS = {
 }
 
 
+# The launchers' own apps, by their name in Windows' installed programs (uninstalling removes the entry).
+CLIENT_NAMES = {"epic": "epic games launcher", "ea": "ea app"}
+
+
+def clients_on_pc():
+    """Which of these launchers' own apps are installed here, e.g. ["ea", "epic"]."""
+    names = {(v.get("DisplayName") or "").strip().lower() for _, v in _uninstall_entries()}
+    return sorted(k for k, n in CLIENT_NAMES.items() if n in names)
+
+
 def find_all():
     """Run every finder. One broken launcher never stops the others."""
     games, errors = [], {}

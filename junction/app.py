@@ -173,8 +173,9 @@ class Api:
                 self._busy.release()
 
     def _view(self):
-        """The library as the page sees it: with the play time Junction counted itself."""
-        return playtime.apply(self._lib) if self._lib else self._lib
+        """The library as the page sees it: with the play time Junction counted itself, and which launcher
+        sign-ins have run out (so the page can ask to sign in again)."""
+        return dict(playtime.apply(self._lib), signins=signins.overview()) if self._lib else self._lib
 
     def _played(self):
         """A game Junction started began or stopped: update Continue playing and the tray."""

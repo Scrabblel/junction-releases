@@ -44,6 +44,8 @@ def _post_token(fields):
         with urllib.request.urlopen(req, timeout=20) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
+        if e.code >= 500:  # EA having a bad moment, not a refused sign-in: try again later
+            raise
         try:
             body = json.load(e)
             msg = body.get("error_description") or body.get("error")

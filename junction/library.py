@@ -151,7 +151,7 @@ def scan(settings=None, progress=None):
         })
     lib = {"scannedAt": int(time.time()), "launchers": launchers.LAUNCHERS,
            "steamAccounts": accounts, "ownedSources": owned, "steamSignedIn": steam_switch.signed_in_steamid(),
-           "games": out, "errors": result["errors"]}
+           "games": out, "errors": result["errors"], "clientsOnPc": launchers.clients_on_pc()}
     return lib, games
 
 

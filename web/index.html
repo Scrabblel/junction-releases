@@ -827,9 +827,9 @@ button.avatar svg { width: 18px; height: 18px; }
 html[data-style="glass"] .ctx.profile:has(.pm-fly) { backdrop-filter: none; background: rgb(20 26 36 / .94); }
 html[data-style="glass"] .pm-fly { background: rgb(20 26 36 / .8); border-color: rgb(255 255 255 / .14); backdrop-filter: blur(26px) saturate(1.4); }
 .pm-sep { height: 1px; background: var(--rule); margin: 4px 2px 6px; }
-#signed-in.has-update { position: relative; overflow: visible; }
-#signed-in.has-update img { border-radius: 50%; }
-#signed-in.has-update::after { content: ""; position: absolute; top: -2px; right: -2px; width: 11px; height: 11px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 2px var(--ground); }
+#signed-in:is(.has-update, .needs-signin) { position: relative; overflow: visible; }
+#signed-in:is(.has-update, .needs-signin) img { border-radius: 50%; }
+#signed-in:is(.has-update, .needs-signin)::after { content: ""; position: absolute; top: -2px; right: -2px; width: 11px; height: 11px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 2px var(--ground); }
 .ctx.profile .pm-update { color: var(--signal); font-weight: 600; }
 .ctx.profile .pm-update .pm-ico { color: var(--signal); }
 .ctx.profile .pm-update .pm-val { color: #1a1205; background: var(--signal); padding: 3px 8px; border-radius: var(--pill); font-weight: 700; font-size: 11px; }
@@ -3935,6 +3935,8 @@ async function profileMenu(page = 'main') {
     main: { items: [
       ...(updateState?.available ? [{ icon: PM.update, label: `Update to ${updateState.available.version}`, value: 'New', cls: 'pm-update',
         run: () => (closeMenu(), updateDialog()) }] : []),
+      ...expiredSignIns().map(store => ({ icon: launcherIcon(store), label: `Sign in to ${SIGN_IN_NAMES[store]} again`, value: 'Expired', cls: 'pm-update',
+        run: b => signInAgain(store, b) })),
       { icon: PM.key, label: 'Accounts and keys', go: 'keys' },
       { icon: PM.sliders, label: 'Preferences', go: 'prefs' },
       { icon: PM.refresh, label: 'Rescan launchers', run: () => (closeMenu(), rescan()) },
@@ -5253,6 +5255,7 @@ function friendsPanel() {
   $('.friends-panel .fp-row, #fp-close')?.focus();
 }
 function stampScan() {
+  checkSignIns();
   const fb = $('#friends-btn'), active = (lib.friends || []).filter(f => f.playing || f.state).length;
   fb.hidden = !(lib.friends || []).length;
   $('#friends-count').hidden = !active;
@@ -5353,6 +5356,31 @@ window.junctionUpdate = info => {
     toast(`Junction ${rel.version} is out. Open the menu under your picture to update.`);
   }
 };
+// ---------- launcher sign-ins that ran out (Epic, EA) ----------
+// Told the same way as an update: a dot on your picture, one toast each time a sign-in runs out, and
+// "Sign in to … again" at the top of the menu. The app says which have run out with every library it sends.
+// Only for a launcher whose own app is on this PC: without it, there's nothing of theirs to keep up to date.
+const SIGN_IN_NAMES = { epic: 'Epic Games', ea: 'EA app' };
+const expiredSignIns = () => Object.keys(lib.signins || {})
+  .filter(k => lib.signins[k].expired && SIGN_IN_NAMES[k] && (lib.clientsOnPc || []).includes(k));
+function checkSignIns() {
+  const out = expiredSignIns(), before = prefs.signInToasted || [];
+  $('#signed-in').classList.toggle('needs-signin', out.length > 0);
+  // Forget the ones that are signed in again, so running out again later is told again.
+  const told = before.filter(k => out.includes(k)), fresh = out.filter(k => !told.includes(k));
+  if (fresh.length) toast(`Your ${fresh.map(k => SIGN_IN_NAMES[k]).join(' and ')} sign-in has run out, so its play time can't update. Open the menu under your picture to sign in again.`, fresh[0]);
+  if (fresh.length || told.length !== before.length) { prefs.signInToasted = [...told, ...fresh]; savePrefs(); }
+}
+async function signInAgain(store, b) {
+  const v = b.querySelector('.pm-val');
+  v.textContent = 'Signing in…';
+  const res = await host.signIn(store).catch(() => null);
+  if (!res?.ok) { v.textContent = 'Expired'; return toast(res?.error || 'Junction couldn’t sign in. Try again.'); }
+  closeMenu();
+  lib.signins = { ...lib.signins, [store]: { name: res.name, expired: false } };
+  checkSignIns();
+  toast(`Signed in as ${res.name}. ${SIGN_IN_NAMES[store]} play time shows up in a moment.`, store);
+}
 const updateMB = n => (n / 1048576).toFixed(1);
 // Release notes are written in GitHub's Markdown; this shows the common parts (headings, lists, bold).
 function mdLite(text) {
