@@ -1457,6 +1457,67 @@ html.own-frame :is(.topbar, .topbar *, .win-ctl, .win-ctl *, .topbar *::before, 
 html.win-max .win-ctl .wc-restore { display: block; }
 /* When the top bar folds away, so do the buttons, until you point at them. */
 .app.top-hidden ~ .win-ctl:not(:hover) { opacity: 0; }
+/* ---------- Classic layout (Preferences › Layout): your games in a list on the left, the chosen game on the right ----------
+   Both sides scroll on their own under a solid top bar, on Home, Library and game pages. */
+html[data-layout="classic"] .app:is([data-view="home"], [data-view="library"], [data-view="game"]) .main { grid-row: 2; overflow: hidden; }
+html[data-layout="classic"] .app:is([data-view="home"], [data-view="library"], [data-view="game"]) .topbar { background: var(--panel); border-bottom: 1px solid var(--rule); }
+.classic { position: relative; height: 100%; display: grid; grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); }
+.classic .backdrop { position: fixed; inset: 0; height: auto; opacity: .3; }
+.classic .backdrop img { filter: blur(44px) saturate(1.2); scale: 1.25; }
+.cl-side { position: relative; z-index: 1; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px;
+  padding: 16px 8px 0 calc(var(--gutter-l) + 4px); border-right: 1px solid var(--rule); background: color-mix(in srgb, var(--panel) 82%, transparent); }
+.cl-search { position: relative; display: block; margin-right: 8px; }
+.cl-search svg { position: absolute; left: 12px; top: 50%; translate: 0 -50%; width: 16px; height: 16px; color: var(--ink-faint); pointer-events: none; }
+.cl-search input { width: 100%; box-sizing: border-box; height: 38px; padding: 0 12px 0 36px; border-radius: var(--pill); border: 1px solid var(--rule); background: var(--raised); color: var(--ink); font-size: 14px; }
+.cl-search input::placeholder { color: var(--ink-faint); }
+.cl-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.cl-chips button { padding: 5px 12px; border-radius: var(--pill); border: 1px solid var(--rule); background: none; color: var(--ink-dim); font-size: 13px; font-weight: 600; }
+.cl-chips button:hover { color: var(--ink); border-color: var(--ink-faint); }
+.cl-chips button[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+.cl-list { min-height: 0; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 1px; padding: 0 6px 28px 0; scrollbar-width: thin; scrollbar-color: var(--raised-2) transparent; }
+.cl-label { margin: 12px 10px 4px; font: 600 11px/1 var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+.cl-label:first-child { margin-top: 2px; }
+.cl-empty { margin: 16px 10px; color: var(--ink-faint); font-size: 14px; }
+.cl-row { min-width: 0; display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px 0 10px; border: 0; border-radius: calc(6px * var(--round)); background: none;
+  color: var(--ink-dim); font-size: 14px; text-align: left; content-visibility: auto; contain-intrinsic-size: auto 34px; }
+.cl-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-row .h { flex: none; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.cl-row .lg { flex: none; display: flex; gap: 5px; color: var(--ink-faint); }
+.cl-row .lg span { display: grid; }
+.cl-row .lg svg { width: 14px; height: 14px; }
+.cl-row.off .nm { color: var(--ink-faint); }
+.cl-row:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+.cl-row:hover .lg, .cl-row[aria-current] .lg { color: var(--ink-dim); }
+.cl-row[aria-current] { background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink); font-weight: 600; }
+.cl-row[aria-current] .nm { color: var(--ink); }
+.cl-row:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.cl-page { position: relative; z-index: 1; min-width: 0; overflow-y: auto; display: grid; align-content: start; gap: 16px; padding: 18px var(--gutter-r) 0 26px; scrollbar-width: thin; scrollbar-color: var(--raised-2) transparent; }
+.cl-page > .back { justify-self: start; padding: 8px 16px 8px 12px; font-size: 14px; }
+.cl-banner { position: relative; min-height: clamp(190px, 30vh, 320px); box-sizing: border-box; border-radius: var(--radius); overflow: hidden; display: flex; align-items: flex-end;
+  padding: 22px 26px; background: var(--raised) center / cover no-repeat; }
+.cl-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, rgb(0 0 0 / .55), transparent 62%); }
+.cl-banner > * { position: relative; z-index: 1; }
+.cl-banner .logo { max-width: min(340px, 70%); max-height: 120px; object-fit: contain; object-position: left bottom; filter: drop-shadow(0 4px 18px rgb(0 0 0 / .5)); }
+.cl-banner h1 { margin: 0; font: 800 clamp(28px, 3.4vw, 46px)/1.04 var(--font-display); letter-spacing: -.02em; color: var(--on-image); text-wrap: balance; text-shadow: var(--title-shadow); }
+.cl-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cl-actions .meta { margin: 0 0 0 4px; display: flex; gap: 8px; align-items: center; }
+.cl-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.cl-stat { display: grid; gap: 5px; padding: 13px 15px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--rule); }
+.cl-stat span { font: 600 11px/1.2 var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+.cl-stat b { font: 700 21px/1.1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.cl-page > .note-chip { justify-self: start; }
+.cl-page > .note { margin: 0; color: var(--ink-dim); font-size: 14px; }
+.classic .gp-tabs { margin: 4px calc(-1 * var(--gutter-r)) 0 -26px; padding-left: 26px; }
+.classic .gp-panel { padding: 16px 0 48px; background: none; min-height: 0; animation: none; }
+html[data-style="glass"] .classic .gp-panel { background: none; backdrop-filter: none; border: 0; }
+html[data-style="glass"] .classic .backdrop { opacity: .6; }
+html[data-style="glass"] :is(.cl-side, .cl-stat) { background: rgb(16 21 30 / .5); backdrop-filter: blur(24px) saturate(1.3); }
+html[data-style="mono"] .cl-banner { filter: grayscale(1); }
+html[data-style="sharp"] :is(.cl-banner, .cl-stat, .cl-search input, .cl-chips button) { clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+html[data-style="sharp"] .cl-banner { --cut: 18px; }
+html[data-style="sharp"] .cl-chips button[aria-pressed="true"] { background: var(--signal); border-color: var(--signal); color: var(--on-go); }
+html[data-style="sharp"] .cl-row[aria-current] { background: linear-gradient(90deg, color-mix(in srgb, var(--signal) 24%, transparent), transparent); }
+
 /* ---------- styles (Preferences › Style): the same pages in another look ----------
    Each style sets the colours, fonts and corners above, then a few rules of its own. They're always dark. */
 
@@ -1756,6 +1817,7 @@ const THEMES = { dark: 'Dark', light: 'Light', system: 'Match Windows' };
 // html[data-style="…"]. Only a style with `themes` has light and dark versions; the others are always dark.
 const LAYOUTS = {
   console: { name: 'Console', home: () => renderHome(), library: () => renderLibrary(), game: g => renderGame(g) },
+  classic: { name: 'Classic', home: () => renderClassic(), library: () => renderClassic(), game: () => renderClassic(), shown: () => classicGame() },
 };
 const STYLES = {
   junction: { name: 'Junction', themes: true },
@@ -2424,6 +2486,7 @@ function moveFocus(dir) {
     if (back?.isConnected && back.offsetParent !== null) { back.focus({ preventScroll: true }); return back.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
     return moveFocus('down');
   }
+  if ($('#main .classic')) return moveClassic(dir);
   const items = [...document.querySelectorAll(`#main .tile, #main .lrow, #focus .pill, #main .play, #main .all-games, #main .hrow .line-chip, #main .gp-head .pill, #main .gp-tabs button, #main .lhead button,
     #main .fbar :is(button, select, input), #main .libchips button, #main .deal, #main .store-search input, #main .filters-toggle,
     #main .filter-panel :is(button, select, input), #main .results-bar :is(button, select), #main .btn.more`)]
@@ -2448,6 +2511,44 @@ function moveFocus(dir) {
   }
   if (h && dir === 'up' && best && best.closest('#focus') && !h.classList.contains('intro')) collapseIntro();
   if (best) { best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+}
+// Classic: the list and the game next to it are two columns. Up and down go through the list (search, filters,
+// games); right goes over to the game's Play button and left comes back to the game you chose.
+function moveClassic(dir) {
+  const seen = el => el.offsetParent !== null && !el.disabled;
+  const side = [$('#cl-q'), ...document.querySelectorAll('.cl-chips button, #cl-list .cl-row')].filter(el => el && seen(el));
+  const page = [...document.querySelectorAll('#cl-page :is(button, a[href], select, summary)')].filter(seen);
+  const cur = document.activeElement, chosen = $('#cl-list [aria-current]') || $('#cl-list .cl-row');
+  const show = el => { if (!el) return; el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); };
+  const toBar = from => {
+    const tab = document.querySelector('.topbar .nav [aria-current="page"]') || barItems()[0];
+    if (!tab) return;
+    moveFocus.back = from;
+    return tab.focus();
+  };
+  if (side.includes(cur)) {
+    const i = side.indexOf(cur), chip = cur.closest('.cl-chips');
+    if (chip && (dir === 'left' || dir === 'right')) return show(nearestIn([...chip.children], cur, dir));
+    if (dir === 'right') return show($('#cl-page #play, #cl-page #install') || page[0]);
+    if (dir === 'left') return;
+    // Past the filter buttons in one step: they're one row on screen.
+    let j = i + (dir === 'down' ? 1 : -1);
+    if (chip) j = dir === 'down' ? side.findIndex(el => el.matches('.cl-row')) : side.indexOf($('#cl-q'));
+    else if (dir === 'up' && side[j]?.closest('.cl-chips')) j = side.indexOf(side.find(el => el.closest('.cl-chips')));
+    if (j < 0) return dir === 'up' ? toBar(cur) : undefined;
+    return show(side[j]);
+  }
+  if (page.includes(cur)) {
+    // Sideways only along the same line; at its left end, back to the list.
+    const r = cur.getBoundingClientRect();
+    const line = el => { const q = el.getBoundingClientRect(); return q.bottom > r.top + 4 && q.top < r.bottom - 4; };
+    const best = nearestIn(dir === 'left' || dir === 'right' ? page.filter(el => el === cur || line(el)) : page, cur, dir);
+    if (best) return show(best);
+    if (dir === 'left') return show(chosen);
+    if (dir === 'up') return toBar(cur);
+    return;
+  }
+  return show(chosen);
 }
 let padPrev = {};
 function pollPads() {
@@ -2618,8 +2719,8 @@ function playOptions(t) {
 const optionLabel = o => `${lib.launchers[o.copy.launcher]}${o.steamId ? ` · ${accountName(o.steamId)}` : ''}`;
 const savedOption = t => playOptions(t).find(o => o.key === prefs.playWith[t.id]) || null;
 
-// The game page looks like Home: the game's art behind it, its name, Play, and a few tabs underneath.
-function renderGame(t) {
+// What every layout's game page is made of: facts about the game, the ways to play it, and the tabs underneath.
+function gameBits(t) {
   const a = t.art || {};
   const on = isInstalled(t);
   const options = playOptions(t), saved = savedOption(t);
@@ -2644,35 +2745,26 @@ function renderGame(t) {
     t.score != null && t.scoreCount > 0 && `${t.score}% positive on Steam`,
     launcherNames(t),
   ].filter(Boolean);
-
-  $('#main').innerHTML = `
-    <div class="gamepage">
-      <div class="backdrop" id="backdrop" aria-hidden="true"><div class="shade"></div></div>
-      <section class="gp-head${state.tabSwitch ? ' still' : ''}">
-        <button class="pill back" data-home>${ICON.back} Back</button>
-        ${a.logo && a.hero ? `<img class="logo" src="${esc(a.logo)}" alt="${esc(t.name)}">` : `<h1>${esc(t.name)}</h1>`}
-        <p class="meta">${esc(meta)} ${launcherBadge(t)}</p>
-        <div class="btns">
-          ${on ? `<button class="pill primary big" id="play">${ICON.play}<span>Play</span></button>`
+  return { a, on, choice, meta, dlc, series, space, idle, tabs, facts, installedCopies };
+}
+const gameButtonsHtml = (t, b) => `
+          ${b.on ? `<button class="pill primary big" id="play">${ICON.play}<span>Play</span></button>`
                : `<button class="pill primary big install" id="install">${ICON.download}<span>Install</span></button>`}
           <button class="pill round" id="fav" aria-pressed="${isFav(t)}" title="${isFav(t) ? 'Remove from favourites' : 'Add to favourites'}" aria-label="Favourite">${isFav(t) ? ICON.star : ICON.starLine}</button>
           <button class="pill round" data-menu="${esc(t.id)}" aria-label="More for ${esc(t.name)}">···</button>
-          ${choice}
-        </div>
+          ${b.choice}`;
+const gameNotesHtml = (t, b) => `
         ${friendsLine(t.steamAppId)}
-        ${dlc.length ? `<button class="note-chip" data-game-tab="details">${dlc.length} DLC on sale on Steam · up to -${dlc[0].cut}%</button>` : ''}
-        ${series.length ? `<button class="note-chip" data-price="${esc(series[0].id)}" data-from="library">${esc(series[0].title)} is on sale · -${bestDeal(series[0]).cut}%</button>` : ''}
-        ${idle ? `<p class="note">Takes ${esc(size(space))} and you haven't played it in a while${t.lastPlayed ? ` (${esc(when(t.lastPlayed))})` : ''}.</p>` : ''}
-      </section>
-      <div class="gp-bar">
+        ${b.dlc.length ? `<button class="note-chip" data-game-tab="details">${b.dlc.length} DLC on sale on Steam · up to -${b.dlc[0].cut}%</button>` : ''}
+        ${b.series.length ? `<button class="note-chip" data-price="${esc(b.series[0].id)}" data-from="library">${esc(b.series[0].title)} is on sale · -${bestDeal(b.series[0]).cut}%</button>` : ''}
+        ${b.idle ? `<p class="note">Takes ${esc(size(b.space))} and you haven't played it in a while${t.lastPlayed ? ` (${esc(when(t.lastPlayed))})` : ''}.</p>` : ''}`;
+const gameTabsHtml = (t, b) => `
         <nav class="gp-tabs" role="tablist" aria-label="${esc(t.name)}">
-          ${tabs.map(([k, label]) => `<button role="tab" data-game-tab="${k}" aria-selected="${state.gameTab === k}">${label}</button>`).join('')}
-        </nav>
-        <span class="gp-mini" aria-hidden="true">
-          <b>${esc(t.name)}</b>
-          <button class="pill primary" data-mini-play tabindex="-1">${on ? `${ICON.play}Play` : `${ICON.download}Install`}</button>
-        </span>
-      </div>
+          ${b.tabs.map(([k, label]) => `<button role="tab" data-game-tab="${k}" aria-selected="${state.gameTab === k}">${label}</button>`).join('')}
+        </nav>`;
+function gamePanelHtml(t, b) {
+  const { dlc, facts, installedCopies } = b;
+  return `
       <div class="gp-panel">
         ${state.gameTab === 'ach' ? achievementsHtml(t) : ''}
         ${state.gameTab === 'news' ? newsHtml(t) : ''}
@@ -2713,14 +2805,133 @@ function renderGame(t) {
             ${installedCopies.length ? `<button class="pill" id="folder">${ICON.folder} Open install folder</button>` : ''}
             ${t.copies.some(c => c.launcher === 'manual') ? `<button class="pill" id="remove">${ICON.trash} Remove from Junction</button>` : ''}
           </div>` : ''}
-      </div>
-    </div>`;
-  $('#main').scrollTop = 0;
-  setBackdrop(a.hero || customCover(t) || a.header || a.cover || '', !a.hero);
+      </div>`;
+}
+// After a game page is on screen: its art and colour, and the tab that loads later (achievements, media).
+function afterGame(t, b, soft) {
+  const a = b.a;
+  setBackdrop(a.hero || customCover(t) || a.header || a.cover || '', soft || !a.hero);
   tintGame(t);
   if (state.achGame !== t.id) { state.achGame = t.id; state.achFilter = 'all'; state.achAll = false; }
   if (state.gameTab === 'ach') fillAchievements(t);
   if (state.gameTab === 'media') fillMedia(t);
+}
+
+// The game page looks like Home: the game's art behind it, its name, Play, and a few tabs underneath.
+function renderGame(t) {
+  const b = gameBits(t), a = b.a;
+  $('#main').innerHTML = `
+    <div class="gamepage">
+      <div class="backdrop" id="backdrop" aria-hidden="true"><div class="shade"></div></div>
+      <section class="gp-head${state.tabSwitch ? ' still' : ''}">
+        <button class="pill back" data-home>${ICON.back} Back</button>
+        ${a.logo && a.hero ? `<img class="logo" src="${esc(a.logo)}" alt="${esc(t.name)}">` : `<h1>${esc(t.name)}</h1>`}
+        <p class="meta">${esc(b.meta)} ${launcherBadge(t)}</p>
+        <div class="btns">${gameButtonsHtml(t, b)}
+        </div>${gameNotesHtml(t, b)}
+      </section>
+      <div class="gp-bar">${gameTabsHtml(t, b)}
+        <span class="gp-mini" aria-hidden="true">
+          <b>${esc(t.name)}</b>
+          <button class="pill primary" data-mini-play tabindex="-1">${b.on ? `${ICON.play}Play` : `${ICON.download}Install`}</button>
+        </span>
+      </div>${gamePanelHtml(t, b)}
+    </div>`;
+  $('#main').scrollTop = 0;
+  afterGame(t, b);
+}
+// The game on screen: on a game page that one, and in a layout that shows a game next to a list (Classic's
+// Home and Library), the chosen one. Play, the tabs, favourites and achievements all act on it.
+const shownGame = () => (state.view.name === 'game' ? findGame(state.view.id) : layout().shown?.() || null);
+// Draw the page with the game on screen again (after a tab, a favourite, a choice), wherever it is.
+function redrawShown() {
+  if (state.view.name === 'game') { const t = findGame(state.view.id); return t && layout().game(t); }
+  return state.view.name === 'library' ? layout().library() : layout().home();
+}
+
+// ---------- Classic layout: every game in a list on the left, the chosen one on the right ----------
+const CL_FILTERS = { all: 'All', installed: 'Installed', favs: 'Favourites' };
+function classicList() {
+  const q = (state.clQuery || '').trim().toLowerCase(), f = state.clFilter || 'all';
+  return titles.filter(t => !isHidden(t) && (f !== 'installed' || isInstalled(t)) && (f !== 'favs' || isFav(t))
+    && (!q || t.name.toLowerCase().includes(q)));
+}
+// Home shows the game you played last; Library the one you chose (or that one again).
+function classicDefault() {
+  const all = titles.filter(t => !isHidden(t));
+  return all.filter(t => t.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed)[0] || sorted(all, 'recent')[0] || null;
+}
+function classicGame() {
+  if (state.view.name === 'game') return findGame(state.view.id);
+  if (state.view.name === 'library' && state.clSel) return findGame(state.clSel) || classicDefault();
+  return classicDefault();
+}
+const clLogos = t => [...new Set([...t.copies].sort((a, b) => isInstalled(b) - isInstalled(a)).map(c => c.launcher))].slice(0, 3)
+  .map(l => `<span title="${esc(lib.launchers[l] || l)}">${launcherIcon(l)}</span>`).join('');
+function classicRows(sel) {
+  const games = classicList();
+  const row = t => `<button class="cl-row${isInstalled(t) ? '' : ' off'}" data-cl-pick="${esc(t.id)}"${t.id === sel?.id ? ' aria-current="true"' : ''}>
+      <span class="nm">${esc(t.name)}</span>${t.playtimeMinutes ? `<span class="h">${esc(hours(t.playtimeMinutes))}</span>` : ''}<span class="lg">${clLogos(t)}</span></button>`;
+  if (!games.length) return `<p class="cl-empty">${state.clQuery ? 'No games match that name.' : 'No games here yet.'}</p>`;
+  // Searching or filtering shows one list; otherwise your last few games come first.
+  if ((state.clQuery || '').trim()) return `<p class="cl-label">${games.length} found</p>${sorted(games, 'name').map(row).join('')}`;
+  const recent = games.filter(t => t.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 5);
+  const rest = sorted(games.filter(t => !recent.includes(t)), 'name');
+  return `${recent.length ? `<p class="cl-label">Recent</p>${recent.map(row).join('')}<p class="cl-label">A to Z</p>` : ''}${rest.map(row).join('')}`;
+}
+function renderClassic() {
+  const t = classicGame();
+  const before = $('#main .classic'), listY = $('#cl-list')?.scrollTop || 0, paneY = $('#cl-page')?.scrollTop || 0;
+  const sameGame = before && t && before.dataset.pick === t.id;
+  const b = t && gameBits(t), a = b?.a || {};
+  const stat = (label, value) => `<div class="cl-stat"><span>${label}</span><b>${value}</b></div>`;
+  const ach = t && achievementsOf(t)[0];
+  const banner = a.hero || a.header || customCover(t || {}) || a.cover || '';
+  $('#main').innerHTML = `
+    <div class="classic"${t ? ` data-pick="${esc(t.id)}"` : ''}>
+      <div class="backdrop" id="backdrop" aria-hidden="true"><div class="shade"></div></div>
+      <aside class="cl-side" aria-label="Your games">
+        <label class="cl-search">${ICON.search}<input id="cl-q" type="search" placeholder="Search ${titles.filter(x => !isHidden(x)).length} games" value="${esc(state.clQuery || '')}" autocomplete="off"></label>
+        <div class="cl-chips">${Object.entries(CL_FILTERS).map(([k, n]) => `<button data-cl-filter="${k}" aria-pressed="${(state.clFilter || 'all') === k}">${n}</button>`).join('')}</div>
+        <div class="cl-list" id="cl-list">${classicRows(t)}</div>
+      </aside>
+      <section class="cl-page" id="cl-page">${!t ? `<p class="empty">Junction hasn't found any games yet.</p>` : `
+        ${state.view.name === 'game' ? `<button class="pill back" data-home>${ICON.back} Back</button>` : ''}
+        <div class="cl-banner"${banner ? ` style="background-image:url('${esc(banner)}')"` : ''}>
+          ${a.logo && a.hero ? `<img class="logo" src="${esc(a.logo)}" alt="${esc(t.name)}">` : `<h1>${esc(t.name)}</h1>`}
+        </div>
+        <div class="cl-actions">${gameButtonsHtml(t, b)}<p class="meta">${launcherBadge(t)}</p></div>
+        <div class="cl-stats">
+          ${stat('Play time', t.playtimeMinutes ? esc(hours(t.playtimeMinutes)) : '—')}
+          ${stat('Last played', t.lastPlayed ? esc(when(t.lastPlayed)) : '—')}
+          ${stat('Achievements', ach ? `${ach[1][0]} / ${ach[1][1]}` : '—')}
+          ${stat('On disk', b.space ? esc(size(b.space)) : isInstalled(t) ? '—' : 'Not installed')}
+        </div>${gameNotesHtml(t, b)}
+        ${gameTabsHtml(t, b)}${gamePanelHtml(t, b)}`}
+      </section>
+    </div>`;
+  $('#cl-list').scrollTop = listY;
+  if (sameGame && state.tabSwitch) $('#cl-page').scrollTop = paneY;
+  // The chosen game stays in view in the list.
+  const cur = $('#cl-list [aria-current]');
+  if (cur && !before) cur.scrollIntoView({ block: 'center' });
+  if (t) afterGame(t, b, true);
+}
+// A game chosen in the list: shown on the right, and the Library tab is where you are now.
+function classicPick(id) {
+  state.clSel = id;
+  if (state.view.name === 'game') state.view = { name: 'game', id, from: state.view.from };
+  else state.view = { name: 'library' };
+  render.last = `${state.view.name}:${state.view.id || ''}`;  // the same page, so no page animation
+  state.tabSwitch = false;
+  return render().then(() => $(`#cl-list [data-cl-pick="${CSS.escape(id)}"]`)?.focus({ preventScroll: true }));
+}
+function refreshClassicList() {
+  const box = $('#cl-list');
+  if (!box) return;
+  box.innerHTML = classicRows(classicGame());
+  box.scrollTop = 0;
+  document.querySelectorAll('[data-cl-filter]').forEach(b => b.setAttribute('aria-pressed', b.dataset.clFilter === (state.clFilter || 'all')));
 }
 const mediaAsked = new Set();
 async function fillMedia(t) {
@@ -2730,9 +2941,9 @@ async function fillMedia(t) {
   if (!m || !(m.clip || m.screenshots.length)) return;
   const copy = t.copies.find(c => c.steamAppId === t.steamAppId) || t.copies[0];
   copy.media = m;
-  if (state.view.name === 'game' && state.view.id === t.id && state.gameTab === 'media') {
+  if (shownGame()?.id === t.id && state.gameTab === 'media') {
     const y = $('#main').scrollTop;
-    state.tabSwitch = true; renderGame(t); state.tabSwitch = false;
+    state.tabSwitch = true; redrawShown(); state.tabSwitch = false;
     $('#main').scrollTop = y;
   }
 }
@@ -2776,7 +2987,7 @@ function chooseOption(i) {
   if ($('#remember-choice')?.checked) { prefs.playWith[title.id] = o.key; savePrefs(); }
   $('#layer').innerHTML = '';
   state.pendingOptions = null;
-  if (state.view.name === 'game') renderGame(title);
+  if (shownGame()) redrawShown();
   runOption(o);
 }
 const runOption = o => isInstalled(o.copy) ? play(o.copy, o.steamId) : install(o.copy, o.steamId);
@@ -3529,7 +3740,7 @@ async function fillAchievements(t) {
   box.innerHTML = `<div class="ach-head"><h2>Achievements</h2><b>${done0} / ${total0}</b></div>
     <div class="bar"><i style="width:${(done0 / total0 * 100).toFixed(1)}%"></i></div>`;
   await loadAchievements(t);
-  if (!$('#ach-full') || state.view.id !== t.id) return;
+  if (!$('#ach-full') || shownGame()?.id !== t.id) return;
   const a = achFor(t, state.achSid[t.id]);
   if (!a) return;
   const f = state.achFilter;
@@ -3569,11 +3780,11 @@ function toggleFav(t) {
   if (on) toggle('favorites', t.id, true);
   savePrefs();
   // The game page stays still; only the star moves.
-  state.tabSwitch = state.view.name === 'game';
+  state.tabSwitch = !!shownGame();
   const y = $('#main').scrollTop;
   const done = render().then(() => {
     state.tabSwitch = false;
-    if (state.view.name === 'game') $('#main').scrollTop = y;
+    if (shownGame()) $('#main').scrollTop = y;
     if (on) popStar($('#fav'));
   });
   toast(on ? `${t.name} is a favourite.` : `${t.name} is no longer a favourite.`, t.launcher);
@@ -4389,7 +4600,7 @@ function slidePage(dir) {
   const page = $('#main').firstElementChild;
   if (!page || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   for (const el of page.children) {
-    if (el.matches('.backdrop, .scroll-hint')) continue;
+    if (el.matches('.backdrop, .scroll-hint, .cl-side')) continue;
     el.animate(PAGE_MOVES[dir], { duration: 380, easing: 'cubic-bezier(.2, .7, .2, 1)', fill: 'backwards' });
   }
 }
@@ -4624,6 +4835,7 @@ document.addEventListener('click', e => {
     if (state.view.name === 'store') state.scroll.store = $('#main').scrollTop;
     // From a game page, Back on the store page returns to that game.
     if (state.view.name === 'game') return go({ name: 'price', id: t.dataset.price, from: 'library', back: state.view.id, gameFrom: state.view.from });
+    if (shownGame()) return go({ name: 'price', id: t.dataset.price, from: 'library', back: shownGame().id, gameFrom: sectionOf(state.view) });
     const from = t.dataset.from || (state.view.name === 'browse' ? 'browse' : sectionOf(state.view));
     return go({ name: 'price', id: t.dataset.price, from });
   }
@@ -4640,18 +4852,20 @@ document.addEventListener('click', e => {
   }
   if (t.dataset.jump) return jumpTo(t.dataset.jump);
   if ('expand' in t.dataset) return expandIntro();
-  if (t.dataset.gameTab && state.view.name === 'game') {
+  if (t.dataset.gameTab && shownGame()) {
     state.gameTab = t.dataset.gameTab;
     const y = $('#main').scrollTop;
     state.tabSwitch = true;
-    renderGame(findGame(state.view.id));
+    redrawShown();
     state.tabSwitch = false;
     $('#main').scrollTop = y;
     return document.querySelector(`[data-game-tab="${state.gameTab}"][role="tab"]`)?.focus({ preventScroll: true });
   }
-  if ('miniPlay' in t.dataset && state.view.name === 'game') return startGame(findGame(state.view.id));
-  if (t.dataset.achFilter) { state.achFilter = t.dataset.achFilter; state.achAll = false; return fillAchievements(findGame(state.view.id)); }
-  if ('achMore' in t.dataset) { state.achAll = true; return fillAchievements(findGame(state.view.id)); }
+  if ('miniPlay' in t.dataset && shownGame()) return startGame(shownGame());
+  if (t.dataset.achFilter) { state.achFilter = t.dataset.achFilter; state.achAll = false; return fillAchievements(shownGame()); }
+  if ('achMore' in t.dataset) { state.achAll = true; return fillAchievements(shownGame()); }
+  if (t.dataset.clPick) return classicPick(t.dataset.clPick);
+  if (t.dataset.clFilter) { state.clFilter = t.dataset.clFilter; return refreshClassicList(); }
   if ('revealName' in t.dataset) {
     const txt = t.closest('.txt');
     txt.innerHTML = `<b>${esc(t.dataset.revealName)}</b>${t.dataset.reveal ? `<span>${esc(t.dataset.reveal)}</span>` : ''}`;
@@ -4690,7 +4904,7 @@ document.addEventListener('click', e => {
     return render();
   }
   if (t.dataset.inCollection) {
-    const g = findGame(state.view.id), col = prefs.collections.find(c => c.name === t.dataset.inCollection);
+    const g = shownGame(), col = prefs.collections.find(c => c.name === t.dataset.inCollection);
     return g && col && toggleCollection(g, col);
   }
   if (t.dataset.shop) {
@@ -4709,11 +4923,11 @@ document.addEventListener('click', e => {
     return toast(isWished(id) ? `Added ${store.games[id].title} to your wishlist.` : `Removed ${store.games[id].title} from your wishlist.`);
   }
 
-  const g = state.view.name === 'game' && findGame(state.view.id);
+  const g = shownGame();
   const copy = g && activeCopy(g);
   switch (t.id) {
     case 'play': case 'install': return g && startGame(g);
-    case 'forget-choice': delete prefs.playWith[g.id]; savePrefs(); renderGame(g); return startGame(g);
+    case 'forget-choice': delete prefs.playWith[g.id]; savePrefs(); redrawShown(); return startGame(g);
     case 'fav': return toggleFav(g);
     case 'hide': return toggleHide(g);
     case 'cover': return coverDialog(g);
@@ -4752,8 +4966,11 @@ document.addEventListener('click', e => {
 document.addEventListener('toggle', e => {
   if (e.target.id === 'acc-more' && prefs.accountsOpen !== e.target.open) { prefs.accountsOpen = e.target.open; savePrefs(); }
 }, true);
+document.addEventListener('input', e => {
+  if (e.target.id === 'cl-q') { state.clQuery = e.target.value; refreshClassicList(); }
+});
 document.addEventListener('change', e => {
-  if (e.target.id === 'ach-account') { state.achSid[state.view.id] = e.target.value; return fillAchievements(findGame(state.view.id)); }
+  if (e.target.id === 'ach-account') { state.achSid[shownGame().id] = e.target.value; return fillAchievements(shownGame()); }
   if (e.target.id === 'sort') { state.sort = prefs.libSort = e.target.value; savePrefs(); return renderLibrary(); }
   if (e.target.id === 'genre-filter') { state.genre = e.target.value; return renderLibrary(); }
   if (e.target.id === 'collection-filter') {
