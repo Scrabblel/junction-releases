@@ -501,6 +501,63 @@ def clients_on_pc():
     return sorted(k for k, n in CLIENT_NAMES.items() if n in names)
 
 
+# ---------- uninstalling ----------
+
+def _split_command(cmd):
+    """'"C:\\x\\unins000.exe" /SILENT' -> ('C:\\x\\unins000.exe', '/SILENT'): an uninstall string as program + arguments."""
+    cmd = (cmd or "").strip()
+    m = re.match(r'"([^"]+)"\s*(.*)$', cmd) or re.match(r"(.+?\.exe)\b\s*(.*)$", cmd, re.I)
+    return (m.group(1), m.group(2).strip()) if m else (None, None)
+
+
+def _entry_for_dir(folder):
+    """Windows' uninstall entry for whatever is installed in this folder."""
+    folder = os.path.normcase(os.path.normpath(folder or "")).rstrip("\\")
+    for _, v in _uninstall_entries():
+        loc = (v.get("InstallLocation") or "").strip().strip('"')
+        if folder and loc and os.path.normcase(os.path.normpath(loc)).rstrip("\\") == folder and v.get("UninstallString"):
+            return v
+
+
+def uninstall_for(game):
+    """How to uninstall this installed game: through its own launcher, never by deleting files.
+    {"type": "uri"|"cmd", "target", "how": "uninstall"|"open", "where"}: "open" only opens the launcher (or Windows'
+    list of apps), where the person picks Uninstall themselves, because that launcher can't be asked from outside."""
+    launcher, key = game.get("launcher"), (game.get("id") or "").split(":", 1)[-1]
+    folder = game.get("installDir")
+
+    def entry(match):
+        return next((v for sub, v in _uninstall_entries() if v.get("UninstallString") and match(sub, v)), None)
+
+    def run(v):
+        return {"type": "cmd", "target": v["UninstallString"], "how": "uninstall"} if v else None
+
+    found = None
+    if launcher == "steam":
+        found = {"type": "uri", "target": f"steam://uninstall/{key}", "how": "uninstall"}
+    elif launcher == "ubisoft":
+        found = {"type": "uri", "target": f"uplay://uninstall/{key}", "how": "uninstall"}
+    elif launcher == "epic":
+        # The Epic Games Launcher has no way to be asked to uninstall a game: open its library instead.
+        found = {"type": "uri", "target": "com.epicgames.launcher://store/library", "how": "open", "where": "Epic Games Launcher"}
+    elif launcher == "gog":
+        unins = os.path.join(folder or "", "unins000.exe")
+        found = ({"type": "exe", "target": unins, "how": "uninstall"} if folder and os.path.isfile(unins)
+                 else run(entry(lambda sub, v: sub.lower() == f"{key}_is1")))
+    elif launcher == "ea":
+        found = run(entry(lambda sub, v: sub.strip("{}").lower() == key.lower()))
+    elif launcher == "battlenet":
+        found = run(entry(lambda sub, v: f"--uid={key}" in v["UninstallString"].lower()))
+    elif launcher == "rockstar":
+        found = run(entry(lambda sub, v: re.search(rf"-uninstall={re.escape(key)}\b", v["UninstallString"], re.I)))
+    elif launcher == "xbox":
+        # Store apps are uninstalled in Windows' own list of installed apps.
+        found = {"type": "uri", "target": "ms-settings:appsfeatures", "how": "open", "where": "Windows Settings"}
+    if not found and launcher != "manual" and folder:
+        found = run(_entry_for_dir(folder))
+    return found
+
+
 def find_all():
     """Run every finder. One broken launcher never stops the others."""
     games, errors = [], {}

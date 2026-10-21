@@ -87,11 +87,16 @@ def _take_enriched(lib, enriched):
         g["lastPlayed"] = max(g.get("lastPlayed") or 0, e.get("lastPlayed") or 0) or None
 
 
+BIG_WIDTH = 1280  # Big screen: how many pixels across the page is drawn for, before it's zoomed to the screen
+
+
 class Api:
     """Everything the page can ask for. Only public methods are visible to the page."""
 
     def __init__(self):
         self._window = None
+        self._big = False          # the Big screen layout: drawn larger to fill the screen
+        self._full_later = None    # full screen to switch to once the window shows (it starts hidden in the tray)
         self._lib = None
         self._raw = None
         self._launch = config.read_cache("launch.json", {})
@@ -308,6 +313,30 @@ class Api:
     def install(self, game_id, steam_id=None, target=None):
         return self._run(game_id, steam_id, target)
 
+    def uninstall(self, game_id):
+        """Hand the uninstall to the game's own launcher (or uninstaller). Junction never deletes game files itself;
+        the install watcher notices when the game is gone."""
+        game = self._game(str(game_id or ""))
+        if not game or not game.get("installed"):
+            return {"error": "Junction can't find this game anymore. Press Rescan at the top right."}
+        how = launchers.uninstall_for(game)
+        if not how:
+            name = launchers.LAUNCHERS.get(game.get("launcher"), "its launcher")
+            return {"error": f"Junction can't uninstall this game. Uninstall it in {name} instead."}
+        try:
+            if how["type"] == "uri":
+                os.startfile(how["target"])
+            else:
+                exe, args = (how["target"], "") if how["type"] == "exe" else launchers._split_command(how["target"])
+                if not exe:
+                    return {"error": "Windows' uninstall entry for this game looks broken. Uninstall it in Windows Settings instead."}
+                # Through the Windows shell, so an uninstaller that needs administrator rights can ask for them.
+                os.startfile(exe, "open", args, os.path.dirname(exe) if os.path.isabs(exe) else None)
+        except OSError as e:
+            return {"error": f"Windows couldn't start the uninstall ({e.strerror or e})."}
+        logging.getLogger("junction").info("Uninstall handed to %s for %s", how.get("where") or game.get("launcher"), game_id)
+        return {"ok": True, "how": how["how"], "where": how.get("where")}
+
     def set_earlier_playtime(self, game_id, hours):
         """Hours played before Junction counted this game, typed in by the person (0 removes them)."""
         game_id = str(game_id or "")
@@ -508,6 +537,8 @@ class Api:
             if ctypes.windll.user32.IsIconic(hwnd):
                 w.restore()
             ctypes.windll.user32.SetForegroundWindow(hwnd)
+            if self._full_later is not None:
+                self.big_screen(self._big, self._full_later)
             return True
         except Exception:  # noqa: BLE001
             if not self._quitting:
@@ -515,17 +546,69 @@ class Api:
             return False
 
     def window_info(self):
-        return {"custom": self._own_frame, "maximized": bool(self._window) and titlebar.is_maximized(self._window)}
+        return {"custom": self._own_frame, "maximized": bool(self._window) and titlebar.is_maximized(self._window),
+                "fullScreen": self._full_screen()}
 
     def window_action(self, what):
         """The page's own minimize, maximize/restore and close buttons."""
         w = self._window
         if what == "minimize":
             w.minimize()
+        elif what == "maximize" and self._full_screen():  # in full screen, this button leaves it
+            self.big_screen(self._big, False)
         elif what == "maximize":
             w.restore() if titlebar.is_maximized(w) else w.maximize()
         elif what == "close" and self._closing():  # same as Windows' close button: to the tray, if that's on
             self._quit()
+
+    # ---------- Big screen ----------
+
+    def _full_screen(self):
+        form = self._window and self._window.native
+        return bool(form is not None and getattr(form, "is_fullscreen", False))
+
+    def big_screen(self, on, full=None):
+        """The Big screen layout, for a TV: Junction fills the screen and the page is drawn larger, like zooming in,
+        so it reads from the sofa. Off: a normal window at the normal size again. `full` only switches full screen
+        (F11 and the window button), staying in Big screen. Returns {"fullScreen"}."""
+        w = self._window
+        if not w or self._quitting:
+            return {"fullScreen": False}
+        self._big = bool(on)
+        want = self._big if full is None else bool(full)
+        form = w.native
+        if form is None or not form.Visible:
+            self._full_later = want  # it's in the tray: once it shows
+        else:
+            self._full_later = None
+            if want != self._full_screen():
+                w.toggle_fullscreen()
+        self.fit_big_screen()
+        threading.Timer(0.6, self.fit_big_screen).start()  # once Windows has finished resizing it
+        return {"fullScreen": want if self._full_later is not None else self._full_screen()}
+
+    def fit_big_screen(self):
+        """Zoom the page to the window: Big screen is drawn for BIG_WIDTH pixels across, then made as large as fits."""
+        form = self._window and self._window.native
+        if form is None or self._quitting:
+            return
+        big = self._big
+
+        def on_ui_thread():
+            zoom = 1.0
+            if big:
+                dpi = ctypes.windll.user32.GetDpiForWindow(int(str(form.Handle.ToInt64()))) or 96
+                across = form.ClientSize.Width / (dpi / 96)
+                zoom = max(1.0, min(2.5, round(across / BIG_WIDTH * 20) / 20))
+            if abs(form.webview.ZoomFactor - zoom) > 0.01:
+                form.webview.ZoomFactor = zoom
+
+        try:
+            from System import Action
+            form.Invoke(Action(on_ui_thread))
+        except Exception:  # noqa: BLE001 - the window is closing, or an old WebView2: the page stays its own size
+            if not self._quitting:
+                traceback.print_exc()
 
     def _window_state(self):
         self._js(f"window.junctionWindowState && junctionWindowState({json.dumps(titlebar.is_maximized(self._window))})")

@@ -599,6 +599,9 @@ code.cmd {
 .o-main span { font-size: 12.5px; color: var(--ink-faint); }
 .o-act { font: 700 13px/1 var(--font-display); letter-spacing: .1em; text-transform: uppercase; padding: 7px 12px; border-radius: calc(4px * var(--round)); background: var(--go); color: var(--on-go); }
 .o-act.install { background: var(--install); color: var(--on-install); }
+.dialog.uninstall { width: min(440px, calc(100vw - 32px)); }
+.dialog.uninstall .options { display: grid; gap: 8px; margin-bottom: 12px; }
+.dialog.uninstall .o-act { background: transparent; color: var(--ink-dim); border: 1px solid var(--rule); }
 /* quieter chrome */
 .side-head { gap: 10px; }
 .sidebar, .topbar { border-color: color-mix(in srgb, var(--rule) 70%, transparent); }
@@ -1257,8 +1260,10 @@ button.fp-row:hover { background: color-mix(in srgb, var(--ink) 7%, transparent)
 .pad-hints { pointer-events: none; position: fixed; z-index: 20; left: 50%; bottom: 14px; translate: -50% 0; display: flex; gap: 16px; padding: 8px 16px; border-radius: var(--pill); background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--rule); font-size: 12.5px; color: var(--ink-dim); white-space: nowrap; }
 .pad-hints span { display: inline-flex; align-items: center; gap: 6px; }
 body:has(#layer > .scrim, #ctx) .pad-hints { display: none; }
-body:has(#pad-hints) :is(#main, #cl-page, .cl-list) { scroll-padding-bottom: 72px; }
-body:has(#pad-hints) #main:not(:has(> :is(.home, .classic)))::after, body:has(#pad-hints) :is(#cl-page, .cl-list)::after { content: ""; display: block; height: 56px; }
+body:has(#pad-hints) :is(#main, #cl-page, .cl-list, .filter-panel) { scroll-padding-bottom: 72px; }
+/* Home and the Store front end on their rows: those get the room for the hints instead. */
+body:has(#pad-hints) .home .rows { padding-bottom: 96px; }
+body:has(#pad-hints) #main:not(:has(> :is(.home, .classic)))::after, body:has(#pad-hints) :is(#cl-page, .cl-list, .filter-panel)::after { content: ""; display: block; height: 56px; }
 kbd.pad { font: 800 10.5px/1 var(--font-body); padding: 4px 6px; border-radius: var(--pill); background: var(--ink); color: var(--ground); border: 0; }
 
 /* ---------- round 9: logos, news, tab markers, page slides ---------- */
@@ -1542,14 +1547,82 @@ html[data-layout="classic"] .app:is([data-view="home"], [data-view="library"], [
 .cl-stat b { font: 700 21px/1.1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
 .cl-page > .note-chip { justify-self: start; }
 .cl-page > .note { margin: 0; color: var(--ink-dim); font-size: 14px; }
+/* A logo that's mostly dark gets a soft light halo on the dark page, a mostly white one a shadow on the light page
+   (toneLogo() measures them), so they don't vanish into the background behind them. */
+:root[data-theme="dark"] img.logo[data-tone="dark"] { filter: drop-shadow(0 0 1px rgb(255 255 255 / .9)) drop-shadow(0 0 3px rgb(255 255 255 / .4)) drop-shadow(0 0 24px rgb(255 255 255 / .35)); }
+:root[data-theme="light"] img.logo[data-tone="light"] { filter: drop-shadow(0 0 1px rgb(0 0 0 / .6)) drop-shadow(0 2px 14px rgb(0 0 0 / .32)); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) img.logo[data-tone="dark"] { filter: drop-shadow(0 0 1px rgb(255 255 255 / .9)) drop-shadow(0 0 3px rgb(255 255 255 / .4)) drop-shadow(0 0 24px rgb(255 255 255 / .35)); } }
+@media (prefers-color-scheme: light) { :root:not([data-theme]) img.logo[data-tone="light"] { filter: drop-shadow(0 0 1px rgb(0 0 0 / .6)) drop-shadow(0 2px 14px rgb(0 0 0 / .32)); } }
+html[data-style="mono"][data-theme] img.logo[data-tone="dark"] { filter: grayscale(1) drop-shadow(0 0 1px rgb(255 255 255 / .9)) drop-shadow(0 0 3px rgb(255 255 255 / .4)) drop-shadow(0 0 24px rgb(255 255 255 / .35)); }
+
+/* ---------- Big screen ---------- */
+.bighome { position: relative; min-height: 100%; display: grid; grid-template-rows: auto auto 1fr; align-content: start; overflow: hidden; }
+.bighome .backdrop { position: fixed; inset: 0; height: auto; }
+.bighome .backdrop .shade { opacity: 1; }
+.bighome .backdrop img { filter: blur(40px) saturate(1.2); scale: 1.15; }
+.big-rail { position: relative; z-index: 1; display: flex; gap: 22px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  padding: 96px 72px 34px calc(var(--gutter-l) + 56px); }
+.big-rail::-webkit-scrollbar { display: none; }
+/* The cover before the one you're on fades out at the edge. */
+.big-rail { -webkit-mask-image: linear-gradient(90deg, transparent calc(var(--gutter-l) + 8px), #000 calc(var(--gutter-l) + 44px)); mask-image: linear-gradient(90deg, transparent calc(var(--gutter-l) + 8px), #000 calc(var(--gutter-l) + 44px)); }
+/* As big as fits: in a short window the covers shrink, so the game's Play button stays on screen too. */
+.big-rail .tile, .big-rail .tile.big { width: clamp(108px, calc((100vh - 480px) / 1.5), 168px); flex: none; }
+@media (max-height: 760px) { .big-rail { padding-top: 84px; padding-bottom: 26px; } .big-info .logo { max-height: 100px; } }
+.big-rail .tile .cap { display: none; }
+.big-rail .tile .art { transform-origin: 50% 60%; }
+.big-rail .tile:hover .art, .big-rail .tile:focus-visible .art { transform: scale(1.1); box-shadow: 0 0 0 3px var(--ink), 0 24px 50px -16px #000; }
+.big-rail .tile.all .art { aspect-ratio: 2 / 3; }
+/* The arrows sit at the middle of the covers, not of the row with its room for the top bar above them. */
+.bighome > .strip-arrow { margin-top: 31px; }
+.bighome > .strip-arrow.prev { left: calc(var(--gutter-l) + 12px); }
+.big-info { min-height: 0; max-width: 780px; align-content: start; padding: 6px var(--gutter-r) 26px calc(var(--gutter-l) + 56px); }
+.big-info h1 { font-size: clamp(40px, 4.6vw, 60px); }
+.big-info .logo { max-height: 140px; }
+.big-info .meta { font-size: 17px; }
+.big-info .btns .pill { padding: 12px 24px; font-size: 17px; }
+.big-info .btns .pill.round { padding: 12px 16px; }
+/* Downloads beside the game, not below it where they'd fall off a TV's screen. */
+.big-lower { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 40px; padding-right: calc(var(--gutter-r) + 40px); min-width: 0; }
+.big-lower .big-info { flex: 1 1 auto; min-width: 0; }
+.bighome .downloads { flex: 0 1 380px; min-width: 260px; margin-top: 14px; }
+@media (max-width: 1000px) { .big-lower { flex-wrap: wrap; } .bighome .downloads { flex-basis: 100%; margin-left: calc(var(--gutter-l) + 56px); } }
+html[data-layout="big"] .app:is([data-view="home"]) .topbar { background: none; border-color: transparent; }
+html[data-style="glass"] .big-info { flex: 0 1 auto; margin-left: calc(var(--gutter-l) + 36px); padding: 22px 26px; background: rgb(16 21 30 / .5);
+  border: 1px solid var(--rule); border-radius: var(--radius); backdrop-filter: blur(26px) saturate(1.3); }
+html[data-style="mono"] .bighome .backdrop img { filter: blur(40px) grayscale(1) brightness(.7); }
+html[data-style="sharp"] .big-rail .tile:focus-visible .art { box-shadow: 0 24px 50px -16px #000; }
+
+.cl-home { gap: 26px; padding-bottom: 40px; }
+.cl-continue { position: relative; min-height: clamp(230px, 38vh, 400px); box-sizing: border-box; border-radius: var(--radius); overflow: hidden; display: flex; align-items: flex-end;
+  padding: 26px 28px; background: var(--raised) center / cover no-repeat; }
+.cl-continue::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, rgb(0 0 0 / .72), rgb(0 0 0 / .1) 70%), linear-gradient(90deg, rgb(0 0 0 / .45), transparent 60%); }
+.cc-txt { position: relative; z-index: 1; display: grid; gap: 10px; justify-items: start; min-width: 0; }
+.cc-label { font: 600 11px/1 var(--font-display); letter-spacing: .16em; text-transform: uppercase; color: color-mix(in srgb, var(--on-image) 75%, transparent); }
+/* A set height, so the pane doesn't change size when the logo arrives (and a redraw holds its place). */
+.cl-continue .logo { height: clamp(80px, 13vh, 130px); max-width: min(360px, 70%); object-fit: contain; object-position: left bottom; filter: drop-shadow(0 4px 18px rgb(0 0 0 / .5)); }
+.cl-continue h1 { margin: 0; font: 800 clamp(28px, 3.4vw, 46px)/1.04 var(--font-display); letter-spacing: -.02em; color: var(--on-image); text-wrap: balance; text-shadow: var(--title-shadow); }
+.cc-meta { margin: 0; color: color-mix(in srgb, var(--on-image) 82%, transparent); font-size: 14px; text-shadow: 0 1px 8px rgb(0 0 0 / .6); }
+.cc-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+/* Over the art, so the same in light and dark. */
+.cc-btns .pill:not(.primary) { background: rgb(0 0 0 / .45); color: #fff; border-color: rgb(255 255 255 / .22); backdrop-filter: blur(8px); }
+.cc-btns .pill:not(.primary):hover { background: rgb(0 0 0 / .62); }
+.cl-dl:not([hidden]) { display: grid; gap: 8px; }
+.cl-sec { display: grid; gap: 12px; min-width: 0; }
+.cl-sec-head { display: flex; align-items: baseline; gap: 10px; }
+.cl-sec-head h2 { margin: 0; font: 700 18px/1.2 var(--font-display); color: var(--ink); }
+.cl-sec-head i { font-style: normal; font-size: 13px; color: var(--ink-faint); }
+.cl-sec-head .link-btn { margin-left: auto; font-size: 13px; }
+.cl-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 16px 14px; }
+.cl-tiles.land { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.cl-tiles .tile, .cl-tiles .tile.land { width: auto; }
 .classic .gp-tabs { margin: 4px calc(-1 * var(--gutter-r)) 0 -26px; padding-left: 26px; }
 .classic .gp-panel { padding: 16px 0 48px; background: none; min-height: 0; animation: none; }
 html[data-style="glass"] .classic .gp-panel { background: none; backdrop-filter: none; border: 0; }
 html[data-style="glass"] .classic .backdrop { opacity: .6; }
 html[data-style="glass"] :is(.cl-side, .cl-stat) { background: rgb(16 21 30 / .5); backdrop-filter: blur(24px) saturate(1.3); }
-html[data-style="mono"] .cl-banner { filter: grayscale(1); }
-html[data-style="sharp"] :is(.cl-banner, .cl-stat, .cl-search input, .cl-chips button) { clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
-html[data-style="sharp"] .cl-banner { --cut: 18px; }
+html[data-style="mono"] :is(.cl-banner, .cl-continue) { filter: grayscale(1); }
+html[data-style="sharp"] :is(.cl-banner, .cl-continue, .cl-stat, .cl-search input, .cl-chips button) { clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+html[data-style="sharp"] :is(.cl-banner, .cl-continue) { --cut: 18px; }
 html[data-style="sharp"] .cl-chips button[aria-pressed="true"] { background: var(--signal); border-color: var(--signal); color: var(--on-go); }
 html[data-style="sharp"] .cl-row[aria-current] { background: linear-gradient(90deg, color-mix(in srgb, var(--signal) 24%, transparent), transparent); }
 
@@ -1788,6 +1861,7 @@ const host = {
   },
   // On/off settings (tray, start with Windows, setup done), and the problem report.
   async removeAccount(steamId) { return this.inApp ? window.pywebview.api.remove_steam_account(steamId) : null; },
+  async uninstall(game) { return this.inApp ? window.pywebview.api.uninstall(game.id) : { prototype: true }; },
   async setEarlierPlaytime(id, hours) { return this.inApp ? window.pywebview.api.set_earlier_playtime(id, hours) : null; },
   // Launcher sign-ins (Epic, EA, Ubisoft) for their play time: the sign-in happens on the store's own page, in a window of its own.
   async signIn(store) { return this.inApp ? window.pywebview.api.sign_in(store) : { error: 'Only the Junction app can sign in.' }; },
@@ -1802,6 +1876,9 @@ const host = {
   logError(message) { if (this.inApp) window.pywebview.api.log_error(String(message)).catch?.(() => {}); },
   async showWindow() { return this.inApp ? window.pywebview.api.show_window() : null; },
   async windowInfo() { return this.inApp ? window.pywebview.api.window_info() : null; },
+  // Big screen: full screen, and the page zoomed to the screen. `full` switches only full screen (F11).
+  async bigScreen(on, full) { return this.inApp ? window.pywebview.api.big_screen(on, full ?? null) : null; },
+  async fitBigScreen() { return this.inApp ? window.pywebview.api.fit_big_screen() : null; },
   windowAction(what) { return this.inApp ? window.pywebview.api.window_action(what) : null; },
   async updateInfo() { return this.inApp ? window.pywebview.api.update_info() : null; },
   async whatsNew() { return this.inApp ? window.pywebview.api.whats_new() : null; },
@@ -1861,7 +1938,9 @@ const THEMES = { dark: 'Dark', light: 'Light', system: 'Match Windows' };
 // html[data-style="…"]. Only a style with `themes` has light and dark versions; the others are always dark.
 const LAYOUTS = {
   console: { name: 'Console', about: 'Big covers, made for a controller', home: () => renderHome(), library: () => renderLibrary(), game: g => renderGame(g) },
-  classic: { name: 'Classic', about: 'Your games in a list on the left', home: () => renderClassic(), library: () => renderClassic(), game: () => renderClassic(), shown: () => classicGame() },
+  classic: { name: 'Classic', about: 'Your games in a list on the left', home: () => renderClassic(), library: () => renderClassic(), game: () => renderClassic(),
+             shown: () => (state.view.name === 'home' ? null : classicGame()) },
+  big: { name: 'Big screen', about: 'For a TV: full screen, big covers in one row', home: () => renderBigHome(), library: () => renderLibrary(), game: g => renderGame(g) },
 };
 const STYLES = {
   junction: { name: 'Junction', about: 'The original look, light or dark', themes: true },
@@ -1875,7 +1954,21 @@ function applyLook() {
   document.documentElement.dataset.layout = LAYOUTS[prefs.layout] ? prefs.layout : 'console';
   document.documentElement.dataset.style = style();
   applyTheme();
+  syncBigScreen();
 }
+// Big screen fills the screen and zooms the page to it; any other layout is a normal window again.
+let bigFull = false;
+function syncBigScreen(full) {
+  const big = prefs.layout === 'big';
+  if (!host.inApp || (full === undefined && big === syncBigScreen.was)) return;
+  if (full === undefined && !big && syncBigScreen.was === undefined) { syncBigScreen.was = false; return; }
+  syncBigScreen.was = big;
+  return host.bigScreen(big, full).then(r => { if (r) bigFull = r.fullScreen; }).catch(() => {});
+}
+addEventListener('resize', () => {
+  clearTimeout(syncBigScreen.t);
+  if (prefs.layout === 'big') syncBigScreen.t = setTimeout(() => host.fitBigScreen().catch(() => {}), 250);
+});
 function applyTheme() {
   const theme = STYLES[style()].themes ? prefs.theme : 'dark';
   if (theme === 'system') delete document.documentElement.dataset.theme;
@@ -2354,6 +2447,83 @@ function setFocus(t) {
   if (ach) fillAchStrip(t);
 }
 
+// ---------- logos on the page's own background: is this one mostly dark, or mostly white? ----------
+// Measured once per picture, from a copy loaded for reading (Steam's art allows that); a picture that can't be read
+// is left as it is.
+const logoTones = new Map();
+function toneLogo(img) {
+  const src = img.currentSrc || img.src;
+  if (!/^https?:/.test(src)) return;
+  const set = t => { if (t) img.dataset.tone = t; else delete img.dataset.tone; };
+  const had = logoTones.get(src);
+  if (typeof had === 'string') return set(had);
+  if (had) return had.then(set);
+  const job = new Promise(done => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onerror = () => done('');
+    im.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = 64; c.height = Math.max(1, Math.round(64 * im.height / im.width));
+        const x = c.getContext('2d');
+        x.drawImage(im, 0, 0, c.width, c.height);
+        const d = x.getImageData(0, 0, c.width, c.height).data;
+        let dark = 0, light = 0, all = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const a = d[i + 3] / 255;
+          if (a < .5) continue;
+          const l = (.2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]) / 255;
+          all += a; if (l < .3) dark += a; else if (l > .8) light += a;
+        }
+        done(!all ? '' : dark / all > .45 ? 'dark' : light / all > .6 ? 'light' : '');
+      } catch { done(''); }
+    };
+    im.src = src;
+  });
+  logoTones.set(src, job);
+  job.then(t => { logoTones.set(src, t); set(t); });
+}
+document.addEventListener('load', e => { if (e.target.matches?.('img.logo')) toneLogo(e.target); }, true);
+
+// ---------- Big screen: one row of big covers, for a TV; the game you're on is shown underneath ----------
+const BIG_MAX = 30;
+function bigGames() {
+  const all = titles.filter(t => !isHidden(t));
+  const played = all.filter(t => t.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed);
+  return [...played, ...sorted(all.filter(t => !t.lastPlayed && isInstalled(t)), 'name')].slice(0, BIG_MAX);
+}
+function renderBigHome() {
+  const games = bigGames(), total = titles.filter(t => !isHidden(t)).length;
+  const first = games.find(g => g.id === state.focus) || games[0];
+  $('#main').innerHTML = `
+    <div class="bighome">
+      <div class="backdrop" id="backdrop" aria-hidden="true"><div class="shade"></div></div>
+      ${games.length ? `<div class="big-rail" id="big-rail" aria-label="Your games">${games.map(g => tile(g, true)).join('')}${seeAll(total, 'all')}</div>`
+        : `<p class="empty">Junction hasn't found any games yet.</p>`}
+      <div class="big-lower">
+        <section class="focus big-info" id="focus" aria-live="polite"></section>
+        <div class="downloads" id="downloads" hidden></div>
+      </div>
+    </div>`;
+  renderDownloads();
+  if (!first) return;
+  setFocus(first);
+  const rail = $('#big-rail');
+  // The cover you're on stays at the left, like on a console.
+  const toStart = (t, smooth) => rail.scrollTo({ left: t.offsetLeft - rail.firstElementChild.offsetLeft,
+    behavior: smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' });
+  // After the move: a controller's move scrolls the cover into view itself, which would stop a smooth scroll.
+  rail.addEventListener('focusin', e => { const t = e.target.closest('.tile'); if (t) setTimeout(() => toStart(t, true)); });
+  // The mouse wheel moves the row sideways (there's nothing above or below it to scroll to).
+  rail.addEventListener('wheel', e => {
+    if (!e.deltaY || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    e.preventDefault();
+    rail.scrollBy({ left: e.deltaY * (e.deltaMode === 1 ? 40 : 1.6) });
+  }, { passive: false });
+  toStart(rail.querySelector(`[data-focus="${CSS.escape(first.id)}"]`) || rail.firstElementChild, false);
+}
+
 // ---------- tab markers: one pill per tab bar that slides to the chosen tab ----------
 const markers = {};
 function slideMarker(box, key) {
@@ -2503,7 +2673,7 @@ function updateArrows(strip) {
   prev.style.top = next.style.top = `${strip.offsetTop + strip.offsetHeight / 2}px`;
 }
 function addArrows() {
-  for (const strip of document.querySelectorAll('#main .tiles, #main .rail')) {
+  for (const strip of document.querySelectorAll('#main .tiles, #main .rail, #main .big-rail')) {
     if (strip.arrows) { updateArrows(strip); continue; }
     const box = strip.parentElement;
     box.classList.add('has-arrows');
@@ -2845,7 +3015,7 @@ const gameNotesHtml = (t, b) => `
         ${friendsLine(t.steamAppId)}
         ${b.dlc.length ? `<button class="note-chip" data-game-tab="details">${b.dlc.length} DLC on sale on Steam · up to -${b.dlc[0].cut}%</button>` : ''}
         ${b.series.length ? `<button class="note-chip" data-price="${esc(b.series[0].id)}" data-from="library">${esc(b.series[0].title)} is on sale · -${bestDeal(b.series[0]).cut}%</button>` : ''}
-        ${b.idle ? `<p class="note">Takes ${esc(size(b.space))} and you haven't played it in a while${t.lastPlayed ? ` (${esc(when(t.lastPlayed))})` : ''}.</p>` : ''}`;
+        ${b.idle ? `<p class="note">Takes ${esc(size(b.space))} and you haven't played it in a while${t.lastPlayed ? ` (${esc(when(t.lastPlayed))})` : ''}.${uninstallable(t).length ? ` <button class="link-btn" id="uninstall">Uninstall</button>` : ''}</p>` : ''}`;
 const gameTabsHtml = (t, b) => `
         <nav class="gp-tabs" role="tablist" aria-label="${esc(t.name)}">
           ${b.tabs.map(([k, label]) => `<button role="tab" data-game-tab="${k}" aria-selected="${state.gameTab === k}">${label}</button>`).join('')}
@@ -2891,6 +3061,7 @@ function gamePanelHtml(t, b) {
             <button class="pill" id="hide" aria-pressed="${isHidden(t)}">${ICON.eyeOff} ${isHidden(t) ? 'Show in library' : 'Hide from library'}</button>
             <button class="pill" id="cover">${ICON.image} Change cover</button>
             ${installedCopies.length ? `<button class="pill" id="folder">${ICON.folder} Open install folder</button>` : ''}
+            ${uninstallable(t).length ? `<button class="pill" id="uninstall">${ICON.trash} Uninstall</button>` : ''}
             ${t.copies.some(c => c.launcher === 'manual') ? `<button class="pill" id="remove">${ICON.trash} Remove from Junction</button>` : ''}
           </div>` : ''}
       </div>`;
@@ -2996,7 +3167,8 @@ function classicRows(sel) {
   return `${recent.length ? `<p class="cl-label">Recent</p>${recent.map(row).join('')}<p class="cl-label">A to Z</p>` : ''}${rest.map(row).join('')}`;
 }
 function renderClassic() {
-  const t = classicGame();
+  const home = state.view.name === 'home' && titles.some(x => !isHidden(x));
+  const t = home ? null : classicGame();
   const before = $('#main .classic'), listY = $('#cl-list')?.scrollTop || 0, paneY = $('#cl-page')?.scrollTop || 0;
   const sameGame = before && t && before.dataset.pick === t.id;
   const b = t && gameBits(t), a = b?.a || {};
@@ -3004,14 +3176,14 @@ function renderClassic() {
   const ach = t && achievementsOf(t)[0];
   const banner = a.hero || a.header || customCover(t || {}) || a.cover || '';
   $('#main').innerHTML = `
-    <div class="classic"${t ? ` data-pick="${esc(t.id)}"` : ''}>
+    <div class="classic"${home ? ' data-pick="home"' : t ? ` data-pick="${esc(t.id)}"` : ''}>
       <div class="backdrop" id="backdrop" aria-hidden="true"><div class="shade"></div></div>
       <aside class="cl-side" aria-label="Your games">
         <label class="cl-search">${ICON.search}<input id="cl-q" type="search" placeholder="Search ${titles.filter(x => !isHidden(x)).length} games" value="${esc(state.clQuery || '')}" autocomplete="off"></label>
         <div class="cl-chips">${Object.entries(CL_FILTERS).map(([k, n]) => `<button data-cl-filter="${k}" aria-pressed="${(state.clFilter || 'all') === k}">${n}</button>`).join('')}</div>
         <div class="cl-list" id="cl-list">${classicRows(t)}</div>
       </aside>
-      <section class="cl-page" id="cl-page">${!t ? `<p class="empty">Junction hasn't found any games yet.</p>` : `
+      ${home ? classicHomeHtml() : `<section class="cl-page" id="cl-page">${!t ? `<p class="empty">Junction hasn't found any games yet.</p>` : `
         ${state.view.name === 'game' ? `<button class="pill back" data-home>${ICON.back} Back</button>` : ''}
         <div class="cl-banner"${banner ? ` style="background-image:url('${esc(banner)}')"` : ''}>
           ${a.logo && a.hero ? `<img class="logo" src="${esc(a.logo)}" alt="${esc(t.name)}">` : `<h1>${esc(t.name)}</h1>`}
@@ -3024,14 +3196,59 @@ function renderClassic() {
           ${stat('On disk', b.space ? esc(size(b.space)) : isInstalled(t) ? '—' : 'Not installed')}
         </div>${gameNotesHtml(t, b)}
         ${gameTabsHtml(t, b)}${gamePanelHtml(t, b)}`}
-      </section>
+      </section>`}
     </div>`;
   $('#cl-list').scrollTop = listY;
   if (sameGame && state.tabSwitch) $('#cl-page').scrollTop = paneY;
+  if (home) {
+    renderDownloads();
+    // Home drawn again (a refresh, prices arriving): it stays where you were.
+    if (before?.dataset.pick === 'home') $('#cl-page').scrollTop = paneY;
+    const last = classicDefault();
+    setBackdrop(last && ((last.art || {}).hero || (last.art || {}).header) || '', true);
+    // Its store suggestions need the prices: draw them in once they're here.
+    if (!store) loadStoreQuiet().then(s => s && state.view.name === 'home' && $('#main .classic[data-pick="home"]') && renderClassic());
+  }
   // The chosen game stays in view in the list.
   const cur = $('#cl-list [aria-current]');
   if (cur && !before) cur.scrollIntoView({ block: 'center' });
   if (t) afterGame(t, b, true);
+}
+// Classic's Home: the game you played last, the ones before it, downloads, and a few store suggestions.
+// Picking a game in the list opens it, like on the Library tab.
+function classicHomeHtml() {
+  const all = titles.filter(x => !isHidden(x));
+  const played = all.filter(x => x.lastPlayed).sort((x, y) => y.lastPlayed - x.lastPlayed);
+  const last = played[0] || classicDefault();
+  const recent = played.filter(x => x !== last).slice(0, 8);
+  const a = (last && last.art) || {};
+  const banner = a.hero || a.header || customCover(last || {}) || a.cover || '';
+  const on = last && isInstalled(last);
+  const sec = (title, note, body, more) => `
+        <section class="cl-sec"><div class="cl-sec-head"><h2>${esc(title)}</h2>${note ? `<i>${esc(note)}</i>` : ''}${more || ''}</div>${body}</section>`;
+  const wishSale = store ? wishlistIds().map(id => store.games[id]).filter(sg => sg && !hideOwned(sg) && bestDeal(sg)?.cut > 0)
+    .sort((x, y) => bestDeal(y).cut - bestDeal(x).cut).slice(0, 8) : [];
+  const forYou = store ? forYouGames().slice(0, 8) : [];
+  return `<section class="cl-page cl-home" id="cl-page">
+        ${last ? `
+        <div class="cl-continue"${banner ? ` style="background-image:url('${esc(banner)}')"` : ''}>
+          <div class="cc-txt">
+            <span class="cc-label">${last.lastPlayed ? 'Continue' : 'Ready to play'}</span>
+            ${a.logo && a.hero ? `<img class="logo" src="${esc(a.logo)}" alt="${esc(last.name)}">` : `<h1>${esc(last.name)}</h1>`}
+            <p class="cc-meta">${esc([last.playtimeMinutes && `${hours(last.playtimeMinutes)} played`, last.lastPlayed && `last played ${whenLower(last.lastPlayed)}`].filter(Boolean).join(' · ') || launcherNames(last))}</p>
+            <div class="cc-btns">
+              <button class="pill primary big${on ? '' : ' install'}" data-quick="${esc(last.id)}">${on ? ICON.play : ICON.download}<span>${on ? 'Play' : 'Install'}</span></button>
+              <button class="pill" data-open="${esc(last.id)}">Game page</button>
+            </div>
+          </div>
+        </div>` : ''}
+        <div class="downloads cl-dl" id="downloads" hidden></div>
+        ${recent.length ? sec('Recently played', '', `<div class="cl-tiles">${recent.map(g => tile(g)).join('')}</div>`) : ''}
+        ${wishSale.length ? sec('On sale from your wishlist', '', `<div class="cl-tiles land">${wishSale.map(storeTile).join('')}</div>`,
+          '<button class="link-btn" data-store-tab="wishlist">Wishlist</button>') : ''}
+        ${forYou.length ? sec('For you in the Store', 'Like the games you play most', `<div class="cl-tiles land">${forYou.map(storeTile).join('')}</div>`,
+          '<button class="link-btn" data-store-tab="store">Store</button>') : ''}
+      </section>`;
 }
 // A game chosen in the list: shown on the right, and the Library tab is where you are now.
 function classicPick(id) {
@@ -3545,7 +3762,7 @@ function editionsHtml(sg) {
 function renderPrice(sg) {
   const deals = sg.deals, best = deals[0];
   const backTo = state.view.from === 'library' ? (findGame(state.view.back)?.name || 'Library')
-    : { wishlist: 'Wishlist', browse: 'Browse all' }[state.view.from] || 'Store';
+    : { wishlist: 'Wishlist', browse: 'Browse all', home: 'Home' }[state.view.from] || 'Store';
   const shots = sg.screenshots || [];
   const mine = ownsOf(sg).length ? libraryTitleFor(sg) : null;
   const fetchHistory = host.inApp && !sg.history;
@@ -4013,6 +4230,7 @@ function contextMenu(t, x, y) {
     ['Change cover…', () => coverDialog(t)],
     ...(host.inApp && earlierCopy(t) ? [[earlierCopy(t).playtimeEarlier ? 'Change earlier play time…' : 'Add earlier play time…', () => earlierDialog(t)]] : []),
     [isHidden(t) ? 'Show in library' : 'Hide', () => toggleHide(t)],
+    ...(uninstallable(t).length ? [['Uninstall…', () => uninstallDialog(t)]] : []),
   ];
   const menu = document.createElement('div');
   menu.id = 'ctx';
@@ -4121,6 +4339,8 @@ async function profileMenu(page = 'main') {
           if (info?.available) { closeMenu(); return updateDialog(); }
           v.textContent = !info || info.error ? 'Couldn’t check' : 'Up to date';
         } }]),
+      ...(prefs.layout === 'big' && host.inApp ? [{ icon: PM.full, label: bigFull ? 'Leave full screen' : 'Full screen', value: 'F11',
+        run: () => (closeMenu(), syncBigScreen(!bigFull)) }] : []),
       { icon: PM.help, label: 'Help', go: 'help' },
     ] },
     keys: { title: 'Accounts and keys', items: [
@@ -4265,6 +4485,7 @@ async function profileMenu(page = 'main') {
   menu.style.top = `${Math.max(8, r.bottom + 8)}px`;
 }
 const PM = {
+  full: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M17 6l2.5 2.5M15 8l2 2"/></svg>',
   sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
@@ -4769,7 +4990,7 @@ function renderStats() {
             <p class="note">All-time hours of the games you played this year; launchers don't share hours per year.</p></section>
           <section class="card"><h2>Free up space ${idle.length ? `<i>${esc(size(idleBytes))}</i>` : ''}</h2>
             ${idle.length ? bars(idle.map(t => ({ label: `${t.name} · ${t.lastPlayed ? `last played ${whenLower(t.lastPlayed)}` : 'never played'}`, v: sizeOf(t), id: t.id, c: lineVar(t.launcher) })), size)
-              + '<p class="note">Installed games you haven\'t played in two months. Open one to uninstall it through its launcher.</p>'
+              + '<p class="note">Installed games you haven\'t played in two months. Open one and choose ··· → Uninstall.</p>'
               : emptyState(null, 'Nothing to clean up', 'You played every installed game in the last two months.')}</section>
           <section class="card"><h2>Hours by genre</h2>${bars(Object.entries(perGenre).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([g, v]) => ({ label: g, v, c: '--c: var(--signal)' })), hours)}</section>
           <section class="card"><h2>Games per launcher</h2>${bars(Object.entries(perLauncher).sort((a, b) => b[1] - a[1]).map(([l, v]) => ({ label: lib.launchers[l], v, c: lineVar(l) })), v => String(v))}</section>
@@ -4823,7 +5044,7 @@ function sectionOf(view) {
   // A game page belongs to the tab you opened it from.
   if (view.name === 'game' && view.from) return view.from;
   if (view.name === 'stats') return 'stats';
-  if (view.name === 'home') return 'home';
+  if (view.name === 'home' || (view.name === 'price' && view.from === 'home')) return 'home';
   if (view.name === 'store' || view.name === 'browse' || (view.name === 'price' && view.from !== 'wishlist')) return 'store';
   if (view.name === 'wishlist' || view.name === 'price') return 'wishlist';
   return 'library';
@@ -4930,6 +5151,7 @@ function open(id, from, tab, backTo) {
 }
 function leavePrice() {
   if (state.view.from === 'library') return state.view.back ? open(state.view.back, state.view.gameFrom, undefined, state.view.gameBack) : go({ name: 'library' });
+  if (state.view.from === 'home') return goHome();  // a suggestion on Classic's Home
   const to = ['wishlist', 'browse'].includes(state.view.from) ? state.view.from : 'store';
   return go({ name: to }).then(() => { if (to === 'store') $('#main').scrollTop = state.scroll.store || 0; });
 }
@@ -4974,6 +5196,51 @@ async function comparePrices(t) {
 const knowsHistory = c => c.launcher === 'steam' || c.playtimeFrom === 'launcher'
   || (c.launcher === 'gog' && /GalaxyClient/i.test(c.launch || ''));
 const earlierCopy = t => (t.copies || [t]).filter(c => !knowsHistory(c)).sort((a, b) => !!b.playtimeEarlier - !!a.playtimeEarlier)[0] || null;
+// Installed copies Junction can hand to an uninstaller (games you added yourself are only removed from Junction).
+const uninstallable = t => t.copies.filter(c => isInstalled(c) && c.launcher !== 'manual');
+// Asks first (Cancel is the default), then the game's own launcher uninstalls it. Junction never deletes game files;
+// the install watcher notices when the game is gone.
+function uninstallDialog(t) {
+  const copies = uninstallable(t);
+  if (!copies.length) return;
+  const opener = { epic: 'the Epic Games Launcher', xbox: 'Windows’ list of installed apps' };
+  const what = c => opener[c.launcher]
+    ? `${lib.launchers[c.launcher]} can’t be asked to uninstall from outside, so Junction opens ${opener[c.launcher]}. Choose Uninstall on ${t.name} there.`
+    : `${lib.launchers[c.launcher]} uninstalls it${c.sizeBytes ? ` and frees ${size(c.sizeBytes)}` : ''}. It may ask you to confirm once more.`;
+  $('#layer').innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="dialog uninstall" role="dialog" aria-modal="true" aria-labelledby="un-title">
+        <h2 id="un-title">Uninstall ${esc(t.name)}?</h2>
+        ${copies.length > 1 ? `
+          <p class="hint">It’s installed with ${copies.length} launchers. Which copy?</p>
+          <div class="options">${copies.map((c, i) => `
+            <button class="option" data-un="${i}" style="${lineVar(c.launcher)}"><i></i>
+              <span class="o-main"><b>${esc(lib.launchers[c.launcher])}</b><span>${c.sizeBytes ? `Installed · ${esc(size(c.sizeBytes))}` : 'Installed'}</span></span>
+              <span class="o-act">Uninstall</span></button>`).join('')}</div>`
+        : `<p class="hint">${esc(what(copies[0]))}</p>`}
+        <p class="hint">Your play time, achievements and favourites stay in Junction.</p>
+        <div class="row-btns">
+          <button type="button" class="btn" id="un-cancel">Cancel</button>
+          ${copies.length > 1 ? '' : `<button type="button" class="btn primary" data-un="0">${opener[copies[0].launcher] ? `Open ${esc(lib.launchers[copies[0].launcher])}` : 'Uninstall'}</button>`}
+        </div>
+      </div>
+    </div>`;
+  $('#un-cancel').focus();
+  $('#un-cancel').onclick = () => closeLayer();
+  $('#scrim').onclick = async e => {
+    if (e.target.id === 'scrim') return closeLayer();
+    const b = e.target.closest('[data-un]');
+    if (!b) return;
+    const c = copies[Number(b.dataset.un)];
+    closeLayer();
+    const res = await host.uninstall(c).catch(() => null);
+    if (res?.prototype) return toast(`Preview only: the app asks ${lib.launchers[c.launcher]} to uninstall ${t.name}.`, c.launcher);
+    if (!res?.ok) return toast(res?.error || 'Junction couldn’t start the uninstall. Try again.', c.launcher);
+    toast(res.how === 'open' ? `Opened ${res.where || lib.launchers[c.launcher]}. Choose Uninstall on ${t.name} there.`
+      : `${lib.launchers[c.launcher]} is uninstalling ${t.name}. Junction updates your library when it’s gone.`, c.launcher);
+  };
+}
+
 function earlierDialog(t) {
   const c = earlierCopy(t);
   if (!c) return;
@@ -5292,6 +5559,7 @@ document.addEventListener('click', e => {
     case 'forget-choice': delete prefs.playWith[g.id]; savePrefs(); redrawShown(); return startGame(g);
     case 'fav': return toggleFav(g);
     case 'hide': return toggleHide(g);
+    case 'uninstall': return uninstallDialog(g);
     case 'cover': return coverDialog(g);
     case 'folder': {
       const c = g.copies.find(isInstalled) || copy;
@@ -5490,6 +5758,7 @@ document.addEventListener('keydown', e => {
     if (dir) { e.preventDefault(); return moveFocus(dir); }
     if (state.view.name === 'library' && /^[a-z]$/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) return jumpTo(e.key.toUpperCase());
   }
+  if (e.key === 'F11' && host.inApp) { e.preventDefault(); return syncBigScreen(!bigFull); }
   // The context-menu key (or Shift+F10) on a focused game opens its menu.
   if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
     const el = document.activeElement?.closest?.('[data-open]'), t = el && findGame(el.dataset.open);
@@ -5798,6 +6067,7 @@ $('#win-ctl').addEventListener('click', e => {
     <p>The first scan takes a minute or two; after that Junction opens straight away.</p></div></div>`;
   await host.ready();
   ownTitleBar();
+  syncBigScreen();
   host.updateInfo().then(i => i && junctionUpdate(i)).catch(() => {});
   try {
     lib = await host.library();

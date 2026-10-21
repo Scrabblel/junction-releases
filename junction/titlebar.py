@@ -19,6 +19,7 @@ WM_NCHITTEST = 0x0084
 HTCLIENT, HTTOP, HTTOPLEFT, HTTOPRIGHT = 1, 12, 13, 14
 SM_CXFRAME, SM_CYFRAME, SM_CXPADDEDBORDER = 32, 33, 92
 SWP_FRAMECHANGED = 0x0020
+GWL_STYLE, WS_THICKFRAME = -16, 0x00040000
 SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_NOACTIVATE = 0x0002, 0x0001, 0x0004, 0x0010
 
 LRESULT = ctypes.c_ssize_t
@@ -30,6 +31,8 @@ _comctl.SetWindowSubclass.argtypes = [wintypes.HWND, SUBCLASSPROC, ctypes.c_size
 _comctl.DefSubclassProc.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 _comctl.DefSubclassProc.restype = LRESULT
 _user.IsZoomed.argtypes = [wintypes.HWND]
+_user.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+_user.GetWindowLongW.restype = ctypes.c_long
 _user.GetDpiForWindow.argtypes = [wintypes.HWND]
 _user.GetSystemMetricsForDpi.argtypes = [ctypes.c_int, wintypes.UINT]
 _user.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
@@ -75,7 +78,8 @@ def _proc(hwnd, msg, wparam, lparam, _id, _data):
         rect = ctypes.cast(lparam, ctypes.POINTER(wintypes.RECT)).contents
         top = rect.top
         _comctl.DefSubclassProc(hwnd, msg, wparam, lparam)
-        rect.top = top + (_frame(hwnd) if _user.IsZoomed(hwnd) else 0)
+        framed = _user.GetWindowLongW(hwnd, GWL_STYLE) & WS_THICKFRAME  # full screen has no frame
+        rect.top = top + (_frame(hwnd) if _user.IsZoomed(hwnd) and framed else 0)
         return 0
     if msg == WM_NCHITTEST:
         hit = _comctl.DefSubclassProc(hwnd, msg, wparam, lparam)
