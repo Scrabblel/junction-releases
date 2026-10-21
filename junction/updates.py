@@ -36,7 +36,7 @@ UA = {"User-Agent": f"Junction/{config.VERSION} (update check)", "Accept": "appl
 
 def parse_version(text):
     """'v0.9.1' -> (0, 9, 1, 0), so versions of any length compare properly; anything else -> None."""
-    m = re.fullmatch(r"v?(\d+(?:\.\d+){0,3})", (text or "").strip())
+    m = re.fullmatch(r"[vV]?(\d+(?:\.\d+){0,3})", (text or "").strip())
     return tuple(int(n) for n in m.group(1).split(".")) + (0,) * (3 - m.group(1).count(".")) if m else None
 
 
@@ -144,27 +144,36 @@ class Updater:
         folder = os.path.join(tempfile.gettempdir(), "Junction update")
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, rel["file"])
+        # Without GitHub's checksum Junction can't tell a cut-off or changed download from the real one.
+        if not rel.get("sha256"):
+            raise UpdateError("GitHub didn't say what the installer should look like, so Junction won't run it. "
+                              "Get it from the release page instead.")
         sha, done, total = hashlib.sha256(), 0, rel.get("size") or 0
         req = urllib.request.Request(rel["url"], headers={"User-Agent": UA["User-Agent"]})
-        with urllib.request.urlopen(req, timeout=60) as r, open(path + ".part", "wb") as f:
-            total = int(r.headers.get("Content-Length") or total)
-            last = 0
-            while chunk := r.read(256 * 1024):
-                f.write(chunk)
-                sha.update(chunk)
-                done += len(chunk)
-                if time.time() - last > 0.2:
-                    progress({"stage": "downloading", "done": done, "total": total})
-                    last = time.time()
-        progress({"stage": "downloading", "done": done, "total": total})
-        if rel.get("size") and done != rel["size"]:
-            os.remove(path + ".part")
-            raise UpdateError("The download was incomplete. Try again.")
-        if rel.get("sha256") and sha.hexdigest() != rel["sha256"]:
-            os.remove(path + ".part")
-            raise UpdateError("The download doesn't match the published installer, so Junction didn't run it.")
-        os.replace(path + ".part", path)
-        return path
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r, open(path + ".part", "wb") as f:
+                total = int(r.headers.get("Content-Length") or 0) or total
+                last = 0
+                while chunk := r.read(256 * 1024):
+                    f.write(chunk)
+                    sha.update(chunk)
+                    done += len(chunk)
+                    if time.time() - last > 0.2:
+                        progress({"stage": "downloading", "done": done, "total": total or done})
+                        last = time.time()
+            progress({"stage": "downloading", "done": done, "total": total or done})
+            if rel.get("size") and done != rel["size"]:
+                raise UpdateError("The download was incomplete. Try again.")
+            if sha.hexdigest() != rel["sha256"]:
+                raise UpdateError("The download doesn't match the published installer, so Junction didn't run it.")
+            os.replace(path + ".part", path)
+            return path
+        finally:
+            # A dropped connection or a refused file leaves nothing behind in the temp folder.
+            try:
+                os.remove(path + ".part")
+            except OSError:
+                pass
 
 
 class UpdateError(Exception):

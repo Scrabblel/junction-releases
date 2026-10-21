@@ -4,9 +4,9 @@ IsThereAnyDeal throttles hard, so a full refresh takes half a minute or more; th
 in its cache and refreshes it in the background when it's older than stale() seconds.
 """
 import time
-import urllib.error
 
 from . import art, config, extras, keys, steam_owned, stores
+from .config import NET_ERRORS
 
 STALE = 6 * 3600          # with your own key
 STALE_SHARED = 12 * 3600  # with the key Junction comes with, which everyone shares
@@ -44,8 +44,9 @@ def build(games, accounts, settings=None, progress=None):
     wanted = list(dict.fromkeys(data["frontDeals"][:HISTORY_FRONT] + data["catalog"][:HISTORY_CATALOG]))
     for itad_id in wanted:
         try:
-            line = stores.best_price_line(itad.history(itad_id))
-        except (urllib.error.URLError, ValueError):
+            deals = data["games"][itad_id].get("deals") or []
+            line = stores.best_price_line(itad.history(itad_id), today=deals[0]["price"] if deals else None)
+        except (*NET_ERRORS, ValueError):
             continue
         if len(line) > 1:
             data["games"][itad_id]["history"] = line
@@ -57,14 +58,14 @@ def build(games, accounts, settings=None, progress=None):
         for appid, m in extras.steam_media(list(steam_of), shots=3).items():
             if m["screenshots"]:
                 data["games"][steam_of[appid]]["screenshots"] = m["screenshots"]
-    except (urllib.error.URLError, ValueError):
+    except (*NET_ERRORS, ValueError):
         pass
     # Games without an IsThereAnyDeal picture get their Steam header.
     no_image = {g["steamAppId"]: g for g in data["games"].values() if not g["image"] and g["steamAppId"]}
     try:
         for appid, urls in art.steam_art(list(no_image)).items():
             no_image[appid]["image"] = urls.get("header")
-    except (urllib.error.URLError, ValueError):
+    except (*NET_ERRORS, ValueError):
         pass
     return data
 

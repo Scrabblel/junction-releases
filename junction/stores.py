@@ -22,6 +22,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 from .art import UA, get_json, normalize, steam_art, steam_items
+from .config import NET_ERRORS
 from .launchers import LAUNCHERS
 
 API = "https://api.isthereanydeal.com"
@@ -232,7 +233,7 @@ def itad_free(itad):
     return out
 
 
-def best_price_line(changes, now=None):
+def best_price_line(changes, now=None, today=None):
     """Turn ITAD price changes into the cheapest first-party price over time.
 
     Returns [[unix time, price], ...], oldest first, one point per change in the best price,
@@ -251,6 +252,9 @@ def best_price_line(changes, now=None):
             line.append([ts, best])
     if line:
         line.append([int(now or time.time()), line[-1][1]])
+        # A store that stopped selling the game keeps its last price above; end at today's real best price.
+        if today is not None and line[-1][1] != today:
+            line.append([line[-1][0], today])
     return line
 
 
@@ -286,7 +290,7 @@ def build_store(itad, library_games, accounts, deal_count=150, catalog_count=600
     for a in accounts:
         try:
             appids = steam_wishlist(a["steamId"], a.get("apiKey", ""))
-        except urllib.error.URLError:
+        except NET_ERRORS:
             appids = []
         wishlist_accounts += bool(appids)
         for appid, itad_id in (itad.ids_for_steam(appids) if appids else {}).items():
@@ -306,7 +310,7 @@ def build_store(itad, library_games, accounts, deal_count=150, catalog_count=600
     front = [add(d) for d in itad.deals(deal_count)]
     try:
         sellers = itad.ids_for_steam(steam_top_sellers())
-    except urllib.error.URLError:
+    except NET_ERRORS:
         sellers = {}
     steam_of.update({i: a for a, i in sellers.items()})
     top_sellers = list(dict.fromkeys(sellers.values()))
@@ -353,7 +357,7 @@ def build_store(itad, library_games, accounts, deal_count=150, catalog_count=600
     for source in (epic_free, lambda: itad_free(itad)):
         try:
             free += source()
-        except (urllib.error.URLError, KeyError, ValueError):
+        except (*NET_ERRORS, KeyError, ValueError):
             pass
     seen, unique_free = set(), []
     for f in free:

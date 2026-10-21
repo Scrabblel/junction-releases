@@ -38,6 +38,17 @@ def _galaxy_db():
     return os.path.join(os.environ.get("PROGRAMDATA", r"C:\ProgramData"), "GOG.com", "Galaxy", "storage", "galaxy-2.0.db")
 
 
+def _copy_db(path, copy):
+    """Copy an SQLite database Galaxy has open, with its write-ahead log: the newest play time can be in there."""
+    shutil.copyfile(path, copy)
+    for extra in ("-wal", "-shm"):
+        if os.path.isfile(path + extra):
+            try:
+                shutil.copyfile(path + extra, copy + extra)
+            except OSError:
+                pass
+
+
 def gog_owned():
     """[(product id, title, cover url)] for GOG games in this PC's Galaxy library, DLC and hidden duplicates left out."""
     path = _galaxy_db()
@@ -46,7 +57,7 @@ def gog_owned():
     # Galaxy keeps the database open while it runs, so read a copy.
     with tempfile.TemporaryDirectory() as tmp:
         copy = os.path.join(tmp, "galaxy.db")
-        shutil.copyfile(path, copy)
+        _copy_db(path, copy)
         db = sqlite3.connect(copy)
         try:
             rows = db.execute("""
@@ -362,7 +373,7 @@ def gog_playtime():
         return {}
     with tempfile.TemporaryDirectory() as tmp:
         copy = os.path.join(tmp, "galaxy.db")
-        shutil.copyfile(path, copy)
+        _copy_db(path, copy)
         db = sqlite3.connect(copy)
         try:
             minutes = dict(db.execute("select releaseKey, sum(minutesInGame) from GameTimes group by releaseKey").fetchall())

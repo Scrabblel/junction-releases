@@ -44,7 +44,9 @@ def _post_token(fields):
         with urllib.request.urlopen(req, timeout=20) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
-        if e.code >= 500:  # EA having a bad moment, not a refused sign-in: try again later
+        # Only 400/401 means EA refused the sign-in. Anything else (a rate limit, a proxy, a timeout, a bad
+        # moment on their side) is "try again later" and must never make someone sign in again.
+        if e.code not in (400, 401):
             raise
         try:
             body = json.load(e)
@@ -123,17 +125,30 @@ def sign_in(open_window):
 
     hooked = set()
 
-    def hook():
-        """Listen to the WebView2 control behind the window, once it's there (pywebview doesn't pass these on)."""
+    def attach(control):
         try:
-            control = win.native.browser.webview
             if "control" not in hooked:
                 control.NavigationStarting += going
                 hooked.add("control")
             if "frames" not in hooked and control.CoreWebView2 is not None:
                 control.CoreWebView2.FrameNavigationStarting += going
                 hooked.add("frames")
-        except Exception:  # noqa: BLE001 - not created yet; try again on the next round
+        except Exception:  # noqa: BLE001 - not ready yet; try again on the next round
+            pass
+
+    def hook():
+        """Listen to the WebView2 control behind the window, once it's there (pywebview doesn't pass these on).
+        This must happen on the window's own thread: touching WebView2 from this one waits for that thread
+        while holding Python's lock, and on a busy page (EA's) that thread is waiting for the same lock to
+        handle a request. Both then wait forever and all of Junction freezes."""
+        try:
+            from System import Action
+            form = win.native
+            if form is None or not form.IsHandleCreated:
+                return
+            control = form.browser.webview
+            form.Invoke(Action(lambda: attach(control)))
+        except Exception:  # noqa: BLE001 - not created yet, or just closed; try again on the next round
             pass
 
     win.events.closed += lambda: closed.append(1)
@@ -170,10 +185,12 @@ def _access():
     try:
         tok = _post_token({"grant_type": "refresh_token", "refresh_token": saved["refresh"]})
     except SignInError:
-        signins.put("ea", dict(saved, expired=True))
+        signins.put_if_same("ea", saved["refresh"], dict(saved, expired=True))
         raise
     if tok.get("refresh_token") and tok["refresh_token"] != saved["refresh"]:
-        _keep(tok, saved.get("name"))
+        # Only if you didn't sign out (or in again) while this was under way.
+        signins.put_if_same("ea", saved["refresh"], {"refresh": tok["refresh_token"],
+                                                     "name": saved.get("name") or _name_from(tok["access_token"]) or "EA account"})
     return tok["access_token"]
 
 

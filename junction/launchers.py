@@ -36,6 +36,14 @@ STEAM_SKIP_NAME = re.compile(r"redistributable|steamworks|proton|steam linux run
 # Installed through Steam but not games: listed, hidden until the user un-hides them.
 STEAM_TOOL_IDS = {"431960", "250820"}  # Wallpaper Engine, SteamVR
 
+_BNET_LOCALE = re.compile(r"_(enus|engb|dede|frfr|eses|esmx|itit|ptbr|ruru|kokr|zhtw|zhcn|plpl|jajp)$")
+
+
+def bnet_product(uid):
+    """A Battle.net install id without its language: "wow_enus" -> "wow"."""
+    return _BNET_LOCALE.sub("", (uid or "").lower())
+
+
 # Battle.net uninstall --uid values mapped to the product codes `Battle.net.exe --exec="launch X"` takes.
 BNET_CODES = {
     "wow": "WoW", "wow_classic": "WoWC", "odin": "ODIN", "d3": "D3", "diablo3": "D3",
@@ -164,10 +172,36 @@ def _steam_root():
     return os.path.normpath(path) if path and os.path.isdir(path) else None
 
 
+STEAMID64_BASE = 76561197960265728
+
+
+def _my_steam_users():
+    """The userdata folder names (account ids) of the Steam accounts that count: the ones listed in Junction, or,
+    when none are listed yet, every account on this PC except the ones removed in Junction."""
+    try:
+        from . import config
+        s = config.load_settings()
+    except Exception:  # noqa: BLE001
+        return None, set()
+    accs = s.get("steamAccounts")
+    if accs is None and s.get("steamId"):
+        accs = [{"steamId": s["steamId"]}]
+    removed = {str(h.get("steamId")) for h in s.get("hiddenSteamAccounts") or []}
+    to_id = lambda sid: str(int(sid) - STEAMID64_BASE)  # noqa: E731
+    mine = {to_id(a["steamId"]) for a in accs or [] if str(a.get("steamId") or "").strip().isdigit()
+            and str(a["steamId"]).strip() not in removed}
+    return (mine or None), {to_id(r) for r in removed if r.isdigit()}
+
+
 def _steam_stats(root):
-    """Playtime (minutes) and last played time per app, summed over every Steam account on this PC."""
+    """Playtime (minutes) and last played time per app, summed over your Steam accounts on this PC.
+    Other people's accounts on the same PC, and accounts removed in Junction, don't count."""
     stats = {}
+    only, removed = _my_steam_users()
     for cfg in glob.glob(os.path.join(root, "userdata", "*", "config", "localconfig.vdf")):
+        user = os.path.basename(os.path.dirname(os.path.dirname(cfg)))
+        if (only is not None and user not in only) or user in removed:
+            continue
         try:
             data = parse_vdf(_read(cfg))
         except OSError:
@@ -357,7 +391,7 @@ def find_battlenet():
         if not uid or uid == "battle.net":
             continue
         exe = _exe_from_icon(v.get("DisplayIcon"))
-        code = BNET_CODES.get(uid)
+        code = BNET_CODES.get(uid) or BNET_CODES.get(bnet_product(uid))
         if bnet and code:
             launch = {"type": "cmd", "target": f'"{bnet}" --exec="launch {code}"'}
         elif exe:

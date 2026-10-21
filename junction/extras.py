@@ -14,6 +14,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 from .art import ASSET_BASE, UA, get_json, steam_items
+from .config import NET_ERRORS
 
 TRAILER_BASE = "https://video.akamai.steamstatic.com/store_trailers/"
 
@@ -39,7 +40,7 @@ def _achievements(key, steamid, appid):
            + urllib.parse.urlencode({"key": key, "steamid": steamid, "appid": appid}))
     try:
         stats = get_json(url, timeout=20).get("playerstats") or {}
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except (*NET_ERRORS, TimeoutError, ValueError):
         return None  # 400/403: the game has no achievements, or this account doesn't own it
     items = stats.get("achievements") or []
     return [sum(1 for a in items if a.get("achieved")), len(items)] if items else None
@@ -76,7 +77,7 @@ def steamgriddb_cover(key, name):
             return None
         grids = call(f"/grids/game/{found[0]['id']}?dimensions=600x900&types=static").get("data") or []
         return grids[0]["url"] if grids else None
-    except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+    except (*NET_ERRORS, TimeoutError, ValueError, KeyError):
         return None
 
 
@@ -89,10 +90,11 @@ def achievement_list(key, appid, steamids):
     def call(url):
         try:
             return get_json(url, timeout=20)
-        except (urllib.error.URLError, TimeoutError, ValueError):
+        except (*NET_ERRORS, TimeoutError, ValueError):
             return {}
     base = "https://api.steampowered.com/ISteamUserStats/"
-    schema = call(base + "GetSchemaForGame/v2/?" + urllib.parse.urlencode({"key": key, "appid": appid, "l": "english"}))
+    # Not through call(): Steam not answering here is an error (asked again next time), not "no achievements".
+    schema = get_json(base + "GetSchemaForGame/v2/?" + urllib.parse.urlencode({"key": key, "appid": appid, "l": "english"}), timeout=20)
     items = ((schema.get("game") or {}).get("availableGameStats") or {}).get("achievements") or []
     if not items:
         return None
@@ -118,7 +120,7 @@ def steam_dlc_sales(appids):
     def one(appid):
         try:
             d = get_json(f"https://store.steampowered.com/api/dlcforapp/?appid={appid}&cc=nl&l=english", timeout=20)
-        except (urllib.error.URLError, TimeoutError, ValueError):
+        except (*NET_ERRORS, TimeoutError, ValueError):
             return appid, []
         out = []
         for x in d.get("dlc") or []:
@@ -138,14 +140,24 @@ def steam_friends(keys, own_ids):
     `keys` maps your SteamIDs to an API key. Friends with a private friend list or game list are skipped.
     """
     base = "https://api.steampowered.com/"
-    ids = set()
+    ids, answered, failure = set(), False, None
     for sid, key in keys.items():
         try:
             fl = get_json(base + "ISteamUser/GetFriendList/v1/?" + urllib.parse.urlencode(
                 {"key": key, "steamid": sid, "relationship": "friend"}))
-        except (urllib.error.URLError, TimeoutError, ValueError):
-            continue  # this account's friend list is private
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):  # this account's friend list is private
+                answered = True
+            else:
+                failure = e
+            continue
+        except (*NET_ERRORS, TimeoutError, ValueError) as e:
+            failure = e
+            continue
+        answered = True
         ids.update(f["steamid"] for f in fl.get("friendslist", {}).get("friends", []))
+    if failure and not answered:  # Steam didn't answer for any account: say so, so the old list is kept
+        raise failure
     ids -= set(own_ids)
     key = next(iter(keys.values()), "")
     if not ids or not key:
@@ -168,7 +180,7 @@ def steam_friends(keys, own_ids):
         try:
             r = get_json(base + "IPlayerService/GetOwnedGames/v1/?" + urllib.parse.urlencode(
                 {"key": key, "steamid": fid, "include_played_free_games": 1}), timeout=20)
-        except (urllib.error.URLError, TimeoutError, ValueError):
+        except (*NET_ERRORS, TimeoutError, ValueError):
             return fid, set()
         return fid, {g["appid"] for g in r.get("response", {}).get("games", [])}
     with ThreadPoolExecutor(6) as pool:
@@ -200,7 +212,7 @@ def steam_news(appids, count=4):
                                     "feeds": "steam_community_announcements"})
         try:
             d = get_json(f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?{q}", timeout=20)
-        except (urllib.error.URLError, TimeoutError, ValueError):
+        except (*NET_ERRORS, TimeoutError, ValueError):
             return appid, []
         out = []
         for x in (d.get("appnews") or {}).get("newsitems") or []:
@@ -222,7 +234,7 @@ def steam_profiles(key, steamids):
     try:
         r = get_json("https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?" + urllib.parse.urlencode(
             {"key": key, "steamids": ",".join(steamids)}), timeout=20)
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except (*NET_ERRORS, TimeoutError, ValueError):
         return {}
     return {p["steamid"]: {"name": p.get("personaname"), "avatar": p.get("avatarfull") or p.get("avatarmedium")}
             for p in r.get("response", {}).get("players", [])}

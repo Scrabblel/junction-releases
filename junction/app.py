@@ -61,6 +61,30 @@ def _merge_extras(new, old):
             g["lastPlayed"] = g.get("lastPlayed") or p.get("lastPlayed")
 
 
+def _take_enriched(lib, enriched):
+    """Put what a refresh found (friends, news, achievements, sizes, launcher play time) into `lib`, a newer scan
+    that finished while the refresh ran. Unlike _merge_extras, the refresh's values win."""
+    for k in ENRICHED:
+        if k in enriched:
+            lib[k] = enriched[k]
+    pics = {a["steamId"]: a.get("avatar") for a in enriched.get("steamAccounts") or []}
+    for a in lib.get("steamAccounts") or []:
+        if pics.get(a["steamId"]):
+            a["avatar"] = pics[a["steamId"]]
+    found = {g["id"]: g for g in enriched.get("games") or []}
+    for g in lib.get("games") or []:
+        e = found.get(g["id"])
+        if not e:
+            continue
+        if e.get("achievements") is not None:
+            g["achievements"] = e["achievements"]
+        if e.get("sizeBytes") is not None and g.get("installed") and g.get("installDir") == e.get("installDir"):
+            g["sizeBytes"] = e["sizeBytes"]
+        if e.get("playtimeFrom") == "launcher" and e.get("playtimeMinutes"):
+            g["playtimeMinutes"], g["playtimeFrom"] = e["playtimeMinutes"], "launcher"
+        g["lastPlayed"] = max(g.get("lastPlayed") or 0, e.get("lastPlayed") or 0) or None
+
+
 class Api:
     """Everything the page can ask for. Only public methods are visible to the page."""
 
@@ -71,6 +95,11 @@ class Api:
         self._launch = config.read_cache("launch.json", {})
         self._lib_lock = threading.Lock()
         self._busy = threading.Lock()  # one background refresh at a time
+        self._scan_lock = threading.RLock()  # one scan at a time (a refresh, Rescan or a new install)
+        self._scanning = False
+        self._swap = threading.Lock()  # replacing self._lib (a published library is never changed in place)
+        self._wanted = 0  # a refresh asked for while one runs: 1 = refresh, 2 = rescan first
+        self._wanted_lock = threading.Lock()
         self._store = None
         self._store_lock = threading.Lock()
         self._store_refreshing = False
@@ -100,38 +129,71 @@ class Api:
 
     # ---------- library ----------
 
-    def _scan(self):
-        """Scan now, keep the extras of the last library, and remember how to launch each game."""
+    def _scan(self, sizes=False):
+        """Scan now, keep the extras of the last library, and remember how to launch each game.
+        With sizes=True the disk sizes are measured before the library is published (the install watch)."""
+        with self._scan_lock:
+            self._scanning = True
+            try:
+                return self._scan_now(sizes)
+            finally:
+                self._scanning = False
+
+    def _scan_now(self, sizes):
         lib, raw = library.scan(progress=self._progress)
         lib["version"] = LIB_VERSION
-        _merge_extras(lib, self._lib)
-        self._raw = raw
-        self._launch = {g["id"]: g["launch"] for g in raw}
+        if sizes:
+            library.add_sizes(lib)
+        with self._swap:
+            _merge_extras(lib, self._lib)
+            self._raw = raw
+            self._launch = {g["id"]: g["launch"] for g in raw}
+            self._lib = lib
         config.write_cache("launch.json", self._launch)
         config.write_cache("library.json", lib)
-        self._lib = lib
+        # What's installed now, so the install watch doesn't rescan (and toast) for what this scan already saw.
+        self._installed_sig = {g["id"] for g in raw if g.get("installed")}
         return lib
 
     def _enrich(self):
-        lib = copy.deepcopy(self._lib)
+        base = self._lib
+        lib = copy.deepcopy(base)
         store_appids = [sg["steamAppId"] for sg in ((self._store or {}).get("games") or {}).values() if sg.get("steamAppId")]
         library.enrich(lib, store_appids=store_appids)
-        self._lib = lib
-        config.write_cache("library.json", lib)
+        with self._swap:
+            if self._lib is base:
+                self._lib = lib
+            else:  # a scan (Rescan, a new install) finished meanwhile: keep its games, add what this found
+                merged = copy.deepcopy(self._lib)
+                _take_enriched(merged, lib)
+                self._lib = merged
+            current = self._lib
+        config.write_cache("library.json", current)
         self._push("library")
 
     def _background(self, rescan):
-        if not self._busy.acquire(blocking=False):
-            return
-        try:
-            if rescan:
-                self._scan()
-                self._push("library")
-            self._enrich()
-        except Exception:  # noqa: BLE001
-            traceback.print_exc()
-        finally:
-            self._busy.release()
+        """Refresh behind the page. Asked again while one runs, the running one goes round once more when it's
+        done (with a rescan if any of the asks wanted one), so a saved key or a sign-in is never left out."""
+        with self._wanted_lock:
+            self._wanted = max(self._wanted, 2 if rescan else 1)
+        while self._wanted and not self._quitting:
+            if not self._busy.acquire(blocking=False):
+                return  # the one running picks it up
+            try:
+                with self._wanted_lock:
+                    rescan, self._wanted = self._wanted == 2, 0
+                if rescan:
+                    try:
+                        self._scan()
+                        self._push("library")
+                    except Exception:  # noqa: BLE001 - offline or a launcher hiccup: the extras still refresh
+                        traceback.print_exc()
+                if self._lib:
+                    self._enrich()
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+            finally:
+                self._busy.release()
 
     def _start(self, rescan):
         threading.Thread(target=self._background, args=(rescan,), daemon=True).start()
@@ -150,27 +212,26 @@ class Api:
                 found = launchers.find_all()
             except Exception:  # noqa: BLE001
                 continue
-            if found["errors"]:  # a launcher that failed to read would look like an uninstall
-                continue
-            now = {g["id"] for g in found["games"]}
             if self._installed_sig is None:
                 self._installed_sig = {g["id"] for g in lib["games"] if g["installed"]}
-            if now == self._installed_sig or not self._busy.acquire(blocking=False):
+            # A launcher that couldn't be read just now would look like an uninstall: keep its games as they were.
+            failed = set(found["errors"])
+            now = {g["id"] for g in found["games"]} | {i for i in self._installed_sig if i.split(":", 1)[0] in failed}
+            # The last scan couldn't read a launcher that reads fine now: its games may be missing, so scan again.
+            stale = not failed and any(k in launchers.LAUNCHERS for k in (lib.get("errors") or {}))
+            if (now == self._installed_sig and not stale) or self._scanning or self._quitting:
                 continue
             before = self._installed_sig
             try:
                 old = {g["id"]: g["name"] for g in lib["games"]}
-                new = self._scan()
-                library.add_sizes(new)
-                config.write_cache("library.json", new)
+                new = self._scan(sizes=True)
                 names = {g["id"]: g["name"] for g in new["games"]}
                 self._push("library", {"installed": [names.get(i, i) for i in sorted(now - before)],
                                        "removed": [old.get(i, i) for i in sorted(before - now)]})
-            except Exception:  # noqa: BLE001
+                self._installed_sig = now  # exactly what this look saw, so the watch settles
+            except Exception:  # noqa: BLE001 - offline, say: try again in a minute (the change is still there)
                 traceback.print_exc()
-            finally:
-                self._installed_sig = now
-                self._busy.release()
+                time.sleep(60)
 
     def _view(self):
         """The library as the page sees it: with the play time Junction counted itself, and which launcher
@@ -190,15 +251,13 @@ class Api:
                     self._lib = cached
                     self._start(rescan=True)   # show the last scan now, refresh behind it
                 else:
-                    with self._busy:
-                        self._scan()           # first start: nothing to show yet
+                    self._scan()               # first start: nothing to show yet
                     self._start(rescan=False)
             self._update_tray()
             return self._view()
 
     def rescan(self):
-        with self._busy:
-            self._scan()
+        self._scan()  # doesn't wait for the slower refresh behind the page; that one keeps this scan's games
         self._start(rescan=False)
         self._update_tray()
         return self._view()
@@ -236,10 +295,12 @@ class Api:
     def play(self, game_id, steam_id=None, target=None):
         result = self._run(game_id, steam_id, target)
         game = self._game(game_id)
+        exe = None
         if game_id.startswith("manual:") and target:
             game = {"id": game_id, "launcher": "manual", "installDir": os.path.dirname(target), "launch": target, "installed": True}
+            exe = target
         if result.get("ok") and game and game.get("installed"):
-            self._tracker.started(game)  # counts play time where no launcher does
+            self._tracker.started(game, exe=exe)  # counts play time where no launcher does
         return result
 
     def install(self, game_id, steam_id=None, target=None):
@@ -273,9 +334,9 @@ class Api:
                          for s in g.get("owners") or []})
         try:
             data = library.achievements_for(appid, owners)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - Steam didn't answer: ask again next time instead of keeping "none"
             traceback.print_exc()
-            data = None
+            return None
         self._ach[appid] = (time.time(), data)
         return data
 
@@ -288,10 +349,9 @@ class Api:
     # ---------- store ----------
 
     def _build_store(self):
-        if self._raw is None:
-            with self._busy:
-                if self._raw is None:
-                    self._scan()
+        with self._scan_lock:  # a scan already under way is waited for, not done twice
+            if self._raw is None:
+                self._scan()
         data = live_store.build(self._raw, (self._lib or {}).get("steamAccounts") or [], progress=self._progress)
         if data:
             config.write_cache("store.json", data)
@@ -329,6 +389,9 @@ class Api:
             return None
         # Kept with the prices, so the page has it again if it reloads them.
         game = ((self._store or {}).get("games") or {}).get(itad_id)
+        deals = (game or {}).get("deals") or []
+        if line and deals and line[-1][1] != deals[0]["price"]:
+            line = line + [[line[-1][0], deals[0]["price"]]]  # today's real best price
         if game is not None and line is not None:
             game["history"] = line
         return line
@@ -402,17 +465,24 @@ class Api:
         self._tray.recent = recent
 
     def show_window(self):
+        """Bring the window to the front. Returns False when there's none to show (Junction is quitting)."""
         w = self._window
-        if not w:
-            return
+        if not w or self._quitting:
+            return False
         try:
+            form = w.native
+            if form is None or form.IsDisposed:
+                return False
             w.show()
             hwnd = int(str(w.native.Handle.ToInt64()))
             if ctypes.windll.user32.IsIconic(hwnd):
                 w.restore()
             ctypes.windll.user32.SetForegroundWindow(hwnd)
+            return True
         except Exception:  # noqa: BLE001
-            traceback.print_exc()
+            if not self._quitting:
+                traceback.print_exc()
+            return False
 
     def window_info(self):
         return {"custom": self._own_frame, "maximized": bool(self._window) and titlebar.is_maximized(self._window)}
@@ -434,14 +504,65 @@ class Api:
         self._js(f"window.junctionTrayPlay && junctionTrayPlay({json.dumps(game_id)})")
 
     def _quit(self):
+        if self._quitting:
+            return
         self._quitting = True
-        if self._window:
-            self._window.destroy()
+        self._tracker.flush()
+        if self._tray:
+            try:
+                self._tray.stop()
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+        # Every window, not just the main one: pywebview only stops once all are closed, and a sign-in window left
+        # open would keep Junction running without a window to bring back.
+        for w in [w for w in webview.windows if w is not self._window] + ([self._window] if self._window else []):
+            try:
+                w.destroy()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _ending_session(self, sender, args):
+        """Windows asks before shutting down, restarting or signing out (and Task Manager before ending Junction):
+        answer yes instead of hiding in the tray, which held the shutdown up. Save the play time so far now; the
+        window closes, and Junction quits, only when Windows goes ahead. A shutdown that's called off changes nothing."""
+        try:
+            reason = str(args.CloseReason)
+        except Exception:  # noqa: BLE001
+            return
+        if reason in ("WindowsShutDown", "TaskManagerClosing"):
+            args.Cancel = False
+            try:
+                self._tracker.save_now()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _hook_closing(self):
+        """Listen to the window's own closing, after pywebview's handler, to see why it closes."""
+        try:
+            self._window.native.FormClosing += self._ending_session
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+
+    def _tidy(self):
+        """pywebview keeps an entry for every evaluate_js call and every call from the page, and only removes the
+        ones with a callback. Junction calls it often (controller presses, refreshes), so clear the empty ones now
+        and then, or a Junction left in the tray for weeks keeps growing."""
+        while not self._quitting:
+            time.sleep(600)
+            try:
+                cb = getattr(self._window, "_callbacks", None)
+                if isinstance(cb, dict):
+                    for k in [k for k, v in list(cb.items()) if v is None]:
+                        cb.pop(k, None)
+            except Exception:  # noqa: BLE001
+                pass
 
     def _closing(self):
         """Closing the window: hide it in the tray instead, unless that's switched off."""
         settings = config.load_settings()
         if self._quitting or not self._tray or not settings.get("closeToTray", True):
+            return True
+        if ctypes.windll.user32.GetSystemMetrics(0x2000):  # SM_SHUTTINGDOWN: Windows is ending the session
             return True
         threading.Thread(target=self._window.hide, daemon=True).start()
         if not settings.get("trayTipShown"):
@@ -537,7 +658,7 @@ class Api:
                 title, url, width=520, height=780, background_color="#12161d"))
         except module.SignInError as e:
             return {"error": str(e)}
-        except (urllib.error.URLError, OSError, TimeoutError):
+        except config.NET_ERRORS:
             return {"error": f"Junction couldn't reach {label}. Check your internet connection and try again."}
         finally:
             self._sign_in_lock.release()
@@ -580,23 +701,42 @@ _kernel.SetEvent.argtypes = _kernel.CloseHandle.argtypes = [ctypes.c_void_p]
 _instance = None
 
 
-def _first_instance(quiet):
+def _first_instance(quiet, wait=20):
+    """True when this is the only Junction. Otherwise the open one is asked to come to the front. If that one is
+    just closing (it doesn't confirm), this start waits until it's gone and then starts after all."""
     global _instance
-    _instance = _kernel.CreateMutexW(None, False, f"Local\\{config.INSTANCE}App")
-    if ctypes.get_last_error() != 183:  # ERROR_ALREADY_EXISTS
-        return True
-    if not quiet:
-        ev = _kernel.OpenEventW(0x0002, False, f"Local\\{config.INSTANCE}Show")  # EVENT_MODIFY_STATE
-        if ev:
-            _kernel.SetEvent(ev)
-    return False
+    shown = _kernel.CreateEventW(None, False, False, f"Local\\{config.INSTANCE}Shown")
+    end = time.time() + wait
+    asked = False
+    while True:
+        _instance = _kernel.CreateMutexW(None, False, f"Local\\{config.INSTANCE}App")
+        if ctypes.get_last_error() != 183:  # ERROR_ALREADY_EXISTS
+            return True
+        _kernel.CloseHandle(_instance)
+        _instance = None
+        if quiet:
+            return False
+        if not asked:
+            ev = _kernel.OpenEventW(0x0002, False, f"Local\\{config.INSTANCE}Show")  # EVENT_MODIFY_STATE
+            if ev:
+                _kernel.SetEvent(ev)
+                _kernel.CloseHandle(ev)
+            asked = True
+        if shown and _kernel.WaitForSingleObject(shown, 250) == 0:  # it came to the front
+            return False
+        if time.time() > end:
+            return False
 
 
 def _listen_for_second_start(api):
     ev = _kernel.CreateEventW(None, False, False, f"Local\\{config.INSTANCE}Show")
     while ev:
         _kernel.WaitForSingleObject(ev, 0xFFFFFFFF)
-        api.show_window()
+        if api.show_window():
+            shown = _kernel.OpenEventW(0x0002, False, f"Local\\{config.INSTANCE}Shown")
+            if shown:
+                _kernel.SetEvent(shown)
+                _kernel.CloseHandle(shown)
 
 
 def _listen_for_quit(api):
@@ -699,11 +839,13 @@ def main():
         traceback.print_exc()
         api._tray = None
     window.events.closing += api._closing
+    window.events.before_show += api._hook_closing
     if own_frame:  # Junction draws its own title bar; take Windows' away before the window first shows
         window.events.before_show += lambda: setattr(api, "_own_frame", titlebar.attach(window))
         window.events.maximized += api._window_state
         window.events.restored += api._window_state
     threading.Thread(target=api._watch, daemon=True).start()
+    threading.Thread(target=api._tidy, daemon=True).start()
     api._tracker.look_around(lambda: (api._lib or {}).get("games"))  # games started outside Junction
     api._updates.start()
     threading.Thread(target=_listen_for_second_start, args=(api,), daemon=True).start()
@@ -715,9 +857,14 @@ def main():
     # Keep the page's own storage (favourites, collections, covers) between runs.
     storage = os.path.join(os.path.dirname(config.CACHE_DIR), "webview")
     webview.start(private_mode=False, storage_path=storage, icon=icon, http_port=http_port())
-    if api._tray:
-        api._tray.stop()
+    api._quitting = True
+    api._tracker.flush()
     logging.getLogger("junction").info("Junction closed")
+    # Don't wait for background lookups that are still queued (friends, achievements, DLC sales): they'd keep the
+    # process, and the single-instance lock, alive for up to ten seconds after the window has gone. Every file
+    # Junction writes is replaced in one step, so stopping here can't leave half a file.
+    logging.shutdown()
+    os._exit(0)
 
 
 if __name__ == "__main__":

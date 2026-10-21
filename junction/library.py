@@ -17,6 +17,7 @@ import urllib.error
 import urllib.request
 
 from . import art, config, ea_account, epic_account, extras, launchers, owned_local, steam_owned, steam_switch, stores
+from .config import NET_ERRORS
 
 
 def _log(progress, msg):
@@ -55,7 +56,7 @@ def _steam_appids(games, progress):
     def look(name):
         try:
             return name, art.find_steam_appid(name), True
-        except (urllib.error.URLError, ValueError, TimeoutError):
+        except (*NET_ERRORS, ValueError, TimeoutError):
             return name, None, False
     # A few at a time: Steam's store search slows down when asked too fast.
     with concurrent.futures.ThreadPoolExecutor(4) as pool:
@@ -96,6 +97,26 @@ def accounts_and_keys(settings):
     return accs, {str(a["steamId"]): (a.get("apiKey") or "").strip() or spare for a in accs}
 
 
+_grid_known = None
+
+
+def _grid_cover(key, name, max_age=7 * 86400):
+    """A SteamGridDB cover by name, remembered in the cache (a miss too, for a week)."""
+    global _grid_known
+    if _grid_known is None:
+        _grid_known = config.read_cache("griddb.json", {})
+    hit = _grid_known.get(name)
+    if hit and (hit[0] or time.time() - hit[1] < max_age):
+        return hit[0]
+    cover = extras.steamgriddb_cover(key, name)
+    _grid_known[name] = [cover or "", time.time()]
+    try:
+        config.write_cache("griddb.json", _grid_known)
+    except OSError:
+        pass
+    return cover
+
+
 def scan(settings=None, progress=None):
     """Scan this PC. Returns (library dict for the page, the raw game records)."""
     settings = settings if settings is not None else config.load_settings()
@@ -112,11 +133,11 @@ def scan(settings=None, progress=None):
     _log(progress, "Fetching art and genres")
     try:
         urls = art.steam_art(list(appids))
-    except (urllib.error.URLError, ValueError, TimeoutError):
+    except (*NET_ERRORS, ValueError, TimeoutError):
         urls = {}
     try:
         details = stores.steam_details(appids)
-    except (urllib.error.URLError, ValueError, TimeoutError):
+    except (*NET_ERRORS, ValueError, TimeoutError):
         details = {}
     logos = _logos_that_exist(sorted(a for a in appids if urls.get(a, {}).get("hero")))
 
@@ -137,7 +158,7 @@ def scan(settings=None, progress=None):
             if icon:
                 images["icon"] = icon
         if grid_key and not images.get("cover") and not images.get("header"):
-            cover = extras.steamgriddb_cover(grid_key, g["name"])
+            cover = _grid_cover(grid_key, g["name"])
             if cover:
                 images["cover"] = cover
         d = details.get(g["artAppId"], {})
@@ -196,7 +217,8 @@ def add_launcher_playtime(games):
     by_id, by_name = (lambda g: g["id"].split(":", 1)[1]), (lambda g: art.normalize(g["name"]))
     readers = {"gog": (owned_local.gog_playtime, by_id), "ubisoft": (owned_local.ubisoft_playtime, by_id),
                "epic": (epic_account.playtime, by_id), "ea": (ea_account.playtime, by_name),
-               "battlenet": (lambda: {k: (None, t) for k, t in owned_local.battlenet_last_played().items()}, by_id)}
+               "battlenet": (lambda: {k: (None, t) for k, t in owned_local.battlenet_last_played().items()},
+                             lambda g: launchers.bnet_product(by_id(g)))}
     for launcher, (read, key) in readers.items():
         try:
             times = read()
@@ -229,23 +251,24 @@ def add_extras(lib, settings=None, inline=web_uri, store_appids=(), progress=Non
     spare = next(iter(k for k in keys.values() if k), "")
     try:
         friends, owned = extras.steam_friends({k: v for k, v in keys.items() if v}, keys)
-    except (urllib.error.URLError, ValueError, TimeoutError):
-        friends, owned = [], {}
+    except NET_ERRORS:
+        friends, owned = None, {}  # Steam didn't answer: keep the friends you had
     mine = extras.steam_profiles(spare, [str(a["steamId"]) for a in lib.get("steamAccounts") or []])
     for a in lib.get("steamAccounts") or []:
         pic = (mine.get(str(a["steamId"])) or {}).get("avatar")
         a["avatar"] = (inline(pic) if inline else pic) if pic else None
     wanted = {int(g["steamAppId"]) for g in games if g.get("steamAppId")} | {int(a) for a in store_appids}
-    for fr in friends:
+    for fr in friends or []:
         if inline and fr["avatar"]:
             fr["avatar"] = inline(fr["avatar"])
         fr["owns"] = sum(1 for a in owned.get(fr["id"], ()) if a in wanted)
     owners = {}
-    for i, fr in enumerate(friends):
+    for i, fr in enumerate(friends or []):
         for a in owned.get(fr["id"], ()):
             if a in wanted:
                 owners.setdefault(str(a), []).append(i)
-    lib["friends"], lib["friendOwners"] = friends, owners
+    if friends is not None:
+        lib["friends"], lib["friendOwners"] = friends, owners
 
 
 def add_news(lib):
@@ -262,7 +285,11 @@ def add_achievement_counts(lib, settings=None):
              "artAppId": g.get("steamAppId")} for g in lib["games"]]
     extras.achievements(shim, keys)
     for g, s in zip(lib["games"], shim):
-        g["achievements"] = s.get("achievements")
+        # Steam not answering for a game keeps the counts it had, but only for accounts still listed with a key
+        # (a removed account's counts go).
+        kept = {sid: v for sid, v in (g.get("achievements") or {}).items() if keys.get(sid)}
+        kept.update(s.get("achievements") or {})
+        g["achievements"] = kept or None
 
 
 def enrich(lib, settings=None, store_appids=(), progress=None):

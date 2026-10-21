@@ -14,7 +14,7 @@ from . import config
 
 FILE = os.path.join(config.SETTINGS_DIR, "signins.dat")
 _ENTROPY = b"junction-signins"
-_lock = threading.Lock()
+_lock = threading.RLock()
 
 
 class _Blob(ctypes.Structure):
@@ -50,11 +50,13 @@ def unprotect(data: bytes) -> bytes:
 
 def load():
     """{store: {...}} for every saved sign-in; {} when there are none or the file can't be read."""
-    try:
-        with open(FILE, "rb") as f:
-            return json.loads(unprotect(f.read()))
-    except (OSError, ValueError):
-        return {}
+    with _lock:
+        try:
+            with open(FILE, "rb") as f:
+                data = json.loads(unprotect(f.read()))
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
 
 
 def get(store):
@@ -78,7 +80,17 @@ def put(store, data):
             return
         with open(FILE + ".tmp", "wb") as f:
             f.write(protect(json.dumps(all_).encode()))
-        os.replace(FILE + ".tmp", FILE)
+        config.replace_file(FILE + ".tmp", FILE)
+
+
+def put_if_same(store, refresh, data):
+    """Save `data` only if the saved sign-in still has this refresh token. A refresh that was under way while you
+    signed out (or signed in again) must not bring the old sign-in back."""
+    with _lock:
+        if (load().get(store) or {}).get("refresh") != refresh:
+            return False
+        put(store, data)
+        return True
 
 
 def overview():

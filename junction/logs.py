@@ -68,7 +68,12 @@ _KEYLIKE = [
     re.compile(r"\b[0-9A-Fa-f]{32}\b"),                                    # Steam Web API keys
     re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I),  # IsThereAnyDeal keys
     re.compile(r"\b[A-Z0-9]{4,5}(?:-[A-Z0-9]{4,5}){2,4}\b"),               # product keys of any kind
-    re.compile(r"(?i)(key|token|authorization|bearer)([\"'=: ]+)[^\s\"'&,]+"),
+    re.compile(r"(?i)\b(set-cookie|cookie)(:\s*)[^\r\n]+"),                   # a whole Cookie header
+    re.compile(r"\beyJ[\w-]+\.[\w-]+\.[\w-]*"),                          # JWTs (sign-in tokens)
+    # "Bearer <token>", "Authorization: Basic <x>": the word and the value after it
+    re.compile(r"(?i)\b(bearer|basic)(\s+)[^\s\"'&,]+"),
+    # key=..., token: ..., ?code=..., "authorizationCode": "...", cookie=..., password=... (keep this one last)
+    re.compile(r"(?i)(key|token|authorization|code|cookie|password|passwd|secret|session|verifier)([\"'=: ]+)[^\s\"'&,]+"),
 ]
 
 
@@ -78,11 +83,17 @@ def redact(text, settings=None):
     secrets += [settings.get("itadApiKey"), settings.get("steamGridDbKey"), keys.builtin_prices_key()]
     for s in filter(None, secrets):
         text = text.replace(s, "[key]")
-    for i, rx in enumerate(_KEYLIKE):
-        text = rx.sub(r"\1\2[hidden]" if i == len(_KEYLIKE) - 1 else "[hidden]", text)
+    for rx in _KEYLIKE:
+        text = rx.sub(r"\1\2[hidden]" if rx.groups >= 2 else "[hidden]", text)
     home = os.path.expanduser("~")
     if len(home) > 3:
-        text = re.sub(re.escape(home), "%USERPROFILE%", text, flags=re.I)
+        # Also as error messages print it: C:\\Users\\name (doubled) or C:/Users/name. The Windows user name is
+        # often someone's real name.
+        parts = [re.escape(p) for p in re.split(r"[\\/]+", home) if p]
+        text = re.sub(r"[\\/]{1,2}".join(parts), "%USERPROFILE%", text, flags=re.I)
+        name = os.path.basename(home.rstrip("\\/"))
+        if len(name) >= 3:
+            text = re.sub(r"(?i)\b" + re.escape(name) + r"\b", "[you]", text)
     return text
 
 

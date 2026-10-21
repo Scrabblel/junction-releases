@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 
 from . import config, steam_owned, steam_switch, stores
+from .config import NET_ERRORS
 from .art import UA
 
 STEAM_KEY = re.compile(r"^[0-9A-Fa-f]{32}$")
@@ -100,7 +101,7 @@ def _check_steam(key, steamid):
         if e.code in (401, 403):
             return {"error": "Steam turned this key down. Check it was copied completely."}
         return {"error": f"Steam answered with an error ({e.code}). Try again in a minute."}
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except (*NET_ERRORS, TimeoutError, ValueError):
         return {"error": OFFLINE.format("Steam")}
     return {"ok": True, "name": players[0].get("personaname") if players else None}
 
@@ -172,7 +173,7 @@ def _check_prices(key):
         return {"error": str(e)}
     except urllib.error.HTTPError as e:
         return {"error": f"IsThereAnyDeal answered with an error ({e.code}). Try again in a minute."}
-    except (urllib.error.URLError, TimeoutError):
+    except (*NET_ERRORS, TimeoutError):
         return {"error": OFFLINE.format("IsThereAnyDeal")}
     return {"ok": True}
 
@@ -187,7 +188,7 @@ def _check_art(key):
         if e.code in (401, 403):
             return {"error": "SteamGridDB turned this key down. Check it was copied completely."}
         return {"error": f"SteamGridDB answered with an error ({e.code}). Try again in a minute."}
-    except (urllib.error.URLError, TimeoutError):
+    except (*NET_ERRORS, TimeoutError):
         return {"error": OFFLINE.format("SteamGridDB")}
     return {"ok": True}
 

@@ -68,7 +68,7 @@
   --line-steam: #2a78bd; --line-epic: #59626e; --line-gog: #8547dc; --line-ubisoft: #0d8c8f;
   --line-ea: #e0453d; --line-battlenet: #4f5ee8; --line-rockstar: #c45a10; --line-xbox: #4a8a10; --line-manual: #c25bb5;
   --title-shadow: none;
-  --wash-mid: 28%; --wash-mid-at: 36%; --wash-end: 60%; --wash-bottom: 40%; --wash-bottom-at: 22%; --wash-bottom-end: 46%; --shade: 30%;
+  --wash-mid: 42%; --wash-mid-at: 36%; --wash-end: 74%; --wash-bottom: 52%; --wash-bottom-at: 22%; --wash-bottom-end: 58%; --shade: 44%;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
@@ -373,6 +373,7 @@ code.cmd {
   transition: border-color .15s, translate .15s, box-shadow .15s;
 }
 .deal:hover, .deal:focus-visible { border-color: var(--c); translate: 0 -3px; box-shadow: 0 12px 26px -16px var(--c); outline: none; }
+.deal:focus-visible { box-shadow: 0 0 0 3px var(--ink), 0 12px 26px -16px var(--c); }
 .deal .img { aspect-ratio: 460 / 215; max-width: 100%; background: var(--raised); overflow: hidden; position: relative; }
 .deal .img img { width: 100%; height: 100%; object-fit: cover; }
 .deal .img .ph { position: absolute; inset: 0; display: grid; place-items: center; font: 700 30px var(--font-display); color: var(--ink-faint); }
@@ -626,7 +627,7 @@ kbd { font: 600 11px/1 var(--font-body); padding: 3px 5px; border: 1px solid var
 .lrow:hover .lplay, .lrow:focus-visible .lplay { opacity: 1; }
 
 .ctx {
-  position: fixed; z-index: 40; min-width: 210px; max-width: 280px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 6px; display: grid;
+  position: fixed; z-index: 40; min-width: 210px; max-width: 280px; max-height: calc(100vh - 32px); overflow-y: auto; padding: 6px; display: grid;
   background: var(--raised); border: 1px solid var(--rule); border-radius: calc(8px * var(--round)); box-shadow: 0 18px 40px -16px #000;
 }
 .ctx-title { padding: 6px 10px 8px; font-size: 12.5px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--rule); margin-bottom: 4px; }
@@ -1068,11 +1069,13 @@ a.pill { text-decoration: none; }
 .store-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 0 var(--gutter-r) 0 calc(var(--gutter-l) + 16px); }
 .store-tools .lsearch { flex: 0 1 300px; }
 .store-tools .note { margin-left: auto; }
+:root[data-theme="light"] .store-tools :is(.note, .check) { background: color-mix(in srgb, var(--ground) 72%, transparent); border-radius: var(--pill); padding: 2px 10px; color: var(--ink-dim); }
+@media (prefers-color-scheme: light) { :root:not([data-theme]) .store-tools :is(.note, .check) { background: color-mix(in srgb, var(--ground) 72%, transparent); border-radius: var(--pill); padding: 2px 10px; color: var(--ink-dim); } }
 .hrow .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px var(--gutter-r) 0 calc(var(--gutter-l) + 16px); }
 .focus .tags { font-size: 13px; color: var(--ink-faint); }
 .focus .price-now { font: 800 22px/1 var(--font-display); color: var(--ink); }
 .focus .price-now i { font-style: normal; font-size: 15px; color: var(--good); margin-right: 8px; }
-.focus .price-now s { font-size: 14px; font-weight: 500; color: var(--ink-faint); margin-left: 8px; }
+.focus .price-now :is(s, .at) { font-size: 14px; font-weight: 500; color: var(--ink-faint); margin-left: 8px; }
 
 /* ---------- console look: game, store and other pages ---------- */
 .hero { min-height: clamp(380px, 64vh, 680px); aspect-ratio: auto; max-height: none; }
@@ -1169,6 +1172,7 @@ a.pill { text-decoration: none; }
 .gp-tabs button[aria-selected="true"] { background: var(--ink); color: var(--ground); }
 .gp-panel { position: relative; z-index: 1; display: grid; gap: 18px; padding: 22px var(--gutter-r) 56px calc(var(--gutter-l) + 16px); background: var(--ground); min-height: 50vh; align-content: start; animation: glide .3s ease-out backwards; }
 .gp-panel .facts { margin: 0; color: var(--ink-dim); }
+.tab-hold { pointer-events: none; }
 .gp-sec { display: grid; gap: 10px; max-width: 980px; }
 .gp-sec h2 { margin: 0; }
 .dlc-list { display: grid; gap: 6px; }
@@ -1250,8 +1254,11 @@ button.fp-row:hover { background: color-mix(in srgb, var(--ink) 7%, transparent)
 @keyframes grow { from { width: 0; } }
 
 /* ---------- controller hints ---------- */
-.pad-hints { position: fixed; z-index: 20; left: 50%; bottom: 14px; translate: -50% 0; display: flex; gap: 16px; padding: 8px 16px; border-radius: var(--pill); background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--rule); font-size: 12.5px; color: var(--ink-dim); white-space: nowrap; }
+.pad-hints { pointer-events: none; position: fixed; z-index: 20; left: 50%; bottom: 14px; translate: -50% 0; display: flex; gap: 16px; padding: 8px 16px; border-radius: var(--pill); background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--rule); font-size: 12.5px; color: var(--ink-dim); white-space: nowrap; }
 .pad-hints span { display: inline-flex; align-items: center; gap: 6px; }
+body:has(#layer > .scrim, #ctx) .pad-hints { display: none; }
+body:has(#pad-hints) :is(#main, #cl-page, .cl-list) { scroll-padding-bottom: 72px; }
+body:has(#pad-hints) #main:not(:has(> :is(.home, .classic)))::after, body:has(#pad-hints) :is(#cl-page, .cl-list)::after { content: ""; display: block; height: 56px; }
 kbd.pad { font: 800 10.5px/1 var(--font-body); padding: 4px 6px; border-radius: var(--pill); background: var(--ink); color: var(--ground); border: 0; }
 
 /* ---------- round 9: logos, news, tab markers, page slides ---------- */
@@ -1466,9 +1473,25 @@ html.own-frame :is(.topbar, .topbar *, .win-ctl, .win-ctl *, .topbar *::before, 
 .win-ctl .wc-close:hover { color: #fff; background: #c42b1c; }
 .win-ctl .wc-close:active { color: #fff; background: #c42b1ccc; }
 .win-ctl .wc-restore, html.win-max .win-ctl .wc-max { display: none; }
+/* Light theme: the window buttons sit on a light backing, so they show over dark or busy art too. */
+:root[data-theme="light"] .win-ctl { background: color-mix(in srgb, var(--ground) 72%, transparent); border-bottom-left-radius: calc(8px * var(--round)); }
+@media (prefers-color-scheme: light) { :root:not([data-theme]) .win-ctl { background: color-mix(in srgb, var(--ground) 72%, transparent); border-bottom-left-radius: calc(8px * var(--round)); } }
+/* The friends panel starts below the window buttons, so its × is never under Windows' own Close. */
+html.own-frame .friends-panel { padding-top: 34px; }
+/* Sharp's wide letters: at the narrowest windows the clock gives way rather than sliding under Minimize. */
+@media (max-width: 1000px) { html[data-style="sharp"] .clock { display: none; } }
 html.win-max .win-ctl .wc-restore { display: block; }
 /* When the top bar folds away, so do the buttons, until you point at them. */
 .app.top-hidden ~ .win-ctl:not(:hover) { opacity: 0; }
+/* Home's opening view in a short window (a laptop, a window not maximized): the panel and the first row get
+   smaller so the row and "More rows" fit on screen. */
+@media (max-height: 820px) {
+  .games-home.intro .focus { padding-top: clamp(56px, 12vh, 100px); gap: 10px; min-height: var(--intro-h); }
+  .games-home.intro .focus .logo { max-height: clamp(70px, 15vh, 150px); }
+  .games-home.intro .focus .note-chip.news { display: none; }
+  .home.intro:not(.store-front) .hrow:first-child .tile { width: clamp(110px, min(13vw, 22vh), 236px); }
+  .home.intro .rows { padding-bottom: 34px; }
+}
 /* ---------- Classic layout (Preferences › Layout): your games in a list on the left, the chosen game on the right ----------
    Both sides scroll on their own under a solid top bar, on Home, Library and game pages. */
 html[data-layout="classic"] .app:is([data-view="home"], [data-view="library"], [data-view="game"]) .main { grid-row: 2; overflow: hidden; }
@@ -1756,7 +1779,7 @@ const host = {
   },
   async openUrl(url) {
     if (this.inApp) return window.pywebview.api.open_url(url);
-    window.open(url, '_blank', 'noopener');
+    Window.prototype.open.call(window, url, '_blank', 'noopener');
   },
   // On/off settings (tray, start with Windows, setup done), and the problem report.
   async removeAccount(steamId) { return this.inApp ? window.pywebview.api.remove_steam_account(steamId) : null; },
@@ -1890,7 +1913,7 @@ function hours(min) {
   if (!min) return null;
   if (min < 60) return `${min} min`;
   const h = min / 60;
-  return `${h < 10 ? h.toFixed(1) : Math.round(h).toLocaleString('en-GB')} h`;
+  return `${h < 9.95 ? h.toFixed(1) : Math.round(h).toLocaleString('en-GB')} h`;
 }
 const listOf = items => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : (items[0] || '');
 // "today", "yesterday" or a date, for the middle of a sentence.
@@ -1906,14 +1929,14 @@ function when(ts) {
 }
 function releasedLabel(s) {
   if (!s) return null;
-  return new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: /^\d{4}-\d{2}-\d{2}$/.test(s) ? 'UTC' : undefined });
 }
 
 // ---------- one entry per game, however many launchers it's on ----------
 // lib.games holds one "copy" per launcher. A game you own on Epic and Ubisoft is two copies and one title.
 // Copies join up when they share a Steam app id, or else the same name minus edition words.
 const normTitle = s => String(s).toLowerCase().replace(/[™®©’']/g, '')
-  .replace(/\b(game of the year|goty|definitive|complete|deluxe|ultimate|standard|gold|anniversary)\b|\bedition\b/g, '')
+  .replace(/\b(game of the year|goty|definitive|complete|deluxe|ultimate|standard|gold|anniversary(?= edition))\b|\bedition\b/g, '')
   .replace(/[^a-z0-9]+/g, ' ').trim();
 let titles = [];
 let titleOf = new Map();  // copy id -> title
@@ -1921,7 +1944,9 @@ const launcherRank = c => { const i = prefs.launcherOrder.indexOf(c.launcher); r
 const isInstalled = g => g.installed !== false;
 
 function buildTitles() {
-  const copies = lib.games.concat(prefs.manual).slice().sort((a, b) => !!b.steamAppId - !!a.steamAppId);
+  const own = lib.ownTimes || {};
+  const manual = prefs.manual.map(m => own[m.id] ? { ...m, playtimeMinutes: own[m.id].minutes, lastPlayed: own[m.id].lastPlayed } : m);
+  const copies = lib.games.concat(manual).slice().sort((a, b) => !!b.steamAppId - !!a.steamAppId);
   const groups = new Map(), keyOfName = new Map();
   for (const c of copies) {
     const n = normTitle(c.name);
@@ -2017,6 +2042,23 @@ function libraryTitleFor(sg) {
   const { byApp, byName } = libraryIndex();
   return (sg.steamAppId && byApp.get(sg.steamAppId)) || byName.get(normTitle(sg.title)) || null;
 }
+// Whether you own a Store game: from your library as it is now (a game bought since the prices were fetched
+// counts, a removed account's games don't). Before the library has loaded, what the Store said.
+const ownedNow = memo(() => [lib], () => ({
+  launchers: new Set(lib.games.map(g => g.launcher)),
+  accounts: (lib.steamAccounts || []).map(a => a.name).filter(Boolean),
+}));
+function ownsOf(sg) {
+  const was = sg.owned || [];
+  if (!lib.games.length) return was;
+  const { launchers, accounts: names } = ownedNow();
+  const still = was.filter(o => o.launcher === 'steam'
+    ? names.length && (!/\(/.test(o.label || '') || (o.label.match(/\((.*)\)/)?.[1] || '').split(', ').some(n => names.includes(n)))
+    : launchers.has(o.launcher));
+  if (still.length) return still;
+  const t = libraryTitleFor(sg);
+  return t ? [{ launcher: t.copies[0]?.launcher, label: launcherNames(t) }] : [];
+}
 
 // ---------- art ----------
 function coverArt(g) {
@@ -2090,7 +2132,7 @@ const seriesKey = name => normTitle(name).replace(/\b(\d+|ii|iii|iv|v|vi|vii|vii
 const seriesOnSale = memo(() => [store, titles, [...state.shops].join()], () => {
   const bySeries = new Map();
   for (const sg of Object.values(store.games)) {
-    if (sg.owned.length || !(bestDeal(sg)?.cut > 0) || libraryTitleFor(sg)) continue;
+    if (ownsOf(sg).length || !(bestDeal(sg)?.cut > 0) || libraryTitleFor(sg)) continue;
     const k = seriesKey(sg.title);
     if (!bySeries.has(k)) bySeries.set(k, []);
     bySeries.get(k).push(sg);
@@ -2220,7 +2262,7 @@ function sizeIntro() {
     probe.className = 'focus';
     probe.setAttribute('aria-hidden', 'true');
     probe.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;min-height:0;width:100%';
-    probe.innerHTML = `<div style="height:150px"></div><p class="meta">x ${launcherBadge(titles[0])}</p>
+    probe.innerHTML = `<div style="height:150px"></div><p class="meta">x ${titles[0] ? launcherBadge(titles[0]) : ''}</p>
       <div class="ach-strip"><span class="lbl count">0 / 0</span></div><span class="note-chip news">x</span>
       <div class="btns"><button class="pill primary" tabindex="-1">${ICON.play}Play</button></div>`;
     h.append(probe);
@@ -2502,14 +2544,26 @@ function moveFocus(dir) {
     return moveFocus('down');
   }
   if ($('#main .classic')) return moveClassic(dir);
-  const items = [...document.querySelectorAll(`#main .tile, #main .lrow, #focus .pill, #main .play, #main .all-games, #main .hrow .line-chip, #main .gp-head .pill, #main .gp-tabs button, #main .lhead button,
+  // Home and the Library: the covers and their buttons. Every other page (a game, prices, Browse, Wishlist,
+  // Stats): every button, link and field you can see.
+  const grid = ['home', 'library'].includes(state.view.name);
+  const sel = grid
+    ? `#main .tile, #main .lrow, #focus .pill, #main .play, #main .all-games, #main .hrow .line-chip, #main .gp-head .pill, #main .gp-tabs button, #main .lhead button,
     #main .fbar :is(button, select, input), #main .libchips button, #main .deal, #main .store-search input, #main .filters-toggle,
-    #main .filter-panel :is(button, select, input), #main .results-bar :is(button, select), #main .btn.more`)]
-    .filter(el => el.offsetParent !== null && !el.disabled && !el.closest('.pop-panel'));
+    #main .filter-panel :is(button, select, input), #main .results-bar :is(button, select), #main .btn.more, #main .empty-card button, #main .empty-state button`
+    : `#main :is(button, a[href], select, input, textarea, summary, [tabindex="0"])`;
+  const items = [...document.querySelectorAll(sel)]
+    .filter(el => el.offsetParent !== null && !el.disabled && !el.closest('.pop-panel') && !el.matches('.strip-arrow, [tabindex="-1"], [data-expand]'));
   const cur = document.activeElement && items.includes(document.activeElement) ? document.activeElement : null;
-  // With nothing chosen yet, start on the first game rather than the Library's Installed / All buttons.
-  if (!cur) return (items.find(el => !el.closest('.lhead')) || items[0])?.focus();
-  const best = nearestIn(items, cur, dir);
+  // With nothing chosen yet, start on the first game rather than the search box or the Installed / All buttons.
+  if (!cur) {
+    const first = items.find(el => el.matches('.tile, .lrow, .deal, .bar-row')) || items.find(el => !el.closest('.lhead') && !el.matches('input'));
+    return (first || items[0])?.focus();
+  }
+  // Up and down stay in their own column: Browse's filters on the left, the results on the right.
+  const inPanel = el => !!el.closest('.filter-panel');
+  const pool = dir === 'up' || dir === 'down' ? items.filter(el => inPanel(el) === inPanel(cur)) : items;
+  const best = nearestIn(pool, cur, dir);
   // Up from the top of the page goes into the top bar, starting on the tab you're on.
   if (!best && dir === 'up') {
     const tab = document.querySelector('.topbar .nav [aria-current="page"]') || barItems()[0];
@@ -2580,7 +2634,8 @@ function pollPads() {
   requestAnimationFrame(pollPads);
 }
 // A menu, dialog, search box or picture viewer in front takes the controller's input.
-const padBox = () => document.getElementById('ctx') || document.querySelector('#layer > *') || document.querySelector('#main .pop.open .pop-panel');
+// (A toast lives in #layer too, but it's only a message: it never takes the controller.)
+const padBox = () => document.getElementById('ctx') || document.querySelector('#layer > :not(.toast)') || document.querySelector('#main .pop.open .pop-panel');
 const ARROWS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
 function padKey(key) {
   const ev = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
@@ -2633,6 +2688,9 @@ function padPress(k) {
     if (now && now !== document.body && $('#app').contains(now)) { padPress.last = now; padPress.lastKey = focusKey(now); }
   }, 150);
   const box = padBox();
+  if ($('#layer .lightbox') && (k === 'left' || k === 'right')) return stepLightbox(k === 'left' ? -1 : 1);
+  // Behind a dialog, the palette or a menu, the page's own buttons (tabs, rows, search, the X menu) wait.
+  if (box && ['lb', 'rb', 'lt', 'rt', 'y', 'x'].includes(k)) return;
   if (box && ARROWS[k]) {
     if (!box.contains(document.activeElement) || box.matches('.pop-panel')) return moveWithin(box, k);
     return padKey(ARROWS[k]) || moveWithin(box, k);
@@ -2666,7 +2724,7 @@ function padPress(k) {
     return profileMenu();
   }
   if (k === 'x') {
-    const el = document.activeElement?.closest?.('[data-open], [data-quick]'), t = el && findGame(el.dataset.open || el.dataset.quick);
+    const el = document.activeElement?.closest?.('[data-open], [data-quick], [data-cl-pick]'), t = el && findGame(el.dataset.open || el.dataset.quick || el.dataset.clPick);
     if (t) { const r = el.getBoundingClientRect(); return contextMenu(t, r.left + 20, r.top + 20); }
     return;
   }
@@ -2863,6 +2921,32 @@ function redrawShown() {
   if (state.view.name === 'game') { const t = findGame(state.view.id); return t && layout().game(t); }
   return state.view.name === 'library' ? layout().library() : layout().home();
 }
+// Redraw the game on screen without the page jumping: a shorter tab would pull the tabs up, so the page is kept
+// as tall as it was (until the next game), and the scroll stays where it was.
+function redrawHoldingPlace() {
+  const main = $('#main'), old = $('#cl-page') || main, y = main.scrollTop, sy = old.scrollTop, before = old.scrollHeight;
+  const tall = !$('#cl-page') && main.firstElementChild?.offsetHeight;  // its layout height: the glide-in doesn't count
+  state.tabSwitch = true;
+  redrawShown();
+  state.tabSwitch = false;
+  const scroller = $('#cl-page') || main, page = scroller === main && main.firstElementChild;
+  if (page) {
+    // A min-height on the page also holds when achievements arrive a moment later and turn out shorter.
+    if (tall && page.offsetHeight < tall) page.style.minHeight = `${tall}px`;
+  } else {
+    // Classic's pane is a grid whose boxes don't all wrap what's in them: hold it with a spacer at its end.
+    const hold = document.createElement('div');
+    hold.className = 'tab-hold';
+    hold.setAttribute('aria-hidden', 'true');
+    hold.style.height = '0px';
+    scroller.append(hold);
+    // A page shorter than the window measures as the window's height, so top up until it's tall enough.
+    for (let i = 0, short; i < 3 && (short = before - scroller.scrollHeight) > 0; i++) hold.style.height = `${parseFloat(hold.style.height) + short}px`;
+    if (!parseFloat(hold.style.height)) hold.remove();
+  }
+  main.scrollTop = y;
+  if (scroller !== main) scroller.scrollTop = sy;
+}
 
 // ---------- Classic layout: every game in a list on the left, the chosen one on the right ----------
 const CL_FILTERS = { all: 'All', installed: 'Installed', favs: 'Favourites' };
@@ -2878,8 +2962,8 @@ function classicDefault() {
 }
 function classicGame() {
   if (state.view.name === 'game') return findGame(state.view.id);
-  if (state.view.name === 'library' && state.clSel) return findGame(state.clSel) || classicDefault();
-  return classicDefault();
+  const picked = state.view.name === 'library' && state.clSel && findGame(state.clSel);
+  return picked && (!isHidden(picked) || state.showHidden) ? picked : classicDefault();
 }
 const clLogos = t => [...new Set([...t.copies].sort((a, b) => isInstalled(b) - isInstalled(a)).map(c => c.launcher))].slice(0, 3)
   .map(l => `<span title="${esc(lib.launchers[l] || l)}">${launcherIcon(l)}</span>`).join('');
@@ -2887,7 +2971,9 @@ function classicRows(sel) {
   const games = classicList();
   const row = t => `<button class="cl-row${isInstalled(t) ? '' : ' off'}" data-cl-pick="${esc(t.id)}"${t.id === sel?.id ? ' aria-current="true"' : ''}>
       <span class="nm">${esc(t.name)}</span>${t.playtimeMinutes ? `<span class="h">${esc(hours(t.playtimeMinutes))}</span>` : ''}<span class="lg">${clLogos(t)}</span></button>`;
-  if (!games.length) return `<p class="cl-empty">${state.clQuery ? 'No games match that name.' : 'No games here yet.'}</p>`;
+  if (!games.length) return `<p class="cl-empty">${state.clQuery ? 'No games match that name.'
+    : state.clFilter === 'favs' ? 'No favourites yet. Press ☆ on a game to add it here.'
+    : state.clFilter === 'installed' ? 'No installed games.' : 'No games here yet.'}</p>`;
   // Searching or filtering shows one list; otherwise your last few games come first.
   if ((state.clQuery || '').trim()) return `<p class="cl-label">${games.length} found</p>${sorted(games, 'name').map(row).join('')}`;
   const recent = games.filter(t => t.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 5);
@@ -2957,9 +3043,7 @@ async function fillMedia(t) {
   const copy = t.copies.find(c => c.steamAppId === t.steamAppId) || t.copies[0];
   copy.media = m;
   if (shownGame()?.id === t.id && state.gameTab === 'media') {
-    const y = $('#main').scrollTop;
-    state.tabSwitch = true; redrawShown(); state.tabSwitch = false;
-    $('#main').scrollTop = y;
+    redrawHoldingPlace();
   }
 }
 // "In a game: FiveM", "Online", "Last online 3 days ago".
@@ -2993,7 +3077,7 @@ function startGame(t) {
       </div>
     </div>`;
   $('#layer .option').focus();
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') $('#layer').innerHTML = ''; };
+  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
 }
 function chooseOption(i) {
   const { title, options } = state.pendingOptions || {};
@@ -3048,7 +3132,7 @@ function dealCard(sg) {
       <div class="img">${storeImg(sg)}</div>
       <div class="body">
         <span class="t">${esc(sg.title)}</span>
-        <div class="flags">${isLow(sg, d) ? '<span class="flag low">Lowest ever</span>' : ''}${sg.owned.length ? '<span class="flag owned">Owned</span>' : ''}${isWished(sg.id) ? '<span class="flag wish">Wishlist</span>' : ''}</div>
+        <div class="flags">${isLow(sg, d) ? '<span class="flag low">Lowest ever</span>' : ''}${ownsOf(sg).length ? '<span class="flag owned">Owned</span>' : ''}${isWished(sg.id) ? '<span class="flag wish">Wishlist</span>' : ''}</div>
         <div class="price-row"><span class="shop"><i></i>${esc(name)}</span>${priceBlock(d)}</div>
       </div>
     </button>`;
@@ -3083,7 +3167,7 @@ async function ensureStore() {
 
 // The store has two pages: Featured (Steam-style shelves) and Browse all (every game, with filters).
 const catalogGames = () => store.catalog.map(id => store.games[id]).filter(Boolean);
-const hideOwned = sg => !prefs.showOwned && sg.owned.length > 0;
+const hideOwned = sg => !prefs.showOwned && ownsOf(sg).length > 0;
 function topTags(n) {
   const counts = {};
   for (const sg of catalogGames()) for (const t of sg.tags || []) counts[t] = (counts[t] || 0) + 1;
@@ -3112,7 +3196,7 @@ function storeHead(active) {
 function storeTile(sg) {
   const d = bestDeal(sg);
   return `
-    <button class="tile land${sg.owned.length ? ' owned' : ''}" data-price="${esc(sg.id)}" data-sfocus="${esc(sg.id)}"
+    <button class="tile land${ownsOf(sg).length ? ' owned' : ''}" data-price="${esc(sg.id)}" data-sfocus="${esc(sg.id)}"
             aria-label="${esc(sg.title)}${d ? `, ${money(d.price)}` : ''}">
       <span class="art">${storeImg(sg)}${d ? `<span class="tag">${d.cut > 0 ? `<i>-${d.cut}%</i>` : ''}${money(d.price)}</span>` : ''}</span>
       <span class="cap">${esc(sg.title)}</span>
@@ -3142,7 +3226,7 @@ function forYouGames() {
   const wished = new Set(wishlistIds());
   const scored = [];
   for (const sg of catalogGames()) {
-    if (sg.owned.length || wished.has(sg.id) || !bestDeal(sg) || libraryTitleFor(sg)) continue;
+    if (ownsOf(sg).length || wished.has(sg.id) || !bestDeal(sg) || libraryTitleFor(sg)) continue;
     const tags = (sg.tags || []).slice(0, 8);
     if (tags.length < 3) continue;
     const fit = tags.reduce((s, g, i) => s + (w[g] || 0) / top / Math.sqrt(i + 1), 0) / Math.sqrt(tags.length);
@@ -3224,7 +3308,7 @@ function setStoreFocus(id) {
     setBackdrop(fr.image || '', true);
     f.innerHTML = `
       <h1>${esc(fr.title)}</h1>
-      <p class="price-now">Free <s>on ${esc(fr.store)}</s></p>
+      <p class="price-now">Free <span class="at">on ${esc(fr.store)}</span></p>
       <p>${have ? `Already in your library (${esc(launcherNames(have))})` : `Yours to keep if you claim it${fr.until ? ` before ${esc(freeDate(fr))}` : ''}.`}</p>
       <div class="btns"><a class="pill primary" href="${esc(fr.url)}" target="_blank" rel="noopener">Claim on ${esc(fr.store)}</a></div>`;
     return;
@@ -3233,16 +3317,16 @@ function setStoreFocus(id) {
   if (!sg) return;
   const d = bestDeal(sg), shots = sg.screenshots || [];
   setBackdrop(shots[0] || sg.image || '', !shots[0]);
-  const mine = sg.owned.length ? libraryTitleFor(sg) : null;
+  const mine = ownsOf(sg).length ? libraryTitleFor(sg) : null;
   const meta = [
     d && isLow(sg, d) ? 'Lowest price ever' : sg.historyLow ? `Lowest ever ${money(sg.historyLow.price)}` : null,
     sg.score != null && sg.scoreCount > 0 ? `${sg.score}% positive` : null,
     sg.released ? releasedLabel(sg.released) : null,
-    sg.owned.length ? `You own this on ${sg.owned.map(o => o.label).join(', ')}` : null,
+    ownsOf(sg).length ? `You own this on ${ownsOf(sg).map(o => o.label).join(', ')}` : null,
   ].filter(Boolean).join(' · ');
   f.innerHTML = `
     <h1>${esc(sg.title)}</h1>
-    ${d ? `<p class="price-now">${d.cut > 0 ? `<i>-${d.cut}%</i>` : ''}${money(d.price)}${d.cut > 0 ? `<s>${money(d.regular)}</s>` : ''} <s>at ${esc(shopName(d.shop))}</s></p>` : ''}
+    ${d ? `<p class="price-now">${d.cut > 0 ? `<i>-${d.cut}%</i>` : ''}${money(d.price)}${d.cut > 0 ? `<s>${money(d.regular)}</s>` : ''} <span class="at">at ${esc(shopName(d.shop))}</span></p>` : ''}
     ${meta ? `<p>${esc(meta)}</p>` : ''}
     ${forYouWhy.has(sg.id) && state.view.name === 'store' ? `<p class="why">${esc(forYouWhy.get(sg.id))}</p>` : ''}
     ${(sg.tags || []).length ? `<p class="tags">${esc(sg.tags.slice(0, 4).join(' · '))}</p>` : ''}
@@ -3251,6 +3335,7 @@ function setStoreFocus(id) {
     <div class="btns">
       <button class="pill primary" data-price="${esc(sg.id)}">${ICON.tag}Compare prices</button>
       ${mine ? `<button class="pill" data-open="${esc(mine.id)}">In your library</button>`
+        : ownsOf(sg).length ? `<button class="pill" data-nav="library">In your library</button>`
         : d ? `<a class="pill" href="${esc(d.url)}" target="_blank" rel="noopener">Buy at ${esc(shopName(d.shop))}</a>` : ''}
       <button class="pill round" data-swish="${esc(sg.id)}" aria-pressed="${isWished(sg.id)}" aria-label="${isWished(sg.id) ? 'Remove from wishlist' : 'Add to wishlist'}" title="${isWished(sg.id) ? 'On your wishlist' : 'Add to wishlist'}">${isWished(sg.id) ? ICON.star : ICON.starLine}</button>
     </div>`;
@@ -3368,7 +3453,7 @@ function editionsHtml(sg) {
   const mine = bestDeal(sg), others = editionsOf(sg).sort((a, b) => bestDeal(a).price - bestDeal(b).price);
   if (!others.length) return '';
   const cheaper = mine && others.find(x => bestDeal(x).price < mine.price - .005);
-  const owned = others.find(x => x.owned.length);
+  const owned = others.find(x => ownsOf(x).length);
   return `
     <section class="editions">
       ${owned ? `<p class="edition-warn">You already own <b>${esc(owned.title)}</b>.</p>`
@@ -3377,7 +3462,7 @@ function editionsHtml(sg) {
       <div class="edition-list">${others.map(x => {
         const d = bestDeal(x), diff = mine ? d.price - mine.price : 0;
         return `<button class="edition" data-price="${esc(x.id)}">
-          <span class="n">${esc(x.title)}${x.owned.length ? ' <i>Owned</i>' : ''}</span>
+          <span class="n">${esc(x.title)}${ownsOf(x).length ? ' <i>Owned</i>' : ''}</span>
           <span class="diff ${diff < 0 ? 'less' : ''}">${!mine ? '' : Math.abs(diff) < .005 ? 'Same price' : diff < 0 ? `${money(-diff)} cheaper` : `${money(diff)} more`}</span>
           <b>${money(d.price)}</b></button>`;
       }).join('')}</div>
@@ -3388,7 +3473,7 @@ function renderPrice(sg) {
   const backTo = state.view.from === 'library' ? (findGame(state.view.back)?.name || 'Library')
     : { wishlist: 'Wishlist', browse: 'Browse all' }[state.view.from] || 'Store';
   const shots = sg.screenshots || [];
-  const mine = sg.owned.length ? libraryTitleFor(sg) : null;
+  const mine = ownsOf(sg).length ? libraryTitleFor(sg) : null;
   const fetchHistory = host.inApp && !sg.history;
   const facts = [
     sg.released && releasedLabel(sg.released),
@@ -3422,16 +3507,17 @@ function renderPrice(sg) {
     <div class="actionbar buybar">
       <div class="play-wrap">
         ${best ? `<div class="buy-price">${best.cut > 0 ? `<span class="cut">-${best.cut}%</span><span class="was">${money(best.regular)}</span>` : ''}<span class="big-price">${money(best.price)}</span></div>
-        <span class="play-note">at ${esc(shopName(best.shop))}${lowNote ? ` · ${esc(lowNote)}` : ''}</span>` : '<span class="big-price muted">Not for sale right now</span>'}
+        <span class="play-note">at ${esc(shopName(best.shop))}${lowNote ? ` · ${esc(lowNote)}` : ''}</span>` : `<span class="big-price muted">${sg.gone ? 'Not in today’s price list' : 'Not for sale right now'}</span>`}
       </div>
       ${mine ? `<button class="play" data-open="${esc(mine.id)}">${ICON.play}<span>In your library</span></button>`
+        : ownsOf(sg).length ? `<button class="play" data-nav="library">${ICON.play}<span>In your library</span></button>`
         : best ? `<a class="play buy" href="${esc(best.url)}" target="_blank" rel="noopener"><span>Buy at ${esc(shopName(best.shop))}</span> ↗</a>` : ''}
       <div class="tools">
         <button class="icon-btn" id="wish" aria-pressed="${isWished(sg.id)}" title="${isWished(sg.id) ? 'Remove from wishlist' : 'Add to wishlist'}">${isWished(sg.id) ? ICON.star : ICON.starLine}</button>
       </div>
     </div>
     <div class="game-body">
-      ${sg.owned.length ? `<p class="owned-line">${ICON.folder}You own this on ${esc(sg.owned.map(o => o.label).join(' and '))}.</p>` : ''}
+      ${ownsOf(sg).length ? `<p class="owned-line">${ICON.folder}You own this on ${esc(ownsOf(sg).map(o => o.label).join(' and '))}.</p>` : ''}
       ${friendsLine(sg.steamAppId)}
       ${editionsHtml(sg)}
       ${facts.length ? `<p class="facts">${esc(facts.join(' · '))}</p>` : ''}
@@ -3442,7 +3528,8 @@ function renderPrice(sg) {
         <h2>Every store · ${deals.length}</h2>
         ${deals.length ? `<div class="table-wrap"><table class="prices">
           <thead><tr><th>Store</th><th class="num">Price</th><th class="num hide-narrow">Normal</th><th class="num">Off</th><th class="num hide-narrow">Lowest here</th><th class="num"><span class="sr">Open</span></th></tr></thead>
-          <tbody>${rows}</tbody></table></div>` : emptyState(ICON.tag, 'No store sells this right now', 'Star it and it stays on your wishlist, so you see it when a store has it.')}
+          <tbody>${rows}</tbody></table></div>` : (sg.gone ? emptyState(ICON.tag, 'Not in today’s price list', 'Junction checks prices for the most popular games and games on sale. It stays on your wishlist, and its prices show again when it’s back in the list.')
+        : emptyState(ICON.tag, 'No store sells this right now', 'Star it and it stays on your wishlist, so you see it when a store has it.'))}
       </section>
       <section class="section">
         <h2>Best price this year</h2>
@@ -3466,7 +3553,9 @@ function renderPrice(sg) {
 
 // The cheapest first-party price over the last year, as a step line.
 function historyChart(sg) {
-  const h = sg.history;
+  let h = sg.history;
+  const today = bestDeal(sg)?.price;
+  if (h && h.length && today != null && h[h.length - 1][1] !== today) h = [...h, [h[h.length - 1][0], today]];
   if (!h || h.length < 2) {
     return `<p class="note">${host.inApp ? 'No price changes in the last year.'
       : 'Price history loads in the app.'}</p>`;
@@ -3488,7 +3577,7 @@ function historyChart(sg) {
       </svg>
       <div class="x"><span>${date(t0)}</span><span>Today · ${money(h[h.length - 1][1])}</span></div>
     </div>
-    <p class="note">Lowest: ${money(min)} on ${date(low[0])}</p>`;
+    <p class="note">Lowest: ${min === 0 && max > 0 ? 'free (a giveaway)' : money(min)} on ${date(low[0])}</p>`;
 }
 
 // A small price line for lists: same data as historyChart, no labels.
@@ -3513,6 +3602,8 @@ function setWished(id, on) {
     toggle('unwished', id, false);
     if (!fromSteam) toggle('wishlist', id, true);
     prefs.wishAdded[id] = Date.now();
+    const sg = store.games[id];
+    if (sg && !sg.gone) (prefs.wishInfo ||= {})[id] = { title: sg.title, image: sg.image || null, steamAppId: sg.steamAppId || null, tags: (sg.tags || []).slice(0, 6) };
   } else {
     prefs.wishlist = prefs.wishlist.filter(x => x !== id);
     if (fromSteam) toggle('unwished', id, true);
@@ -3885,7 +3976,7 @@ function selectMenu(sel) {
   menu.setAttribute('aria-label', sel.getAttribute('aria-label') || 'Choose');
   // Afterwards, back to the list (or the same list on the page drawn anew).
   const keep = focusKey(sel);
-  menu.back = () => setTimeout(() => (sel.isConnected ? sel : findByKey(keep))?.focus({ preventScroll: true }), 0);
+  menu.back = () => setTimeout(() => { if (!$('#layer .scrim')) (sel.isConnected ? sel : findByKey(keep))?.focus({ preventScroll: true }); }, 0);
   menu.innerHTML = [...sel.options].map((o, i) =>
     `<button role="menuitem" data-opt="${i}" class="${o.selected ? 'strong' : ''}">${o.selected ? '✓ ' : ''}${esc(o.text)}</button>`).join('');
   document.body.append(menu);
@@ -3914,8 +4005,12 @@ function selectMenu(sel) {
 // ---------- settings: the menu under your profile picture (or the controller's ☰ button) ----------
 // A short main list; everything else sits one level down. → or A opens a submenu, ← or B goes back.
 async function profileMenu(page = 'main') {
+  if (profileMenu.opening) return;
   closeMenu();
+  profileMenu.opening = true;
   const info = host.inApp ? await host.settings().catch(() => null) : null;
+  profileMenu.opening = false;
+  closeMenu();
   const ic = (svg, cls = 'pm-ico') => `<span class="${cls}" aria-hidden="true">${svg}</span>`;
   const keyVal = tail => (tail ? 'Saved' : 'Not set');
   const toggle = (name, label, on, said) => ({ label, on, run: async (b) => {
@@ -4205,17 +4300,24 @@ function signInRow(info, store, label) {
   const s = info.signins?.[store];
   const now = () => (!s ? 'Sign in' : s.expired ? 'Sign in again' : s.name);
   return { icon: launcherIcon(store), label, value: now(), run: async b => {
-    const v = b.querySelector('.pm-val');
-    if (s && !s.expired) {
+    const v = b.querySelector('.pm-val'), menu = b.closest('#ctx');
+    if (signInRow.busy) return;  // its window is open: pressing again changes nothing
+    // Signed in: press twice to sign out. Run out: press to sign in again, or twice quickly to just forget it.
+    if (s && (!s.expired || b.dataset.sure)) {
       if (!b.dataset.sure) { b.dataset.sure = '1'; v.textContent = 'Sign out?'; return; }
       await host.signOut(store).catch(() => null);
-      closeMenu();
+      if (lib.signins) { delete lib.signins[store]; checkSignIns(); }
+      if ($('#ctx') === menu) closeMenu();
       return toast(`Signed out of ${label}. Its play time leaves your library in a moment.`, store);
     }
+    if (s?.expired) b.dataset.sure = '1';
     v.textContent = 'Signing in…';
+    signInRow.busy = true;
     const res = await host.signIn(store).catch(() => null);
-    if (!res?.ok) { v.textContent = now(); return toast(res?.error || 'Junction couldn’t sign in. Try again.'); }
-    closeMenu();
+    signInRow.busy = false;
+    if (!res?.ok) { v.textContent = s?.expired ? 'Sign out?' : now(); return toast(res?.error || 'Junction couldn’t sign in. Try again.'); }
+    if (lib.signins) { lib.signins = { ...lib.signins, [store]: { name: res.name, expired: false } }; checkSignIns(); }
+    if ($('#ctx') === menu) closeMenu();
     toast(`Signed in as ${res.name}. ${label} play time shows up in a moment.`, store);
   } };
 }
@@ -4396,11 +4498,33 @@ addEventListener('unhandledrejection', e => { if (host.inApp) host.logError(`Unh
 let storePromise = null;
 function loadStoreQuiet() {
   if (store) return Promise.resolve(store);
-  storePromise ||= host.store().then(s => (store = s)).catch(() => { storePromise = null; return null; });
+  storePromise ||= host.store().then(s => (store = withWishStubs(s))).catch(() => { storePromise = null; return null; });
   return storePromise;
 }
+// Prices come for the ~850 games in the Store's list. A game you put on your wishlist that has since left that
+// list (the sale ended, it dropped out of the top) stays on your Wishlist from what was saved when you added it.
+// Also leaves out giveaways that have already ended (an older saved Store can still have them).
+function withWishStubs(s) {
+  if (!s || !s.games) return s;
+  let saved = false;
+  for (const id of prefs.wishlist) {
+    const sg = s.games[id];
+    if (sg && !prefs.wishInfo?.[id]) {
+      (prefs.wishInfo ||= {})[id] = { title: sg.title, image: sg.image || null, steamAppId: sg.steamAppId || null, tags: (sg.tags || []).slice(0, 6) };
+      saved = true;
+    }
+    const w = prefs.wishInfo?.[id];
+    if (sg || !w) continue;
+    s.games[id] = { id, title: w.title, image: w.image || null, steamAppId: w.steamAppId || null, tags: w.tags || [],
+                    deals: [], owned: [], historyLow: null, gone: true };
+  }
+  if (saved) savePrefs();
+  const now = Date.now() / 1000;
+  if (Array.isArray(s.free)) s.free = s.free.filter(f => !f.until || f.until > now);
+  return s;
+}
 const storeHits = (q, n) => !store ? [] : Object.values(store.games)
-  .filter(sg => sg.title.toLowerCase().includes(q) && !sg.owned.length && bestDeal(sg))
+  .filter(sg => sg.title.toLowerCase().includes(q) && !ownsOf(sg).length && bestDeal(sg))
   .sort((a, b) => (a.rank || 9e9) - (b.rank || 9e9)).slice(0, n);
 const ACTIONS = [
   ['Go home', () => goHome()],
@@ -4533,7 +4657,8 @@ function renderStats() {
       <div class="st-inner">
         <div class="st-head">
           <h1>Stats</h1>
-          <p class="note">Steam and GOG Galaxy share play time. The desktop app will track your other launchers.</p>
+          <p class="note">${host.inApp ? 'Play time from Steam, GOG Galaxy, Ubisoft Connect and (when you sign in) Epic and EA, plus what Junction times itself.'
+            : 'Steam and GOG Galaxy share play time. The desktop app also reads the other launchers.'}</p>
         </div>
         <div class="kpis">
           ${kpi(Math.round(minutes / 60), 'played', ' h')}
@@ -4638,11 +4763,12 @@ async function render() {
   }
   render.prev = { ...state.view };
   if (state.view.name !== 'game' && state.view.name !== 'price') main.style.removeProperty('--game');
-  if (section === 'stats') return renderStats();
+  if (section === 'stats' && state.view.name !== 'game') return renderStats();
   // A game page opened from the Store or Wishlist still belongs to those tabs, but it's a game page.
   if ((section === 'store' || section === 'wishlist') && state.view.name !== 'game') {
     if (!(await ensureStore())) return;
     if (state.view.name === 'price' && store.games[state.view.id]) return renderPrice(store.games[state.view.id]);
+    if (state.view.name === 'price') state.view = { name: section };
     if (state.view.name === 'browse') return renderBrowse();
     return section === 'store' ? renderFront() : renderWishlist();
   }
@@ -4690,31 +4816,38 @@ function slidePage(dir) {
   }
 }
 function go(view) { state.view = view; return render().then(() => { $('#main').scrollTop = 0; }); }
-function open(id, from, tab) {
-  // Remember where we came from, so Back returns to the same row or letter.
-  if (['home', 'library', 'store', 'wishlist'].includes(state.view.name)) {
-    state.returnTo = state.view.name;
-    state.scroll[state.view.name] = $('#main').scrollTop;
+function open(id, from, tab, backTo) {
+  // Remember where we came from, so Back returns to the same row or letter. Each game page keeps its own way back
+  // (a game opened from another game goes back where that one would; a price page hands back its game's).
+  const prev = state.view;
+  let back = backTo;
+  if (['home', 'library', 'store', 'wishlist', 'stats', 'price', 'browse'].includes(prev.name)) {
+    state.scroll[prev.name] = $('#main').scrollTop;
+    back ||= prev.name === 'price' && prev.back === (findGame(id)?.id || id) ? prev.gameBack : { ...prev };
   }
+  back ||= prev.name === 'game' ? prev.back : null;
+  state.returnTo = back || state.returnTo;
   from = from || (state.view.name === 'game' ? state.view.from : sectionOf(state.view));
   if (state.view.id !== (findGame(id)?.id || id)) state.gameTab = null;
   if (tab) state.gameTab = tab;
-  state.view = { name: 'game', id: findGame(id)?.id || id, from };
+  state.view = { name: 'game', id: findGame(id)?.id || id, from, back: state.returnTo };
   $('#app').dataset.drawer = '';
   render();
 }
 function leavePrice() {
-  if (state.view.from === 'library') return state.view.back ? open(state.view.back, state.view.gameFrom) : go({ name: 'library' });
+  if (state.view.from === 'library') return state.view.back ? open(state.view.back, state.view.gameFrom, undefined, state.view.gameBack) : go({ name: 'library' });
   const to = ['wishlist', 'browse'].includes(state.view.from) ? state.view.from : 'store';
   return go({ name: to }).then(() => { if (to === 'store') $('#main').scrollTop = state.scroll.store || 0; });
 }
 function goHome() { state.view = { name: 'home' }; render(); }
 function goBack() {
-  const to = state.returnTo || 'home', y = state.scroll[to] || 0, id = state.view.id;
-  state.view = { name: to };
+  const back = state.view.back || state.returnTo || 'home', to = typeof back === 'string' ? { name: back } : back;
+  const y = state.scroll[to.name] || 0, id = state.view.id;
+  state.view = { ...to };
   render().then(() => {
     $('#main').scrollTop = y;
-    const el = id && document.querySelector(`#main [data-focus="${CSS.escape(id)}"]`);
+    const q = id && CSS.escape(id);
+    const el = q && document.querySelector(`#main [data-focus="${q}"], #main [data-cl-pick="${q}"], #main [data-open="${q}"]`);
     el?.focus({ preventScroll: true });
   });
 }
@@ -4737,9 +4870,9 @@ async function comparePrices(t) {
   const n = normTitle(t.name);
   const sg = Object.values(store.games).find(x => t.steamAppId && x.steamAppId === t.steamAppId)
     || Object.values(store.games).find(x => normTitle(x.title) === n);
-  if (sg) return go({ name: 'price', id: sg.id, from: 'library', back: t.id, gameFrom: state.view.from });
+  if (sg) return go({ name: 'price', id: sg.id, from: 'library', back: t.id, gameFrom: state.view.from, gameBack: state.view.back });
   open(t.id);
-  toast(host.inApp ? `No store sells ${t.name} right now.` : `${t.name} isn't in this preview's price snapshot. The app looks up any game live.`);
+  toast(host.inApp ? `No store sells ${t.name} right now.` : `${t.name} isn't in this preview's price snapshot.`);
 }
 function collectionDialog(t) {
   $('#layer').innerHTML = `
@@ -4755,11 +4888,12 @@ function collectionDialog(t) {
       </form>
     </div>`;
   $('#col-name').focus();
-  $('#col-cancel').onclick = () => { $('#layer').innerHTML = ''; };
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') $('#layer').innerHTML = ''; };
+  $('#col-cancel').onclick = () => closeLayer();
+  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
   $('#col-form').onsubmit = e => {
     e.preventDefault();
     const name = $('#col-name').value.trim();
+    if (!name) { $('#col-name').value = ''; $('#col-name').focus(); return toast('Give the collection a name.'); }
     if (prefs.collections.some(c => c.name.toLowerCase() === name.toLowerCase())) return toast(`You already have a collection called ${name}.`);
     prefs.collections.push({ name, ids: t ? [t.id] : [] });
     savePrefs();
@@ -4839,8 +4973,8 @@ function addGameDialog() {
       </form>
     </div>`;
   $('#add-name').focus();
-  $('#add-cancel').onclick = () => { $('#layer').innerHTML = ''; };
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') $('#layer').innerHTML = ''; };
+  $('#add-cancel').onclick = () => closeLayer();
+  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
   $('#add-form').onsubmit = e => {
     e.preventDefault();
     const name = $('#add-name').value.trim(), path = $('#add-path').value.trim();
@@ -4919,7 +5053,7 @@ document.addEventListener('click', e => {
   if (t.dataset.price) {
     if (state.view.name === 'store') state.scroll.store = $('#main').scrollTop;
     // From a game page, Back on the store page returns to that game.
-    if (state.view.name === 'game') return go({ name: 'price', id: t.dataset.price, from: 'library', back: state.view.id, gameFrom: state.view.from });
+    if (state.view.name === 'game') return go({ name: 'price', id: t.dataset.price, from: 'library', back: state.view.id, gameFrom: state.view.from, gameBack: state.view.back });
     if (shownGame()) return go({ name: 'price', id: t.dataset.price, from: 'library', back: shownGame().id, gameFrom: sectionOf(state.view) });
     const from = t.dataset.from || (state.view.name === 'browse' ? 'browse' : sectionOf(state.view));
     return go({ name: 'price', id: t.dataset.price, from });
@@ -4939,11 +5073,7 @@ document.addEventListener('click', e => {
   if ('expand' in t.dataset) return expandIntro();
   if (t.dataset.gameTab && shownGame()) {
     state.gameTab = t.dataset.gameTab;
-    const y = $('#main').scrollTop;
-    state.tabSwitch = true;
-    redrawShown();
-    state.tabSwitch = false;
-    $('#main').scrollTop = y;
+    redrawHoldingPlace();
     return document.querySelector(`[data-game-tab="${state.gameTab}"][role="tab"]`)?.focus({ preventScroll: true });
   }
   if ('miniPlay' in t.dataset && shownGame()) return startGame(shownGame());
@@ -4959,8 +5089,14 @@ document.addEventListener('click', e => {
   if (t.dataset.swish) {
     const id = t.dataset.swish, on = !isWished(id);
     setWished(id, on);
-    if (state.view.name === 'wishlist') { renderWishlist(); return toast(`Removed ${store.games[id].title} from your wishlist.`); }
-    return setStoreFocus(id);
+    if (state.view.name === 'wishlist') {
+      // The tile goes; the selection moves on to the first one left.
+      renderWishlist();
+      ($(`#main [data-sfocus]`) || $('#main button'))?.focus({ preventScroll: true });
+      return toast(`Removed ${store.games[id].title} from your wishlist.`);
+    }
+    setStoreFocus(id);
+    return $(`#focus [data-swish="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
   }
   if (t.dataset.see) {
     resetLibraryFilters();
@@ -5204,7 +5340,7 @@ document.addEventListener('keydown', e => {
   }
   if ($('#layer .lightbox') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return stepLightbox(e.key === 'ArrowLeft' ? -1 : 1);
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
-  if (!typing && !$('#layer .scrim') && !$('#ctx') && ['home', 'library', 'game', 'store', 'wishlist'].includes(state.view.name)) {
+  if (!typing && !$('#layer .scrim') && !$('#ctx') && ['home', 'library', 'game', 'store', 'wishlist', 'browse', 'price', 'stats'].includes(state.view.name)) {
     const onControl = document.activeElement?.closest?.('button, a');
     if ((['PageDown', 'End'].includes(e.key) || (e.key === ' ' && !onControl)) && introPage()?.classList.contains('intro')) { e.preventDefault(); return expandIntro(); }
     if (['PageUp', 'Home'].includes(e.key) && introPage() && $('#main').scrollTop <= 0) { e.preventDefault(); return collapseIntro(); }
@@ -5225,6 +5361,7 @@ document.addEventListener('keydown', e => {
     else if ($('#app').dataset.drawer === 'open') $('#app').dataset.drawer = '';
     else if (state.view.name === 'game') goBack();
     else if (state.view.name === 'price') leavePrice();
+    else if (state.view.name === 'browse') go({ name: 'store' }).then(() => { $('#main').scrollTop = state.scroll.store || 0; });
   }
 });
 
@@ -5292,7 +5429,7 @@ function focusKey(el) {
   if (!el || el === document.body || !$('#app').contains(el)) return null;
   let sel = null;
   if (el.id) sel = `#${CSS.escape(el.id)}`;
-  else for (const a of ['data-focus', 'data-sfocus', 'data-open', 'data-price', 'data-menu', 'data-quick', 'data-nav', 'data-game-tab', 'data-see', 'data-browse', 'data-scope', 'data-pop', 'data-line', 'data-line-clear', 'data-density', 'data-shop', 'data-genre', 'data-unlib', 'data-unfilter']) {
+  else for (const a of ['data-focus', 'data-sfocus', 'data-open', 'data-price', 'data-menu', 'data-quick', 'data-cl-pick', 'data-cl-filter', 'data-swish', 'data-nav', 'data-game-tab', 'data-see', 'data-browse', 'data-scope', 'data-pop', 'data-line', 'data-line-clear', 'data-density', 'data-shop', 'data-genre', 'data-unlib', 'data-unfilter']) {
     const v = el.getAttribute(a);
     if (v != null) { sel = `${el.closest('#focus') ? '#focus ' : ''}${el.tagName.toLowerCase()}[${a}="${CSS.escape(v)}"]`; break; }
   }
@@ -5308,15 +5445,22 @@ function findByKey(k) {
 // Redraw with fresh data, but not while a menu, dialog or text box is in use: try again shortly.
 function redrawWhenFree(y) {
   clearTimeout(redrawWhenFree.t);
-  if (document.querySelector('#layer > *, #ctx') || document.activeElement?.matches('input, select, textarea')) {
+  if (document.querySelector('#layer > :not(.toast), #ctx') || document.activeElement?.matches('input, select, textarea')) {
     redrawWhenFree.t = setTimeout(() => redrawWhenFree($('#main').scrollTop), 2000);
     return;
   }
   const keep = focusKey(document.activeElement);
+  // Keep the selection where it was (it matters with a controller or the keyboard).
+  const refocus = () => findByKey(keep)?.focus({ preventScroll: true });
+  // Still the same game on screen: redraw it in place, so the page (and Classic's pane) doesn't jump.
+  if (['game', 'home', 'library'].includes(state.view.name) && shownGame()
+      && render.last === `${state.view.name}:${state.view.id || ''}`) {
+    redrawHoldingPlace();
+    return refocus();
+  }
   render().then(() => {
     $('#main').scrollTop = y;
-    // Keep the selection where it was (it matters with a controller or the keyboard).
-    findByKey(keep)?.focus({ preventScroll: true });
+    refocus();
   });
 }
 window.junctionRefresh = async (what, info) => {
@@ -5331,8 +5475,10 @@ window.junctionRefresh = async (what, info) => {
     // Don't pull the page out from under someone typing or reading a menu.
     redrawWhenFree(y);
   } else if (what === 'store') {
-    store = null; storePromise = null;
-    if (['store', 'browse', 'price', 'wishlist'].includes(state.view.name)) render();
+    const fresh = await host.store().catch(() => null);
+    if (!fresh) return;
+    store = withWishStubs(fresh); storePromise = null;
+    if (['store', 'browse', 'price', 'wishlist'].includes(state.view.name)) redrawWhenFree($('#main').scrollTop);
   }
 };
 // First start in the app: say what the scan is doing.
@@ -5372,11 +5518,14 @@ function checkSignIns() {
   if (fresh.length || told.length !== before.length) { prefs.signInToasted = [...told, ...fresh]; savePrefs(); }
 }
 async function signInAgain(store, b) {
-  const v = b.querySelector('.pm-val');
+  const v = b.querySelector('.pm-val'), menu = b.closest('#ctx');
+  if (signInRow.busy) return;
   v.textContent = 'Signing in…';
+  signInRow.busy = true;
   const res = await host.signIn(store).catch(() => null);
+  signInRow.busy = false;
   if (!res?.ok) { v.textContent = 'Expired'; return toast(res?.error || 'Junction couldn’t sign in. Try again.'); }
-  closeMenu();
+  if ($('#ctx') === menu) closeMenu();
   lib.signins = { ...lib.signins, [store]: { name: res.name, expired: false } };
   checkSignIns();
   toast(`Signed in as ${res.name}. ${SIGN_IN_NAMES[store]} play time shows up in a moment.`, store);
@@ -5456,7 +5605,9 @@ window.junctionUpdateProgress = p => {
 
 // The first start after an update: what changed since the version that ran before.
 function whatsNewDialog(info) {
-  if (!info || $('#layer > *')) return;
+  if (!info) return;
+  // Something else is open (the setup, a dialog): show this once it's closed. A toast doesn't count.
+  if ($('#layer > :not(.toast)')) return setTimeout(() => whatsNewDialog(info), 1500);
   const many = info.releases.length > 1;
   const notes = info.releases.map(r => `${many ? `<h3 class="wn-version">${esc(r.version)}</h3>` : ''}${mdLite(r.notes) || '<p>No notes for this version.</p>'}`).join('');
   $('#layer').innerHTML = `

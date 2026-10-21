@@ -6,12 +6,12 @@ Without a key we fall back to what this PC remembers: the games that account has
 played here before, read from its localconfig.vdf. That list is incomplete, and can include
 games played through Family Sharing that the account doesn't own.
 """
-import json
 import os
 import urllib.error
 import urllib.parse
 
 from .art import get_json, steam_items
+from .config import NET_ERRORS
 from .launchers import (STEAM_SKIP_IDS, STEAM_SKIP_NAME, STEAM_TOOL_IDS, _ci, _game, _read,
                         _steam_root, parse_vdf)
 
@@ -44,8 +44,9 @@ def owned_games(key, steamid):
     return [g for g in response["games"] if types.get(g["appid"], 0) in GAME_TYPES]
 
 
-def remembered_games(steamid):
-    """Games this PC's Steam remembers for the account, in the same shape as owned_games()."""
+def remembered_games(steamid, look_up=True):
+    """Games this PC's Steam remembers for the account, in the same shape as owned_games().
+    With look_up=False (offline) nothing is asked online: names and types stay unknown."""
     root = _steam_root()
     if not root:
         return []
@@ -56,6 +57,9 @@ def remembered_games(steamid):
     for part in ("Software", "Valve", "Steam", "apps"):
         node = _ci(node, part)
     seen = {int(a): v for a, v in (node or {}).items() if a.isdigit() and isinstance(v, dict)}
+    if not look_up:
+        return [{"appid": a, "name": "", "playtime_forever": int(v.get("Playtime") or 0),
+                 "rtime_last_played": int(v.get("LastPlayed") or 0)} for a, v in seen.items()]
     games = []
     for item in steam_items(list(seen)):
         if item.get("type") not in GAME_TYPES:
@@ -95,9 +99,12 @@ def add_accounts(games, settings=None):
         summaries.append(summary)
         try:
             owned = owned_games(key, steamid) if key else remembered_games(steamid)
-        except (ValueError, urllib.error.URLError) as e:
+        except NET_ERRORS as e:
             summary["error"], summary["source"] = str(e), "pc"
-            owned = remembered_games(steamid)
+            try:
+                owned = remembered_games(steamid)
+            except NET_ERRORS:  # offline: keep the play time of the games installed here, nothing else
+                owned = [o for o in remembered_games(steamid, look_up=False) if o["appid"] in steam]
 
         for o in owned:
             appid, name = o["appid"], o.get("name") or ""

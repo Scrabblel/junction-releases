@@ -36,7 +36,9 @@ def _post_token(fields):
         with urllib.request.urlopen(req, timeout=20) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
-        if e.code >= 500:  # Epic having a bad moment, not a refused sign-in: try again later
+        # Only 400/401 means Epic refused the sign-in. Anything else (a rate limit, a proxy, a timeout, a bad
+        # moment on their side) is "try again later" and must never make someone sign in again.
+        if e.code not in (400, 401):
             raise
         try:
             msg = json.load(e).get("errorMessage")
@@ -45,9 +47,13 @@ def _post_token(fields):
         raise SignInError(msg or f"Epic said no (HTTP {e.code}).") from None
 
 
+def _signin_of(tok):
+    return {"refresh": tok["refresh_token"], "account": tok["account_id"],
+            "name": tok.get("displayName") or "Epic account", "refreshExpires": tok.get("refresh_expires_at")}
+
+
 def _keep(tok):
-    signins.put("epic", {"refresh": tok["refresh_token"], "account": tok["account_id"],
-                         "name": tok.get("displayName") or "Epic account", "refreshExpires": tok.get("refresh_expires_at")})
+    signins.put("epic", _signin_of(tok))
 
 
 def code_from_page(text):
@@ -104,10 +110,11 @@ def _access():
     try:
         tok = _post_token({"grant_type": "refresh_token", "refresh_token": saved["refresh"]})
     except SignInError:
-        signins.put("epic", dict(saved, expired=True))
+        signins.put_if_same("epic", saved["refresh"], dict(saved, expired=True))
         raise
     tok.setdefault("displayName", saved.get("name"))
-    _keep(tok)
+    # Only if you didn't sign out (or in again) while this was under way.
+    signins.put_if_same("epic", saved["refresh"], _signin_of(tok))
     return tok["access_token"], tok["account_id"]
 
 

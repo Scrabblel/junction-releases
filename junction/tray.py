@@ -252,11 +252,22 @@ class Tray:
         self._on_thread(lambda: self._icon.ShowBalloonTip(5000, title, text, WinForms.ToolTipIcon.Info))
 
     def stop(self):
+        if getattr(self, "_stopped", False):
+            return
+        self._stopped = True
+
         def _stop():
             self._icon.Visible = False
             self._icon.Dispose()
             self._menu.form.Dispose()
             WinForms.Application.ExitThread()
+        try:
+            # Asked from the tray's own thread ("Quit Junction" in its menu): stop now. Waiting for our own thread
+            # to get round to it would only make quitting two seconds slower.
+            if self._ctl is not None and self._ctl.IsHandleCreated and not self._ctl.InvokeRequired:
+                return _stop()
+        except Exception:  # noqa: BLE001
+            pass
         done = threading.Event()
         self._on_thread(lambda: (_stop(), done.set()))
         done.wait(2)
