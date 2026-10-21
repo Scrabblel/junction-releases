@@ -1763,9 +1763,14 @@ const host = {
     if (this.inApp) return window.pywebview.api.get_media(appid);
     return null;
   },
-  // Live search across every game IsThereAnyDeal knows. The artifact only searches its snapshot.
+  // Live search across every game IsThereAnyDeal knows, as Store games. The artifact only searches its snapshot.
   async searchPrices(query) {
     if (this.inApp) return window.pywebview.api.search_prices(query);
+    return null;
+  },
+  // Today's prices for Store games outside the snapshot: {itadId: {deals, historyLow}}.
+  async prices(ids) {
+    if (this.inApp) return window.pywebview.api.get_prices(ids);
     return null;
   },
   // API keys: the app checks and saves them; the page only ever sees their last four characters.
@@ -1783,6 +1788,7 @@ const host = {
   },
   // On/off settings (tray, start with Windows, setup done), and the problem report.
   async removeAccount(steamId) { return this.inApp ? window.pywebview.api.remove_steam_account(steamId) : null; },
+  async setEarlierPlaytime(id, hours) { return this.inApp ? window.pywebview.api.set_earlier_playtime(id, hours) : null; },
   // Launcher sign-ins (Epic, EA) for their play time: the sign-in happens on the store's own page, in a window of its own.
   async signIn(store) { return this.inApp ? window.pywebview.api.sign_in(store) : { error: 'Only the Junction app can sign in.' }; },
   async signOut(store) { return this.inApp ? window.pywebview.api.sign_out(store) : null; },
@@ -1945,7 +1951,8 @@ const isInstalled = g => g.installed !== false;
 
 function buildTitles() {
   const own = lib.ownTimes || {};
-  const manual = prefs.manual.map(m => own[m.id] ? { ...m, playtimeMinutes: own[m.id].minutes, lastPlayed: own[m.id].lastPlayed } : m);
+  const manual = prefs.manual.map(m => own[m.id] ? { ...m, playtimeMinutes: own[m.id].minutes, lastPlayed: own[m.id].lastPlayed,
+    playtimeCounted: own[m.id].counted, playtimeEarlier: own[m.id].earlier } : m);
   const copies = lib.games.concat(manual).slice().sort((a, b) => !!b.steamAppId - !!a.steamAppId);
   const groups = new Map(), keyOfName = new Map();
   for (const c of copies) {
@@ -1963,7 +1970,7 @@ function buildTitles() {
     const t = {
       id: cs.length === 1 ? p.id : `title:${key}`, name: p.name, launcher: p.launcher, copies: cs,
       installed: cs.some(isInstalled),
-      playtimeMinutes: cs.reduce((s, c) => s + (c.playtimeMinutes || 0), 0) || null,
+      playtimeMinutes: titleMinutes(cs) || null,
       lastPlayed: Math.max(0, ...cs.map(c => c.lastPlayed || 0)) || null,
       owners: [...new Set(cs.flatMap(c => (c.launcher === 'steam' && c.owners) || []))],
       // The installed copy's art wins (it has the hero and logo), any copy fills the gaps.
@@ -1975,6 +1982,14 @@ function buildTitles() {
     for (const c of cs) titleOf.set(c.id, t);
     return t;
   });
+}
+// A game's play time over its copies. Ubisoft Connect and the EA app count every session of a game, also the ones
+// started through Steam (those games run through their app from any store), so their total isn't added to another
+// store's copy of the same game: the larger of the two counts.
+function titleMinutes(cs) {
+  const everywhere = c => (c.launcher === 'ubisoft' || c.launcher === 'ea') && c.playtimeFrom === 'launcher';
+  const rest = cs.filter(c => !everywhere(c)).reduce((sum, c) => sum + (c.playtimeMinutes || 0), 0);
+  return Math.max(rest, ...cs.filter(everywhere).map(c => c.playtimeMinutes || 0));
 }
 const idsOf = t => [t.id, ...t.copies.map(c => c.id)];
 const launcherNames = t => [...new Set(t.copies.map(c => lib.launchers[c.launcher]))].join(' + ');
@@ -3341,15 +3356,65 @@ function setStoreFocus(id) {
     </div>`;
 }
 
+// Search words: "Assassin's creed 2" -> ["assassins", "creed", "2"] (one letter on its own says nothing).
+const searchWords = text => String(text).toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9]+/).filter(w => w.length > 1 || /\d/.test(w));
+const searchTexts = new WeakMap();
+const searchText = sg => {
+  let v = searchTexts.get(sg);
+  if (!v || v[0] !== sg.title) searchTexts.set(sg, v = [sg.title, ` ${searchWords(sg.title).join(' ')} `]);
+  return v[1];
+};
+const liveKey = () => searchWords(state.browse.q).join(' ');
+const liveFound = new Map();  // search -> ids of the games every store gave for it
+let liveAsking = null;
+// A game matches when its name has every word, or (a game the live search gave) at least half of them.
+function searchMatch(sg, words, live) {
+  const name = searchText(sg);
+  const hits = words.filter(w => name.includes(` ${w}`)).length;
+  return hits === words.length || (live?.has(sg.id) && hits >= Math.ceil(words.length / 2));
+}
+// What Browse says about the search of every store: still looking, or it didn't work.
+function liveNote() {
+  const q = liveKey();
+  if (!host.inApp || q.length < 3 || liveFound.has(q)) return '';
+  return liveFailed === q ? 'Couldn’t search every store just now' : 'Searching every store…';
+}
+let liveFailed = null, liveTimer;
+// IsThereAnyDeal knows far more games than the Store's list: look the search up there too, a moment after typing stops.
+async function liveSearch() {
+  const q = liveKey();
+  if (!host.inApp || !store || q.length < 3 || liveFound.has(q) || liveAsking === q || liveFailed === q) return;
+  liveAsking = q;
+  const found = await host.searchPrices(state.browse.q.trim()).catch(() => null);
+  liveAsking = null;
+  if (!found) liveFailed = q;
+  else {
+    liveFound.set(q, new Set(found.map(g => g.id)));
+    if (liveFound.size > 100) liveFound.delete(liveFound.keys().next().value);
+    for (const g of found) if (!store.games[g.id]) { store.games[g.id] = g; liveGames.set(g.id, g); }
+  }
+  if (state.view.name === 'browse' && liveKey() === q) redrawBrowseKeeping();
+}
+// Draw Browse again with what came in, keeping the scroll, the selection and the cursor in the search box.
+function redrawBrowseKeeping() {
+  const main = $('#main'), y = main.scrollTop, a = document.activeElement, keep = focusKey(a);
+  const caret = a?.id === 'browse-search' ? [a.selectionStart, a.selectionEnd] : null;
+  renderBrowse();
+  main.scrollTop = y;
+  const el = findByKey(keep);
+  el?.focus({ preventScroll: true });
+  if (caret && el) el.setSelectionRange(...caret);
+}
 function browseResults() {
   const b = state.browse;
-  const q = b.q.trim().toLowerCase();
+  const q = b.q.trim().toLowerCase(), words = searchWords(q), live = liveFound.get(liveKey());
   // A search looks through everything in the snapshot, owned games included, so you see "Owned".
   const pool = q ? Object.values(store.games) : catalogGames();
   const list = pool.filter(sg => {
     const d = bestDeal(sg);
     if (!d) return false;
-    if (q && !sg.title.toLowerCase().includes(q)) return false;
+    if (q && words.length && !searchMatch(sg, words, live)) return false;
+    if (q && !words.length && !sg.title.toLowerCase().includes(q)) return false;
     if (!q && hideOwned(sg)) return false;
     if (b.genres.size && ![...b.genres].every(t => (sg.tags || []).includes(t))) return false;
     if (b.maxPrice !== '' && d.price > Number(b.maxPrice)) return false;
@@ -3387,7 +3452,7 @@ function renderBrowse() {
         <aside class="filter-panel${state.browseFiltersOpen ? '' : ' collapsed'}" aria-label="Filters">
           <label class="store-search small">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-            <input id="browse-search" type="search" placeholder="Search games" autocomplete="off" aria-label="Search games" value="${esc(b.q)}">
+            <input id="browse-search" type="search" placeholder="Search every store" autocomplete="off" aria-label="Search every store for a game" value="${esc(b.q)}">
           </label>
           <div class="filter-group">
             <label class="check"><input type="checkbox" id="on-sale" ${b.onSale ? 'checked' : ''}> On sale only</label>
@@ -3411,7 +3476,7 @@ function renderBrowse() {
         <section class="section results">
           <div class="results-bar">
           <div class="section-head">
-            <h2>${results.length} games</h2>
+            <h2>${results.length} games</h2>${liveNote() ? `<span class="note live-note" aria-live="polite">${esc(liveNote())}</span>` : ''}
             <label class="sort">Sort by
               <select id="browse-sort">
                 <option value="rank">Popular</option>
@@ -3425,12 +3490,16 @@ function renderBrowse() {
           ${active.length ? `<div class="filters">${active.map(([k, label]) => `<button class="line-chip active-chip" data-unfilter="${esc(k)}" aria-label="Remove filter ${esc(label)}">${esc(label)} <span aria-hidden="true">×</span></button>`).join('')}</div>` : ''}
           </div>
           ${results.length ? `<div class="deal-grid">${results.slice(0, b.limit).map(dealCard).join('')}</div>`
+            : liveNote() === 'Searching every store…' ? `<div class="deal-grid" aria-busy="true">${'<div class="sk sk-card"></div>'.repeat(4)}</div>`
+            : active.length === 1 && b.q.trim() && host.inApp ? emptyState(ICON.search, `No store sells “${b.q.trim()}”`, 'Junction looked in its Store and at every store it compares. Check the spelling, or try fewer words.', '')
             : emptyState(ICON.search, 'No games match these filters', 'Try fewer genres, a higher price limit, or another search.', '<button class="pill" id="clear-filters">Clear filters</button>')}
           ${results.length > b.limit ? `<button class="btn more" id="more-browse">Show more games</button>` : ''}
         </section>
       </div>
     </div>`;
   $('#browse-sort').value = b.sort;
+  clearTimeout(liveTimer);
+  if (liveNote() === 'Searching every store…') liveTimer = setTimeout(liveSearch, 450);
 }
 
 function presetBrowse(preset) {
@@ -3937,6 +4006,7 @@ function contextMenu(t, x, y) {
     ['New collection…', () => collectionDialog(t), prefs.collections.length ? 'indent' : ''],
     ['Compare prices', () => comparePrices(t)],
     ['Change cover…', () => coverDialog(t)],
+    ...(host.inApp && earlierCopy(t) ? [[earlierCopy(t).playtimeEarlier ? 'Change earlier play time…' : 'Add earlier play time…', () => earlierDialog(t)]] : []),
     [isHidden(t) ? 'Show in library' : 'Hide', () => toggleHide(t)],
   ];
   const menu = document.createElement('div');
@@ -4498,14 +4568,33 @@ addEventListener('unhandledrejection', e => { if (host.inApp) host.logError(`Unh
 let storePromise = null;
 function loadStoreQuiet() {
   if (store) return Promise.resolve(store);
-  storePromise ||= host.store().then(s => (store = withWishStubs(s))).catch(() => { storePromise = null; return null; });
+  storePromise ||= host.store().then(s => { store = withWishStubs(s); pricesForGone(); return store; })
+    .catch(() => { storePromise = null; return null; });
   return storePromise;
+}
+// Games a search found outside the Store's list, kept when the Store refreshes (a price page may show one).
+const liveGames = new Map();
+// Wishlist games that have left the Store's list: ask for today's prices, so they still show what they cost.
+async function pricesForGone() {
+  if (!host.inApp || !store) return;
+  const gone = Object.values(store.games).filter(sg => sg.gone && !sg.priced);
+  if (!gone.length) return;
+  gone.forEach(sg => { sg.priced = true; });
+  const got = await host.prices(gone.map(sg => sg.id)).catch(() => null);
+  if (!got) { gone.forEach(sg => { sg.priced = false; }); return; }
+  let changed = false;
+  for (const sg of gone) {
+    const p = got[sg.id];
+    if (p && p.deals.length) { sg.deals = p.deals; sg.historyLow = p.historyLow; changed = true; }
+  }
+  if (changed && ['store', 'wishlist', 'browse', 'price'].includes(state.view.name)) redrawWhenFree($('#main').scrollTop);
 }
 // Prices come for the ~850 games in the Store's list. A game you put on your wishlist that has since left that
 // list (the sale ended, it dropped out of the top) stays on your Wishlist from what was saved when you added it.
 // Also leaves out giveaways that have already ended (an older saved Store can still have them).
 function withWishStubs(s) {
   if (!s || !s.games) return s;
+  for (const [id, sg] of liveGames) if (!s.games[id]) s.games[id] = sg;
   let saved = false;
   for (const id of prefs.wishlist) {
     const sg = s.games[id];
@@ -4874,6 +4963,52 @@ async function comparePrices(t) {
   open(t.id);
   toast(host.inApp ? `No store sells ${t.name} right now.` : `${t.name} isn't in this preview's price snapshot.`);
 }
+// ---------- earlier play time: hours from before Junction counted a game, typed in ----------
+// Only for copies whose launcher doesn't give Junction its history (Xbox, Battle.net, Rockstar, your own games, and
+// Epic, EA or Ubisoft games without a launcher total). Steam and GOG Galaxy count everything themselves.
+const knowsHistory = c => c.launcher === 'steam' || c.playtimeFrom === 'launcher'
+  || (c.launcher === 'gog' && /GalaxyClient/i.test(c.launch || ''));
+const earlierCopy = t => (t.copies || [t]).filter(c => !knowsHistory(c)).sort((a, b) => !!b.playtimeEarlier - !!a.playtimeEarlier)[0] || null;
+function earlierDialog(t) {
+  const c = earlierCopy(t);
+  if (!c) return;
+  const had = (c.playtimeEarlier || 0) / 60, counted = hours(c.playtimeCounted || 0);
+  $('#layer').innerHTML = `
+    <div class="scrim" id="scrim">
+      <form class="dialog" id="early-form">
+        <h2>Earlier play time</h2>
+        <label>Hours you played ${esc(t.name)} before Junction counted it
+          <input id="early-hours" inputmode="decimal" autocomplete="off" placeholder="e.g. 86" value="${had ? +had.toFixed(1) : ''}"></label>
+        <p class="hint">${esc(lib.launchers[c.launcher] || 'This launcher')} doesn’t tell Junction how long you played before.
+          Junction adds its own timing on top${counted ? `: it has counted ${counted} so far` : ''}.</p>
+        <div class="row-btns">
+          ${had ? '<button type="button" class="btn" id="early-remove">Remove</button>' : ''}
+          <button type="button" class="btn" id="early-cancel">Cancel</button>
+          <button type="submit" class="btn primary">Save</button>
+        </div>
+      </form>
+    </div>`;
+  const input = $('#early-hours');
+  input.focus(); input.select();
+  const save = async value => {
+    const res = await host.setEarlierPlaytime(c.id, value).catch(() => null);
+    if (!res?.ok) return toast(res?.error || 'Junction couldn’t save that. Try again.');
+    closeLayer();
+    toast(value ? `Added ${hours(Math.round(value * 60))} of earlier play time to ${t.name}.` : `Removed the earlier play time from ${t.name}.`);
+  };
+  $('#early-cancel').onclick = () => closeLayer();
+  $('#early-remove')?.addEventListener('click', () => save(0));
+  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  $('#early-form').onsubmit = e => {
+    e.preventDefault();
+    const value = Number(input.value.trim().replace(',', '.'));
+    if (!input.value.trim() || !Number.isFinite(value) || value < 0 || value > 100000) {
+      input.focus(); return toast('Type the hours as a number, like 86 or 12.5.');
+    }
+    save(value);
+  };
+}
+
 function collectionDialog(t) {
   $('#layer').innerHTML = `
     <div class="scrim" id="scrim">
@@ -5217,6 +5352,7 @@ let searchTimer;
 document.addEventListener('input', e => {
   if (e.target.id !== 'store-search' && e.target.id !== 'browse-search') return;
   state.browse.q = e.target.value;
+  liveFailed = null;  // a new search may reach every store again
   state.browse.limit = 60;
   clearTimeout(searchTimer);
   searchTimer = setTimeout(async () => {
@@ -5477,7 +5613,7 @@ window.junctionRefresh = async (what, info) => {
   } else if (what === 'store') {
     const fresh = await host.store().catch(() => null);
     if (!fresh) return;
-    store = withWishStubs(fresh); storePromise = null;
+    store = withWishStubs(fresh); storePromise = null; pricesForGone();
     if (['store', 'browse', 'price', 'wishlist'].includes(state.view.name)) redrawWhenFree($('#main').scrollTop);
   }
 };

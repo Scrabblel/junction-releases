@@ -260,6 +260,18 @@ def best_price_line(changes, now=None, today=None):
 
 # ---------- putting it together ----------
 
+def deals_from(price):
+    """One game's first-party offers from an ITAD prices entry, cheapest first, and its lowest price ever."""
+    offers = [x for x in (price or {}).get("deals", []) if x["shop"]["id"] in FIRST_PARTY]
+    deals = sorted(({"shop": x["shop"]["id"], "price": x["price"]["amount"], "regular": x["regular"]["amount"],
+                     "cut": x.get("cut") or 0, "url": x["url"],
+                     "storeLow": (x.get("storeLow") or {}).get("amount")} for x in offers),
+                   key=lambda x: (x["price"], -x["cut"]))
+    lows = [d for d in deals if d["storeLow"] is not None]
+    low = min(lows, key=lambda d: d["storeLow"]) if lows else None
+    return deals, ({"price": low["storeLow"], "shop": low["shop"]} if low else None)
+
+
 def _owned_label(g, account_names):
     if g["launcher"] == "steam" and g["owners"] and len(account_names) > 1:
         return f'Steam ({", ".join(account_names.get(o, o) for o in g["owners"])})'
@@ -343,14 +355,8 @@ def build_store(itad, library_games, accounts, deal_count=150, catalog_count=600
     log(f"Fetching prices for {len(games)} games")
     prices = itad.prices(list(games))
     for itad_id, g in games.items():
-        offers = [x for x in prices.get(itad_id, {}).get("deals", []) if x["shop"]["id"] in FIRST_PARTY]
-        deals = sorted(({"shop": x["shop"]["id"], "price": x["price"]["amount"], "regular": x["regular"]["amount"],
-                         "cut": x.get("cut") or 0, "url": x["url"],
-                         "storeLow": (x.get("storeLow") or {}).get("amount")} for x in offers),
-                       key=lambda x: (x["price"], -x["cut"]))
-        lows = [d for d in deals if d["storeLow"] is not None]
-        low = min(lows, key=lambda d: d["storeLow"]) if lows else None
-        g.update(deals=deals, historyLow={"price": low["storeLow"], "shop": low["shop"]} if low else None,
+        deals, low = deals_from(prices.get(itad_id))
+        g.update(deals=deals, historyLow=low,
                  owned=[{"launcher": o["launcher"], "label": _owned_label(o, account_names)} for o in owned.get(itad_id, [])])
 
     free = []

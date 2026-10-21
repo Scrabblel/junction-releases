@@ -84,9 +84,27 @@ def _safe_add(*a, **k):
         return False
 
 
+def set_earlier(game_id, minutes):
+    """The play time from before Junction counted a game, as the person typed it in (minutes; 0 or None removes it).
+    It's kept apart from Junction's own count ("minutes"), so changing it never touches what Junction timed."""
+    minutes = max(0.0, float(minutes or 0))
+    with _lock:
+        data = load()
+        e = data.get(game_id)
+        if minutes:
+            data.setdefault(game_id, {"minutes": 0.0, "sessions": 0})["earlier"] = round(minutes, 2)
+        elif e is not None:
+            e.pop("earlier", None)
+            if not e.get("minutes") and not e.get("sessions") and not e.get("lastPlayed"):
+                data.pop(game_id)
+        _save(data)
+
+
 def apply(lib):
     """The library with Junction's own play time added. Returns a new dict; `lib` isn't changed.
-    Games you added yourself aren't in the library (the page keeps them), so their times go along as `ownTimes`."""
+    Games you added yourself aren't in the library (the page keeps them), so their times go along as `ownTimes`.
+    Each game also says how much of its total Junction timed (`playtimeCounted`) and how much was typed in as
+    earlier play time (`playtimeEarlier`), for the dialog where you change the latter."""
     data = load()
     if not data:
         return lib
@@ -94,13 +112,14 @@ def apply(lib):
     for g in lib.get("games") or []:
         e = data.get(g["id"])
         if e:
-            mine, theirs = e.get("minutes", 0), g.get("playtimeMinutes") or 0
+            mine, theirs, earlier = e.get("minutes", 0), g.get("playtimeMinutes") or 0, e.get("earlier") or 0
             # A launcher's own total (Ubisoft's stats) already holds the time Junction saw, so take the larger.
-            total = max(mine, theirs) if g.get("playtimeFrom") == "launcher" else mine + theirs
-            g = dict(g, playtimeMinutes=round(total) or None,
+            total = (max(mine, theirs) if g.get("playtimeFrom") == "launcher" else mine + theirs) + earlier
+            g = dict(g, playtimeMinutes=round(total) or None, playtimeCounted=round(mine), playtimeEarlier=round(earlier),
                      lastPlayed=max(g.get("lastPlayed") or 0, e.get("lastPlayed") or 0) or None)
         games.append(g)
-    own = {k: {"minutes": round(e.get("minutes", 0)) or None, "lastPlayed": e.get("lastPlayed")}
+    own = {k: {"minutes": round(e.get("minutes", 0) + (e.get("earlier") or 0)) or None, "lastPlayed": e.get("lastPlayed"),
+               "counted": round(e.get("minutes", 0)), "earlier": round(e.get("earlier") or 0)}
            for k, e in data.items() if k.startswith("manual:")}
     return dict(lib, games=games, ownTimes=own)
 

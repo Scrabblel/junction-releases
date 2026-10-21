@@ -86,7 +86,9 @@ def history(itad_id, settings=None):
 
 
 def search(query, settings=None):
-    """Every game IsThereAnyDeal knows by this name, with its best first-party price."""
+    """Every game IsThereAnyDeal knows by this name (up to 20), shaped like the Store's own games, so a search
+    can find games outside the Store's list: their prices at every store, genres, reviews and lowest price ever.
+    Raises when IsThereAnyDeal can't be reached; [] without a prices key."""
     settings = settings if settings is not None else config.load_settings()
     key = keys.prices_key(settings)
     if not key or not query.strip():
@@ -96,16 +98,57 @@ def search(query, settings=None):
     if hit and time.time() - hit[0] < SEARCH_TTL:
         return hit[1]
     itad = stores.Itad(key)
-    found = itad.search(query.strip(), results=20) or []
-    ids = [g["id"] for g in found]
-    prices = itad.prices(ids) if ids else {}
-    out = []
-    for g in found:
-        deals = (prices.get(g["id"]) or {}).get("deals") or []
-        best = min(deals, key=lambda d: d["price"]["amount"], default=None)
-        out.append({"id": g["id"], "title": g["title"], "image": ((g.get("assets") or {}).get("banner400")),
-                    "price": best and best["price"]["amount"], "shop": best and best["shop"]["name"], "url": best and best["url"]})
+    # Full games only, like the Store (no DLC, soundtracks or bundles), and no adult-only games.
+    found = [g for g in itad.search(query.strip(), results=20) or [] if g.get("type") in (None, "game") and not g.get("mature")]
+    out = _store_games(itad, found)
     _searches[q] = (time.time(), out)
     if len(_searches) > 200:
         _searches.pop(next(iter(_searches)))
+    return out
+
+
+def _store_games(itad, found):
+    """ITAD search results as Store games (see stores.py): prices, plus Steam's genres and reviews when it sells them."""
+    ids = [g["id"] for g in found]
+    if not ids:
+        return []
+    prices = itad.prices(ids)
+    try:
+        steam_of = itad.steam_for_ids(ids)
+    except NET_ERRORS:
+        steam_of = {}
+    try:
+        details = stores.steam_details(set(steam_of.values())) if steam_of else {}
+    except (*NET_ERRORS, KeyError):
+        details = {}
+    out = []
+    for g in found:
+        appid = steam_of.get(g["id"])
+        det = details.get(appid, {})
+        assets = g.get("assets") or {}
+        deals, low = stores.deals_from(prices.get(g["id"]))
+        out.append({"id": g["id"], "title": g.get("title") or det.get("name", ""),
+                    "image": assets.get("banner400") or assets.get("banner300"), "steamAppId": appid,
+                    "tags": det.get("tags", []), "released": det.get("released"), "score": det.get("score"),
+                    "scoreCount": det.get("scoreCount"), "earlyAccess": det.get("earlyAccess", False),
+                    "deals": deals, "historyLow": low, "owned": [], "live": True})
+    no_image = {g["steamAppId"]: g for g in out if not g["image"] and g["steamAppId"]}
+    try:
+        for appid, urls in art.steam_art(list(no_image)).items():
+            no_image[appid]["image"] = urls.get("header")
+    except NET_ERRORS:
+        pass
+    return out
+
+
+def prices_for(ids, settings=None):
+    """{ITAD id: {deals, historyLow}} for games outside the Store's list (a wishlist game that left it)."""
+    key = keys.prices_key(settings if settings is not None else config.load_settings())
+    ids = list(dict.fromkeys(ids))[:200]
+    if not key or not ids:
+        return {}
+    out = {}
+    for itad_id, price in stores.Itad(key).prices(ids).items():
+        deals, low = stores.deals_from(price)
+        out[itad_id] = {"deals": deals, "historyLow": low}
     return out

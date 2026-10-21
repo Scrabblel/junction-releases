@@ -306,6 +306,24 @@ class Api:
     def install(self, game_id, steam_id=None, target=None):
         return self._run(game_id, steam_id, target)
 
+    def set_earlier_playtime(self, game_id, hours):
+        """Hours played before Junction counted this game, typed in by the person (0 removes them)."""
+        game_id = str(game_id or "")
+        if not (self._game(game_id) or game_id.startswith("manual:")):
+            return {"error": "Junction can't find this game anymore."}
+        try:
+            hours = float(str(hours).replace(",", ".") or 0)
+        except ValueError:
+            return {"error": "Type the hours as a number, like 86 or 12.5."}
+        if not 0 <= hours <= 100000:
+            return {"error": "Type a number of hours between 0 and 100,000."}
+        try:
+            playtime.set_earlier(game_id, hours * 60)
+        except OSError:
+            return {"error": "Junction couldn't save that. Try again."}
+        self._push("library")
+        return {"ok": True}
+
     def open_folder(self, game_id, target=None):
         g = self._game(game_id)
         folder = (g or {}).get("installDir") or (os.path.dirname(target) if target else None)
@@ -397,10 +415,20 @@ class Api:
         return line
 
     def search_prices(self, query):
+        """Games by this name from every store, also ones outside the Store's list. None when it didn't work."""
         try:
             return live_store.search(query)
         except Exception:  # noqa: BLE001
-            return []
+            traceback.print_exc()
+            return None
+
+    def get_prices(self, ids):
+        """Today's prices for Store games outside the Store's list (a wishlist game that left it)."""
+        try:
+            return live_store.prices_for(ids or [])
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+            return None
 
     # ---------- settings: the API keys, entered in the app ----------
 
