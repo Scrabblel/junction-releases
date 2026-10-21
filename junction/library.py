@@ -16,7 +16,8 @@ import time
 import urllib.error
 import urllib.request
 
-from . import art, config, ea_account, epic_account, extras, launchers, owned_local, steam_owned, steam_switch, stores
+from . import (art, config, ea_account, epic_account, extras, launchers, owned_local, steam_owned, steam_switch, stores,
+               ubisoft_account)
 from .config import NET_ERRORS
 
 
@@ -210,12 +211,22 @@ def add_sizes(lib, max_age=86400):
     config.write_cache("sizes.json", known)
 
 
+def _ubisoft_times(games):
+    """Ubisoft's play time: what Ubisoft Connect last saved on this PC, and (signed in) what Ubisoft counts now."""
+    times = owned_local.ubisoft_playtime()
+    try:
+        times.update(ubisoft_account.playtime([g["id"].split(":", 1)[1] for g in games if g["launcher"] == "ubisoft"]))
+    except (ubisoft_account.SignInError, *NET_ERRORS):
+        pass  # what's on this PC is still something
+    return times
+
+
 def add_launcher_playtime(games):
-    """Play time the launchers count themselves: GOG Galaxy, Ubisoft Connect and (when signed in) Epic and EA, and
-    Battle.net's last played.
+    """Play time the launchers count themselves: GOG Galaxy, Ubisoft Connect (up to date when signed in), Epic and EA
+    (when signed in), and Battle.net's last played.
     `playtimeFrom: "launcher"` tells playtime.apply() that this total already holds any time Junction counted."""
     by_id, by_name = (lambda g: g["id"].split(":", 1)[1]), (lambda g: art.normalize(g["name"]))
-    readers = {"gog": (owned_local.gog_playtime, by_id), "ubisoft": (owned_local.ubisoft_playtime, by_id),
+    readers = {"gog": (owned_local.gog_playtime, by_id), "ubisoft": (lambda: _ubisoft_times(games), by_id),
                "epic": (epic_account.playtime, by_id), "ea": (ea_account.playtime, by_name),
                "battlenet": (lambda: {k: (None, t) for k, t in owned_local.battlenet_last_played().items()},
                              lambda g: launchers.bnet_product(by_id(g)))}

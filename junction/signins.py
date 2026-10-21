@@ -1,4 +1,4 @@
-"""Launcher sign-ins (Epic, EA) that Junction keeps so it can read play time from them.
+"""Launcher sign-ins (Epic, EA, Ubisoft) that Junction keeps so it can read play time from them.
 
 A sign-in is as good as the person's password for that store, so it's never in settings.json: it's
 kept in signins.dat next to it, encrypted with Windows' own per-user protection (DPAPI). Only the

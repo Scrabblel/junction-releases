@@ -492,7 +492,7 @@ FINDERS = {
 
 
 # The launchers' own apps, by their name in Windows' installed programs (uninstalling removes the entry).
-CLIENT_NAMES = {"epic": "epic games launcher", "ea": "ea app"}
+CLIENT_NAMES = {"epic": "epic games launcher", "ea": "ea app", "ubisoft": "ubisoft connect"}
 
 
 def clients_on_pc():

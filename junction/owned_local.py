@@ -294,6 +294,16 @@ def _ubisoft_spaces(base):
     return spaces
 
 
+def ubisoft_spaces():
+    """{space id: [product ids]} for the games Ubisoft Connect knows on this PC; {} without Ubisoft Connect."""
+    base = _ubisoft_dir()
+    return _ubisoft_spaces(base) if base else {}
+
+
+def ubisoft_time(cards):
+    return _ubisoft_time(cards)
+
+
 def _ubisoft_time(cards):
     """(seconds played, last changed unix time) from one game's stat cards, or None. Games name it differently:
     one total ("TimePlayed", "Playtime"), or only parts such as solo, co-op and PvP play time, which are added up."""

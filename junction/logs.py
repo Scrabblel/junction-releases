@@ -72,8 +72,9 @@ _KEYLIKE = [
     re.compile(r"\beyJ[\w-]+\.[\w-]+\.[\w-]*"),                          # JWTs (sign-in tokens)
     # "Bearer <token>", "Authorization: Basic <x>": the word and the value after it
     re.compile(r"(?i)\b(bearer|basic)(\s+)[^\s\"'&,]+"),
+    re.compile(r"(?i)\b(ubi_v1|rm_v1)(\s+t=)[^\s\"'&,]+"),                  # Ubisoft's tickets
     # key=..., token: ..., ?code=..., "authorizationCode": "...", cookie=..., password=... (keep this one last)
-    re.compile(r"(?i)(key|token|authorization|code|cookie|password|passwd|secret|session|verifier)([\"'=: ]+)[^\s\"'&,]+"),
+    re.compile(r"(?i)(key|token|ticket|authorization|code|cookie|password|passwd|secret|session|verifier)([\"'=: ]+)[^\s\"'&,]+"),
 ]
 
 

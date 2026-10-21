@@ -23,7 +23,7 @@ import webbrowser
 import webview
 
 from . import (config, ea_account, epic_account, keys, launchers, library, live_store, logs, pad, playtime, signins,
-               startup, steam_switch, titlebar, updates)
+               startup, steam_switch, titlebar, ubisoft_account, updates)
 
 LIB_VERSION = 1          # bump when the cached library's shape changes
 ACH_TTL = 10 * 60        # seconds a game's achievements stay cached
@@ -32,7 +32,7 @@ ENRICHED = ("friends", "friendOwners", "dlcSales", "news")
 # Pages the settings dialogs may open in the browser (where people make their keys).
 KEY_SITES = {"steamcommunity.com", "isthereanydeal.com", "www.steamgriddb.com"}
 # Launchers you can sign in to for their play time: (module, name).
-SIGN_INS = {"epic": (epic_account, "Epic"), "ea": (ea_account, "EA")}
+SIGN_INS = {"epic": (epic_account, "Epic"), "ea": (ea_account, "EA"), "ubisoft": (ubisoft_account, "Ubisoft")}
 
 
 def _merge_extras(new, old):
@@ -54,7 +54,9 @@ def _merge_extras(new, old):
         for k in ("achievements", "sizeBytes"):
             if g.get(k) is None and p.get(k) is not None:
                 g[k] = p[k]
-        if (p.get("playtimeFrom") or g["launcher"] in ("gog", "battlenet")) and (g["launcher"] not in SIGN_INS or g["launcher"] in signed_in):
+        # (Ubisoft's play time is also on this PC, signed in or not.)
+        if (p.get("playtimeFrom") or g["launcher"] in ("gog", "battlenet")) and (
+                g["launcher"] not in SIGN_INS or g["launcher"] == "ubisoft" or g["launcher"] in signed_in):
             # launcher play time comes from enrich()
             if not g.get("playtimeMinutes") and p.get("playtimeMinutes"):
                 g["playtimeMinutes"], g["playtimeFrom"] = p["playtimeMinutes"], p.get("playtimeFrom")

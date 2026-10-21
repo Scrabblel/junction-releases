@@ -1789,7 +1789,7 @@ const host = {
   // On/off settings (tray, start with Windows, setup done), and the problem report.
   async removeAccount(steamId) { return this.inApp ? window.pywebview.api.remove_steam_account(steamId) : null; },
   async setEarlierPlaytime(id, hours) { return this.inApp ? window.pywebview.api.set_earlier_playtime(id, hours) : null; },
-  // Launcher sign-ins (Epic, EA) for their play time: the sign-in happens on the store's own page, in a window of its own.
+  // Launcher sign-ins (Epic, EA, Ubisoft) for their play time: the sign-in happens on the store's own page, in a window of its own.
   async signIn(store) { return this.inApp ? window.pywebview.api.sign_in(store) : { error: 'Only the Junction app can sign in.' }; },
   async signOut(store) { return this.inApp ? window.pywebview.api.sign_out(store) : null; },
   async restoreAccount(steamId) { return this.inApp ? window.pywebview.api.restore_steam_account(steamId) : null; },
@@ -3408,17 +3408,19 @@ function redrawBrowseKeeping() {
 function browseResults() {
   const b = state.browse;
   const q = b.q.trim().toLowerCase(), words = searchWords(q), live = liveFound.get(liveKey());
-  // A search looks through everything in the snapshot, owned games included, so you see "Owned".
+  // A search looks through everything in the snapshot (and what every store gave). Games you own follow
+  // "Show games I own" there too; how many it hid is counted, so the page can offer them.
   const pool = q ? Object.values(store.games) : catalogGames();
+  let ownedHidden = 0;
   const list = pool.filter(sg => {
     const d = bestDeal(sg);
     if (!d) return false;
     if (q && words.length && !searchMatch(sg, words, live)) return false;
     if (q && !words.length && !sg.title.toLowerCase().includes(q)) return false;
-    if (!q && hideOwned(sg)) return false;
     if (b.genres.size && ![...b.genres].every(t => (sg.tags || []).includes(t))) return false;
     if (b.maxPrice !== '' && d.price > Number(b.maxPrice)) return false;
     if (b.onSale && !(d.cut > 0)) return false;
+    if (hideOwned(sg)) { ownedHidden++; return false; }
     return true;
   });
   const by = {
@@ -3428,7 +3430,9 @@ function browseResults() {
     cut: (x, y) => bestDeal(y).cut - bestDeal(x).cut,
     score: (x, y) => ((y.scoreCount || 0) >= 500 ? y.score || 0 : 0) - ((x.scoreCount || 0) >= 500 ? x.score || 0 : 0),
   };
-  return list.sort((x, y) => by[b.sort](x, y) || by.rank(x, y));
+  const out = list.sort((x, y) => by[b.sort](x, y) || by.rank(x, y));
+  out.ownedHidden = b.q.trim() ? ownedHidden : 0;
+  return out;
 }
 
 function renderBrowse() {
@@ -3487,10 +3491,11 @@ function renderBrowse() {
               </select>
             </label>
           </div>
-          ${active.length ? `<div class="filters">${active.map(([k, label]) => `<button class="line-chip active-chip" data-unfilter="${esc(k)}" aria-label="Remove filter ${esc(label)}">${esc(label)} <span aria-hidden="true">×</span></button>`).join('')}</div>` : ''}
+          ${active.length ? `<div class="filters">${active.map(([k, label]) => `<button class="line-chip active-chip" data-unfilter="${esc(k)}" aria-label="Remove filter ${esc(label)}">${esc(label)} <span aria-hidden="true">×</span></button>`).join('')}${results.ownedHidden && results.length ? `<button class="line-chip" id="show-owned-hits" title="Games you own are hidden">+ ${results.ownedHidden} you own</button>` : ''}</div>` : ''}
           </div>
           ${results.length ? `<div class="deal-grid">${results.slice(0, b.limit).map(dealCard).join('')}</div>`
             : liveNote() === 'Searching every store…' ? `<div class="deal-grid" aria-busy="true">${'<div class="sk sk-card"></div>'.repeat(4)}</div>`
+            : results.ownedHidden ? emptyState(ICON.search, results.ownedHidden === 1 ? 'You already own the game that matches' : `You already own the ${results.ownedHidden} games that match`, 'Games you own are hidden. Show them to compare prices or editions.', '<button class="pill" id="show-owned-hits">Show games I own</button>')
             : active.length === 1 && b.q.trim() && host.inApp ? emptyState(ICON.search, `No store sells “${b.q.trim()}”`, 'Junction looked in its Store and at every store it compares. Check the spelling, or try fewer words.', '')
             : emptyState(ICON.search, 'No games match these filters', 'Try fewer genres, a higher price limit, or another search.', '<button class="pill" id="clear-filters">Clear filters</button>')}
           ${results.length > b.limit ? `<button class="btn more" id="more-browse">Show more games</button>` : ''}
@@ -4122,7 +4127,7 @@ async function profileMenu(page = 'main') {
       { icon: ICON.person, label: 'Steam accounts', value: info ? `${nKeys} of ${info.accounts.length} with a key` : '', run: () => (closeMenu(), keysDialog('steam')) },
       { icon: ICON.tag, label: 'Prices (IsThereAnyDeal)', value: !info ? '' : info.prices ? 'Your own key' : info.pricesBuiltIn ? 'Built in' : 'Not set', run: () => (closeMenu(), keysDialog('prices')) },
       { icon: ICON.image, label: 'Cover art (SteamGridDB)', value: info ? keyVal(info.art) : '', run: () => (closeMenu(), keysDialog('art')) },
-      ...(info ? [{ label: 'Play time from launchers', heading: true }, signInRow(info, 'epic', 'Epic Games'), signInRow(info, 'ea', 'EA app')] : []),
+      ...(info ? [{ label: 'Play time from launchers', heading: true }, signInRow(info, 'epic', 'Epic Games'), signInRow(info, 'ea', 'EA app'), signInRow(info, 'ubisoft', 'Ubisoft Connect')] : []),
     ] },
     prefs: { title: 'Preferences', items: [
       // Layout and Style show once there's more than one to choose from.
@@ -4746,7 +4751,7 @@ function renderStats() {
       <div class="st-inner">
         <div class="st-head">
           <h1>Stats</h1>
-          <p class="note">${host.inApp ? 'Play time from Steam, GOG Galaxy, Ubisoft Connect and (when you sign in) Epic and EA, plus what Junction times itself.'
+          <p class="note">${host.inApp ? 'Play time from Steam, GOG Galaxy, Ubisoft Connect and (when you sign in) Epic and EA, plus what Junction times itself. Sign in to Ubisoft to keep its numbers up to date.'
             : 'Steam and GOG Galaxy share play time. The desktop app also reads the other launchers.'}</p>
         </div>
         <div class="kpis">
@@ -5272,6 +5277,7 @@ document.addEventListener('click', e => {
   if (t.dataset.browse) return presetBrowse(t.dataset.browse);
   if (t.id === 'more-browse') { state.browse.limit += 60; return renderBrowse(); }
   if (t.id === 'clear-filters') { state.shops.clear(); return presetBrowse(''); }
+  if (t.id === 'show-owned-hits') { prefs.showOwned = true; savePrefs(); renderBrowse(); return $('#show-owned')?.focus({ preventScroll: true }); }
   if (t.id === 'wish' && state.view.name === 'price') {
     const id = state.view.id;
     setWished(id, !isWished(id));
@@ -5638,11 +5644,11 @@ window.junctionUpdate = info => {
     toast(`Junction ${rel.version} is out. Open the menu under your picture to update.`);
   }
 };
-// ---------- launcher sign-ins that ran out (Epic, EA) ----------
+// ---------- launcher sign-ins that ran out (Epic, EA, Ubisoft) ----------
 // Told the same way as an update: a dot on your picture, one toast each time a sign-in runs out, and
 // "Sign in to … again" at the top of the menu. The app says which have run out with every library it sends.
 // Only for a launcher whose own app is on this PC: without it, there's nothing of theirs to keep up to date.
-const SIGN_IN_NAMES = { epic: 'Epic Games', ea: 'EA app' };
+const SIGN_IN_NAMES = { epic: 'Epic Games', ea: 'EA app', ubisoft: 'Ubisoft Connect' };
 const expiredSignIns = () => Object.keys(lib.signins || {})
   .filter(k => lib.signins[k].expired && SIGN_IN_NAMES[k] && (lib.clientsOnPc || []).includes(k));
 function checkSignIns() {
