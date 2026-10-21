@@ -19,7 +19,7 @@ import time
 import zlib
 
 APP_NAME = "Junction"
-VERSION = "0.9.13"
+VERSION = "0.9.14"
 HOME = os.environ.get("JUNCTION_HOME")
 SETTINGS_DIR = HOME or os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), APP_NAME)
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
