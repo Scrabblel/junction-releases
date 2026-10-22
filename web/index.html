@@ -25,6 +25,7 @@
   --install-deep: #b7cde8;
   --on-install: #0a0d12;
   --good: #3ddc84;
+  --danger: #ff5d55;
   --cut-bg: #1f4a2e;
   --cut-ink: #7cf0a8;
 
@@ -63,7 +64,7 @@
   --ground: #eef1f5; --panel: #ffffff; --raised: #f4f6f9; --raised-2: #e4e8ee; --rule: #d5dbe3;
   --ink: #12161d; --ink-dim: #4b5563; --ink-faint: #7b8593;
   --signal: #b06f00; --go: #12161d; --go-deep: #2a313c; --on-go: #ffffff;
-  --install: #1d4f8f; --install-deep: #173f73; --on-install: #ffffff; --good: #138a4a;
+  --install: #1d4f8f; --install-deep: #173f73; --on-install: #ffffff; --good: #138a4a; --danger: #d0342c;
   --cut-bg: #d6f0dd; --cut-ink: #165c33;
   --line-steam: #2a78bd; --line-epic: #59626e; --line-gog: #8547dc; --line-ubisoft: #0d8c8f;
   --line-ea: #e0453d; --line-battlenet: #4f5ee8; --line-rockstar: #c45a10; --line-xbox: #4a8a10; --line-manual: #c25bb5;
@@ -76,7 +77,7 @@
     --ground: #eef1f5; --panel: #ffffff; --raised: #f4f6f9; --raised-2: #e4e8ee; --rule: #d5dbe3;
     --ink: #12161d; --ink-dim: #4b5563; --ink-faint: #7b8593;
     --signal: #b06f00; --go: #12161d; --go-deep: #2a313c; --on-go: #ffffff;
-    --install: #1d4f8f; --install-deep: #173f73; --on-install: #ffffff; --good: #138a4a;
+    --install: #1d4f8f; --install-deep: #173f73; --on-install: #ffffff; --good: #138a4a; --danger: #d0342c;
     --cut-bg: #d6f0dd; --cut-ink: #165c33;
     --line-steam: #2a78bd; --line-epic: #59626e; --line-gog: #8547dc; --line-ubisoft: #0d8c8f;
     --line-ea: #e0453d; --line-battlenet: #4f5ee8; --line-rockstar: #c45a10; --line-xbox: #4a8a10; --line-manual: #c25bb5;
@@ -1783,6 +1784,52 @@ html[data-style="sharp"] h2 { font-weight: 600; }
 html[data-style="sharp"] .has-ind > .ind { background: var(--signal); }
 html[data-style="sharp"] :is(.nav.has-ind button[aria-current="page"], .gp-tabs.has-ind button[aria-selected="true"], .lhead .seg.has-ind button[aria-pressed="true"]) { color: var(--on-go); }
 html[data-style="sharp"] .pill.primary { background: var(--go); color: var(--on-go); }
+/* Uninstall and Stop are red: they remove or end something. */
+.ctx button.danger, .pill#uninstall, .link-btn#uninstall { color: var(--danger); }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+.btn.danger:hover { filter: brightness(1.08); background: var(--danger); }
+/* A game Junction started: Starting…, then Playing (press it to switch to the game), with a cross that closes it.
+   Pointing at the cross turns the whole button red and it says Stop. */
+.run-group { display: inline-flex; align-items: stretch; gap: 2px; vertical-align: middle; }
+html .run-group > .pill.running { background: var(--good); color: #052414; border-color: var(--good); border-top-right-radius: calc(4px * var(--round)); border-bottom-right-radius: calc(4px * var(--round)); }
+html .run-group > .pill.stop-x { display: grid; place-items: center; padding: 0 14px; min-width: 0; background: var(--good); color: #052414; border-color: var(--good);
+  border-top-left-radius: calc(4px * var(--round)); border-bottom-left-radius: calc(4px * var(--round)); }
+.pill.stop-x svg { width: 16px; height: 16px; }
+html .run-group:has(.stop-x:hover) > .pill, html .run-group:has(.stop-x:focus-visible) > .pill { background: var(--danger); border-color: var(--danger); color: #fff; }
+.pill.running .lbl-stop, .run-group:has(.stop-x:hover) .pill.running .lbl, .run-group:has(.stop-x:focus-visible) .pill.running .lbl { display: none; }
+.run-group:has(.stop-x:hover) .pill.running .lbl-stop, .run-group:has(.stop-x:focus-visible) .pill.running .lbl-stop { display: inline; }
+.pill.running .run-dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; animation: pulse 1.6s ease-in-out infinite; }
+.run-group:has(.stop-x:hover) .run-dot, .run-group:has(.stop-x:focus-visible) .run-dot { animation: none; }
+.run-group.stopping { opacity: .7; pointer-events: none; }
+html[data-style="sharp"] .run-group > .pill { clip-path: none; }
+@media (prefers-reduced-motion: reduce) { .pill.running .run-dot { animation: none; } }
+/* The controller's keyboard: A on a search box opens it at the bottom of the screen, above the button hints. */
+.vkb { position: fixed; z-index: 60; left: 50%; bottom: calc(62px + env(safe-area-inset-bottom, 0px)); translate: -50% 0; width: min(860px, calc(100vw - 32px));
+  display: grid; gap: 7px; padding: 14px; border-radius: calc(16px * var(--round)); background: var(--panel); border: 1px solid var(--rule); box-shadow: 0 30px 70px -24px rgb(0 0 0 / .8); }
+.vkb-text { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 14px; margin-bottom: 4px; border-radius: calc(10px * var(--round)); background: var(--raised);
+  font-size: 17px; color: var(--ink); overflow: hidden; white-space: nowrap; }
+.vkb-text i { font-style: normal; color: var(--ink-faint); font-size: 13px; flex: none; }
+.vkb-text span { overflow: hidden; text-overflow: ellipsis; }
+.vkb-text b { font-weight: 400; color: var(--ink-faint); }
+.vkb-text::after { content: ""; flex: none; width: 2px; height: 22px; margin-left: -8px; background: var(--signal); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.vkb-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.vkb button { height: 46px; padding: 0; border-radius: calc(8px * var(--round)); border: 1px solid var(--rule); background: var(--raised); color: var(--ink);
+  font: 600 18px/1 var(--font-body); display: grid; place-items: center; }
+.vkb button.vk-wide { grid-column: span 2; font-size: 14px; }
+.vkb button.space { grid-column: span 5; }
+.vkb button:hover { background: var(--raised-2); }
+.vkb button:focus-visible { outline: 3px solid var(--signal); outline-offset: 1px; background: var(--raised-2); }
+.vkb button.on { background: var(--signal); border-color: var(--signal); color: #1a1205; }
+.vkb button.done { background: var(--go); border-color: var(--go); color: var(--on-go); }
+.vkb-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 4px; font-size: 12.5px; color: var(--ink-dim); }
+.vkb-foot kbd { margin-right: 6px; }
+body:has(#vkb) .pad-hints { display: none; }
+html[data-style="glass"] .vkb { background: rgb(16 21 30 / .94); backdrop-filter: blur(24px) saturate(1.3); }
+html[data-style="glass"][data-theme="light"] .vkb { background: rgb(255 255 255 / .94); }
+@media (prefers-reduced-motion: reduce) { .vkb-text::after { animation: none; } }
+/* With a controller, the search palette's first result is only chosen once you move down into the results. */
+html.pad-input .palette:not(.moved) .pal-item[aria-selected="true"]:not(:hover) { background: none; }
 </style>
 
 <div class="app" id="app">
@@ -1878,6 +1925,18 @@ const host = {
   },
   async install(game, steamId) {
     if (this.inApp) return window.pywebview.api.install(game.id, steamId || null, game.launcher === 'manual' ? game.launch : null);
+    return { prototype: true };
+  },
+  async running() {
+    if (this.inApp) return window.pywebview.api.get_running();
+    return {};
+  },
+  async focusGame(id) {
+    if (this.inApp) return window.pywebview.api.focus_game(id);
+    return { prototype: true };
+  },
+  async stopGame(id) {
+    if (this.inApp) return window.pywebview.api.stop_game(id);
     return { prototype: true };
   },
   async openFolder(game) {
@@ -2002,7 +2061,7 @@ let lib = { games: [], launchers: {} };
 let prefs = loadPrefs();
 const state = { view: { name: 'home' }, query: '', lines: new Set(), accounts: new Set(), showHidden: false,
                 genre: '', collection: '', showAll: false, copy: {},
-                special: '', sort: prefs.libSort || 'name', focus: null, returnTo: 'home', scroll: {}, backFocus: {}, opened: {}, achSid: {}, achFilter: 'all', achAll: false,
+                special: '', sort: prefs.libSort || 'name', focus: null, returnTo: 'home', scroll: {}, backFocus: {}, running: {}, opened: {}, achSid: {}, achFilter: 'all', achAll: false,
                 shops: new Set(),
                 browse: { q: '', genres: new Set(), maxPrice: '', onSale: false, sort: 'rank', limit: 60 } };
 let store = null;  // price data, loaded the first time the Store or Wishlist opens
@@ -2842,7 +2901,16 @@ function moveFocus(dir) {
     return requestAnimationFrame(() => moveFocus('down'));
   }
   if (h && dir === 'up' && best && best.closest('#focus') && !h.classList.contains('intro')) collapseIntro();
-  if (best) { best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+  if (best) { best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); if (dir === 'up') clearOfBar(best); }
+}
+// The top bar floats over Home, the Store and game pages, and moving up brings it back: scroll a little further, so
+// what's chosen (a whole banner, not half of it) shows below the bar.
+function clearOfBar(el) {
+  const bar = $('.topbar');
+  if (!bar || el.closest('.topbar')) return;
+  const head = el.closest('.hrow')?.querySelector('h2');  // the row's title too, when it has one
+  const room = bar.offsetHeight + 10, top = Math.min(el.getBoundingClientRect().top, head ? head.getBoundingClientRect().top : Infinity);
+  if (top < room) $('#main').scrollTop -= room - top;
 }
 // Classic: the list and the game next to it are two columns. Up and down go through the list (search, filters,
 // games); right goes over to the game's Play button and left comes back to the game you chose.
@@ -2899,7 +2967,7 @@ function pollPads() {
 }
 // A menu, dialog, search box or picture viewer in front takes the controller's input.
 // (A toast lives in #layer too, but it's only a message: it never takes the controller.)
-const padBox = () => document.getElementById('ctx') || document.querySelector('#layer > :not(.toast)') || document.querySelector('#main .pop.open .pop-panel');
+const padBox = () => document.getElementById('vkb') || document.getElementById('ctx') || document.querySelector('#layer > :not(.toast)') || document.querySelector('#main .pop.open .pop-panel');
 const ARROWS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
 function padKey(key) {
   const ev = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
@@ -2940,6 +3008,7 @@ function moveWithin(box, dir) {
 })();
 function padPress(k) {
   document.documentElement.classList.add('pad-input');
+  if ($('#vkb')) return keyboardPad(k);
   // Back in the window after Alt+Tab with nothing selected: the first press shows where you were.
   const a = document.activeElement;
   if ((!a || a === document.body || a === $('#main')) && !padBox()) {
@@ -2955,14 +3024,24 @@ function padPress(k) {
   if ($('#layer .lightbox') && (k === 'left' || k === 'right')) return stepLightbox(k === 'left' ? -1 : 1);
   // Behind a dialog, the palette or a menu, the page's own buttons (tabs, rows, search, the X menu) wait.
   if (box && ['lb', 'rb', 'lt', 'rt', 'y', 'x'].includes(k)) return;
+  // The search palette: down moves from the box into the results, up from the first result back to the box.
+  if (ARROWS[k] && document.activeElement?.id === 'pal-q' && (k === 'up' || k === 'down')) {
+    const p = state.pal, pal = $('.palette');
+    if (!p.moved) { if (k === 'down' && p.items.length) { p.moved = true; pal.classList.add('moved'); } return; }
+    if (k === 'up' && p.index === 0) { p.moved = false; pal.classList.remove('moved'); return; }
+  }
   if (box && ARROWS[k]) {
     if (!box.contains(document.activeElement) || box.matches('.pop-panel')) return moveWithin(box, k);
     return padKey(ARROWS[k]) || moveWithin(box, k);
   }
   if (k === 'a') {
     const el = document.activeElement;
-    // In a text box (search), A picks the highlighted result.
-    if (el?.matches?.('input:not([type="checkbox"]):not([type="radio"]), textarea')) return padKey('Enter');
+    // On a text box, A opens the keyboard. (In the search palette, once you've moved down into the results, A opens
+    // the chosen one.)
+    if (el?.matches?.('input:not([type="checkbox"]):not([type="radio"]), textarea')) {
+      if (el.id && !el.readOnly && el.type !== 'password' && !(el.id === 'pal-q' && state.pal?.moved)) return openKeyboard(el);
+      return padKey('Enter');
+    }
     // A drop-down list opens as a menu the controller can move through.
     if (el?.matches?.('select')) return selectMenu(el);
     // Most buttons here draw the page again; stay on the same button afterwards.
@@ -3446,6 +3525,8 @@ function friendStatus(f) {
 
 // PLAY / INSTALL: straight away when there's one way (or a remembered one), otherwise ask which.
 function startGame(t) {
+  const run = runningCopy(t);
+  if (run?.[1] === 'playing') return focusGame(run[0].id);
   const options = playOptions(t), saved = savedOption(t);
   if (options.length === 1 || saved) return runOption(saved || options[0]);
   state.pendingOptions = { title: t, options };
@@ -4378,7 +4459,7 @@ const refocus = () => setTimeout(() => {
   const el = pageFocus?.isConnected ? pageFocus : findByKey(pageFocusKey);
   el?.focus({ preventScroll: true });
 }, 0);
-const closeLayer = () => { $('#layer').innerHTML = ''; state.lb = null; refocus(); };
+const closeLayer = () => { $('#layer').innerHTML = ''; state.lb = null; if (!vkbTarget()) closeKeyboard(); refocus(); };
 
 // ---------- right-click menu ----------
 function closeMenu() { const m = document.getElementById('ctx'); if (m) { m.remove(); (m.back || refocus)(); } }
@@ -4394,7 +4475,7 @@ function contextMenu(t, x, y) {
     ['Change cover…', () => coverDialog(t)],
     ...(host.inApp && earlierCopy(t) ? [[earlierCopy(t).playtimeEarlier ? 'Change earlier play time…' : 'Add earlier play time…', () => earlierDialog(t)]] : []),
     [isHidden(t) ? 'Show in library' : 'Hide', () => toggleHide(t)],
-    ...(uninstallable(t).length ? [['Uninstall…', () => uninstallDialog(t)]] : []),
+    ...(uninstallable(t).length ? [['Uninstall…', () => uninstallDialog(t), 'danger']] : []),
   ];
   const menu = document.createElement('div');
   menu.id = 'ctx';
@@ -5064,6 +5145,7 @@ function paletteResults() {
     items.push({ group: 'Actions', label, sub: '', run });
   }
   state.pal = { items, index: 0 };
+  $('.palette')?.classList.remove('moved');
   let html = '', last = '';
   items.forEach((it, i) => {
     if (it.group !== last) { html += `<div class="pal-group">${esc(it.group)}</div>`; last = it.group; }
@@ -5403,7 +5485,7 @@ function uninstallDialog(t) {
         <p class="hint">Your play time, achievements and favourites stay in Junction.</p>
         <div class="row-btns">
           <button type="button" class="btn" id="un-cancel">Cancel</button>
-          ${copies.length > 1 ? '' : `<button type="button" class="btn primary" data-un="0">${opener[copies[0].launcher] ? `Open ${esc(lib.launchers[copies[0].launcher])}` : 'Uninstall'}</button>`}
+          ${copies.length > 1 ? '' : `<button type="button" class="btn ${opener[copies[0].launcher] ? 'primary' : 'danger'}" data-un="0">${opener[copies[0].launcher] ? `Open ${esc(lib.launchers[copies[0].launcher])}` : 'Uninstall'}</button>`}
         </div>
       </div>
     </div>`;
@@ -5514,14 +5596,10 @@ function toggle(list, id, on) {
 const switchNeeded = steamId => steamId && lib.steamSignedIn && steamId !== lib.steamSignedIn ? steamId : null;
 function launchingFeedback(g) {
   const t = titleOf.get(g.id) || g;
-  const els = [$('#play'), ...document.querySelectorAll(`#focus [data-quick="${CSS.escape(t.id)}"]`)].filter(Boolean);
-  for (const el of els) {
-    if (el.classList.contains('launching')) continue;
-    const html = el.innerHTML;
-    el.classList.add('launching');
-    el.innerHTML = `${ICON.play}<span>Launching…</span>`;
-    setTimeout(() => { if (el.isConnected) { el.classList.remove('launching'); el.innerHTML = html; } }, 2400);
-  }
+  // The Play buttons say Starting… (markRunning), until the app sees the game running or gives up.
+  state.running[g.id] ||= { state: 'starting', since: Date.now() / 1000 };
+  markRunning();
+  setTimeout(markRunning, STARTING_FOR * 1000 + 50);
   document.querySelectorAll(`#main [data-focus="${CSS.escape(t.id)}"] .play-hint, #main [data-focus="${CSS.escape(t.id)}"] .lplay`).forEach(el => {
     el.classList.add('launching');
     setTimeout(() => el.classList.remove('launching'), 2400);
@@ -5531,6 +5609,8 @@ async function play(g, steamId) {
   launchingFeedback(g);
   const res = await host.play(g, steamId);
   const switchTo = switchNeeded(steamId);
+  // Not started (an error, or the preview without the app): back to Play.
+  if (!res || res.error || res.prototype) setTimeout(() => { delete state.running[g.id]; markRunning(); }, res?.prototype ? 2400 : 0);
   if (res && res.prototype) toast(switchTo
     ? `Preview only: the app restarts Steam on ${accountName(switchTo)} (about 15 seconds), then starts ${g.name}.`
     : `Preview only: the app starts ${g.name} through ${LAUNCH_VIA[g.launcher]}.`, g.launcher);
@@ -5576,8 +5656,186 @@ function addGameDialog() {
   };
 }
 
+// ---------- a keyboard for the controller ----------
+// A on a search box opens it. A types the chosen key, X deletes, Y types a space, B or ☰ closes it again. The box
+// it types into can be drawn anew while you type (the Store and Library searches do): it follows the box by its
+// id, or the box that takes the cursor next (the Store's search moves to Browse all's).
+const VKB_ROWS = ['1234567890', 'qwertyuiop', "asdfghjkl'", 'zxcvbnm-.:'];
+function openKeyboard(input) {
+  closeKeyboard();
+  const kb = document.createElement('div');
+  kb.id = 'vkb';
+  kb.className = 'vkb';
+  kb.setAttribute('role', 'dialog');
+  kb.setAttribute('aria-label', 'Keyboard');
+  kb.dataset.for = input.id;
+  const k = (key, label = key, cls = '') => `<button type="button" class="${cls}" data-vk="${esc(key)}" aria-label="${esc(label)}">${esc(label)}</button>`;
+  kb.innerHTML = `<div class="vkb-text" aria-hidden="true"></div>
+    ${VKB_ROWS.map(r => `<div class="vkb-row">${[...r].map(c => k(c)).join('')}</div>`).join('')}
+    <div class="vkb-row">${k('shift', 'Shift', 'vk-wide')}${k(' ', 'Space', 'space')}${k('back', 'Delete', 'vk-wide')}${k('done', 'Done', 'vk-wide done')}</div>
+    <div class="vkb-foot"><span><kbd class="pad">A</kbd>Type</span><span><kbd class="pad">X</kbd>Delete</span><span><kbd class="pad">Y</kbd>Space</span><span><kbd class="pad">B</kbd>Close</span></div>`;
+  document.body.append(kb);
+  kb.addEventListener('click', e => {
+    const b = e.target.closest('[data-vk]');
+    if (!b) return;
+    kb.last = b;
+    const key = b.dataset.vk;
+    if (key === 'done') return closeKeyboard(true);
+    if (key === 'shift') { b.classList.toggle('on'); return kb.querySelectorAll('[data-vk]').forEach(x => { if (x.dataset.vk.length === 1 && /[a-z]/.test(x.dataset.vk)) x.textContent = b.classList.contains('on') ? x.dataset.vk.toUpperCase() : x.dataset.vk; }); }
+    vkbType(key === 'back' ? '\b' : kb.querySelector('[data-vk="shift"]').classList.contains('on') ? key.toUpperCase() : key);
+    b.focus({ preventScroll: true });
+  });
+  vkbShow();
+  kb.querySelector('[data-vk="q"]').focus({ preventScroll: true });
+}
+const vkbTarget = () => { const kb = $('#vkb'); return kb && document.getElementById(kb.dataset.for); };
+function vkbShow() {
+  const kb = $('#vkb'), el = vkbTarget();
+  if (!kb) return;
+  const label = el?.getAttribute('aria-label') || el?.placeholder || 'Type';
+  kb.querySelector('.vkb-text').innerHTML = el?.value ? `<span>${esc(el.value)}</span>` : `<b>${esc(label)}</b>`;
+}
+// Types `ch` where the box's cursor is ('\b' deletes the letter before it), as if typed on a real keyboard.
+function vkbType(ch) {
+  const el = vkbTarget();
+  if (!el) return closeKeyboard();
+  const end = el.value.length, a = el.selectionStart ?? end, b = el.selectionEnd ?? a;
+  if (ch === '\b') { if (a !== b) el.setRangeText('', a, b, 'end'); else if (a > 0) el.setRangeText('', a - 1, a, 'end'); else return; }
+  else el.setRangeText(ch, a, b, 'end');
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  vkbShow();
+}
+function closeKeyboard(back) {
+  const kb = $('#vkb');
+  if (!kb) return;
+  const el = vkbTarget();
+  kb.remove();
+  if (back && el) { el.focus({ preventScroll: true }); el.setSelectionRange?.(el.value.length, el.value.length); }
+}
+function keyboardPad(k) {
+  const kb = $('#vkb'), inside = kb.contains(document.activeElement);
+  if (ARROWS[k]) return inside ? moveWithin(kb, k) : (kb.last || kb.querySelector('button')).focus({ preventScroll: true });
+  if (k === 'a') return inside ? document.activeElement.click() : (kb.last || kb.querySelector('button')).focus({ preventScroll: true });
+  if (k === 'b' || k === 'menu') return closeKeyboard(true);
+  if (k === 'x') return vkbType('\b');
+  if (k === 'y') return vkbType(' ');
+}
+// A search box drawn anew takes the cursor: keep typing into it, and stay on the key you were on.
+document.addEventListener('focusin', e => {
+  const kb = $('#vkb');
+  if (!kb || kb.contains(e.target)) return;
+  if (e.target.matches?.('input[id]')) kb.dataset.for = e.target.id;
+  vkbShow();
+  setTimeout(() => { if (kb.isConnected && !kb.contains(document.activeElement)) (kb.last || kb.querySelector('[data-vk="q"]')).focus({ preventScroll: true }); }, 0);
+});
+// Keys on a real keyboard while the controller's keyboard is open: arrows move over it, Escape closes it.
+document.addEventListener('keydown', e => {
+  const kb = $('#vkb');
+  if (!kb || !kb.contains(e.target)) return;
+  const dir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key];
+  if (dir) { e.preventDefault(); e.stopPropagation(); return moveWithin(kb, dir); }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return closeKeyboard(true); }
+  if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();  // the key's own click types it
+}, true);
+// Using the mouse somewhere else puts the keyboard away.
+addEventListener('pointerdown', e => { if (e.isTrusted && !e.target.closest?.('#vkb')) closeKeyboard(); }, true);
+
+// ---------- a game you started: "Playing" until it closes ----------
+// The app tells the page which of the games it started are starting or running (junctionRunning). Their Play
+// buttons say Starting… and then Playing: pressing it switches to the game, and a cross beside it closes the game.
+const STARTING_FOR = 60;  // seconds the button says Starting… (the app keeps watching for longer, for slow launchers)
+function runningCopy(t) {
+  const now = Date.now() / 1000;
+  let starting = null;
+  for (const c of t?.copies || (t ? [t] : [])) {
+    const r = state.running[c.id];
+    if (r?.state === 'playing') return [c, 'playing'];
+    if (r && now - r.since < STARTING_FOR) starting ||= [c, 'starting'];
+  }
+  return starting;
+}
+// Every Play button on screen shows its game's state. Run again after anything is drawn (an observer does that).
+function markRunning() {
+  for (const el of document.querySelectorAll('#play, button.pill[data-quick]')) {
+    const t = el.id === 'play' ? shownGame() : findGame(el.dataset.quick);
+    const run = t && runningCopy(t), want = run ? `${run[1]}:${run[0].id}` : '';
+    if ((el.dataset.run || '') === want) continue;
+    if (!('orig' in el.dataset)) el.dataset.orig = el.innerHTML;
+    const group = el.parentElement?.matches('.run-group') ? el.parentElement : null;
+    el.classList.toggle('running', run?.[1] === 'playing');
+    el.classList.toggle('launching', run?.[1] === 'starting');
+    if (!run) {
+      el.innerHTML = el.dataset.orig;
+      el.removeAttribute('aria-label');
+      delete el.dataset.orig; delete el.dataset.run;
+      if (group) { const had = document.activeElement === group.querySelector('.stop-x'); group.replaceWith(el); if (had) el.focus({ preventScroll: true }); }
+      continue;
+    }
+    el.dataset.run = want;
+    if (run[1] === 'starting') {
+      el.innerHTML = `${ICON.play}<span>Starting…</span>`;
+      if (group) group.replaceWith(el);
+      continue;
+    }
+    el.innerHTML = '<span class="run-dot" aria-hidden="true"></span><span class="lbl">Playing</span><span class="lbl-stop">Stop</span>';
+    el.setAttribute('aria-label', `Playing ${t.name}. Switch to the game`);
+    if (!group) {
+      const had = el === document.activeElement, g = document.createElement('span');
+      g.className = 'run-group';
+      el.replaceWith(g);
+      g.append(el);
+      g.insertAdjacentHTML('beforeend', `<button class="pill stop-x" data-stop="${esc(run[0].id)}" aria-label="Stop ${esc(t.name)}" title="Stop">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>`);
+      if (had) el.focus({ preventScroll: true });
+    } else group.querySelector('.stop-x').dataset.stop = run[0].id;
+  }
+}
+window.junctionRunning = m => { state.running = m || {}; markRunning(); };
+new MutationObserver(() => {
+  if (markRunning.queued || (!Object.keys(state.running).length && !document.querySelector('[data-run]'))) return;
+  markRunning.queued = requestAnimationFrame(() => { markRunning.queued = 0; markRunning(); });
+}).observe(document.getElementById('app'), { childList: true, subtree: true });
+async function focusGame(id) {
+  const res = await host.focusGame(id).catch(() => null);
+  const t = findGame(id);
+  if (res?.prototype) return toast(`Preview only: the app switches to ${t?.name || 'the game'}.`);
+  if (!res?.ok) toast(res?.error || 'Junction couldn’t switch to the game.');
+}
+// Asks first (Cancel is the default): closing a game loses what isn't saved in it.
+function stopDialog(id) {
+  const t = findGame(id), c = t?.copies?.find(x => x.id === id) || t;
+  if (!t) return;
+  $('#layer').innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="dialog uninstall" role="dialog" aria-modal="true" aria-labelledby="stop-title">
+        <h2 id="stop-title">Stop ${esc(t.name)}?</h2>
+        <p class="hint">Junction closes the game. Anything you haven’t saved in it is lost.</p>
+        <div class="row-btns">
+          <button type="button" class="btn" id="stop-cancel">Cancel</button>
+          <button type="button" class="btn danger" id="stop-yes">Stop game</button>
+        </div>
+      </div>
+    </div>`;
+  $('#stop-cancel').focus();
+  $('#stop-cancel').onclick = () => closeLayer();
+  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  $('#stop-yes').onclick = async () => {
+    closeLayer();
+    document.querySelectorAll(`[data-stop="${CSS.escape(id)}"]`).forEach(x => x.closest('.run-group')?.classList.add('stopping'));
+    const res = await host.stopGame(id).catch(() => null);
+    document.querySelectorAll('.run-group.stopping').forEach(x => x.classList.remove('stopping'));
+    if (res?.prototype) return toast(`Preview only: the app closes ${t.name}.`, c.launcher);
+    if (!res?.ok) return toast(res?.error || `Junction couldn’t stop ${t.name}.`, c.launcher);
+    toast(res.how === 'ended' ? `${t.name} didn’t close by itself, so Junction ended it.` : `Closed ${t.name}.`, c.launcher);
+  };
+}
+
 // ---------- events ----------
 document.addEventListener('click', e => {
+  const stop = e.target.closest('[data-stop]');
+  if (stop) { e.preventDefault(); return stopDialog(stop.dataset.stop); }
+  const running = e.target.closest('.pill.running');
+  if (running) { e.preventDefault(); return focusGame(running.dataset.run.split(':').slice(1).join(':')); }
   const quick = e.target.closest('[data-quick]');
   if (quick) {
     e.preventDefault();
@@ -5852,8 +6110,8 @@ function onPoint(e) {
 document.addEventListener('mouseover', onPoint);
 document.addEventListener('focusin', onPoint);
 document.addEventListener('contextmenu', e => {
-  const el = e.target.closest('[data-open]');
-  const t = el && findGame(el.dataset.open);
+  const el = e.target.closest('[data-open], [data-cl-pick]');  // a cover or row, or a game in Classic's list
+  const t = el && findGame(el.dataset.open || el.dataset.clPick);
   if (!t) return;
   e.preventDefault();
   contextMenu(t, e.clientX, e.clientY);
@@ -6250,6 +6508,7 @@ $('#win-ctl').addEventListener('click', e => {
     <span class="ei">${ICON.download}</span><b>Finding your games</b><p id="scan-progress">Starting…</p>
     <p>The first scan takes a minute or two; after that Junction opens straight away.</p></div></div>`;
   await host.ready();
+  host.running().then(m => window.junctionRunning(m)).catch(() => {});
   ownTitleBar();
   syncBigScreen();
   host.updateInfo().then(i => i && junctionUpdate(i)).catch(() => {});

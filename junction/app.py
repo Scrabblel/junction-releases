@@ -22,7 +22,7 @@ import webbrowser
 
 import webview
 
-from . import (config, ea_account, epic_account, keys, launchers, library, live_store, logs, pad, playtime, signins,
+from . import (config, ea_account, epic_account, keys, launchers, library, live_store, logs, pad, playtime, running, signins,
                startup, steam_switch, titlebar, ubisoft_account, updates)
 
 LIB_VERSION = 1          # bump when the cached library's shape changes
@@ -116,6 +116,7 @@ class Api:
         self._quitting = False
         self._own_frame = False  # True once Junction draws its own title bar
         self._tracker = playtime.Tracker(self._played)
+        self._running = running.Games(lambda: self._js(f"window.junctionRunning && junctionRunning({json.dumps(self._running.view())})"))
         self._sign_in_lock = threading.Lock()
         self._updates = updates.Updater(lambda info: self._js(f"window.junctionUpdate && junctionUpdate({json.dumps(info)})"))
 
@@ -308,7 +309,21 @@ class Api:
             exe = target
         if result.get("ok") and game and game.get("installed"):
             self._tracker.started(game, exe=exe)  # counts play time where no launcher does
+            self._running.started(game_id, game.get("installDir"), exe)  # "Playing" until it closes
         return result
+
+    def get_running(self):
+        """The games Junction started that are starting or running now."""
+        return self._running.view()
+
+    def focus_game(self, game_id):
+        """Bring a running game's window to the front."""
+        return {"ok": True} if self._running.focus(str(game_id)) else {"error": "Junction couldn't find the game's window."}
+
+    def stop_game(self, game_id):
+        """Close a running game (asked first in the page)."""
+        how = self._running.stop(str(game_id))
+        return {"ok": True, "how": how} if how else {"error": "The game isn't running anymore."}
 
     def install(self, game_id, steam_id=None, target=None):
         return self._run(game_id, steam_id, target)

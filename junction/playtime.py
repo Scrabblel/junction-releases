@@ -135,8 +135,8 @@ _kernel.CloseHandle.argtypes = [wintypes.HANDLE]
 QUERY_LIMITED = 0x1000
 
 
-def running_programs():
-    """The full paths of the programs running now (those Windows lets Junction look at), lower case."""
+def running_processes():
+    """(process id, full path in lower case) of the programs running now (those Windows lets Junction look at)."""
     ids = (wintypes.DWORD * 4096)()
     got = wintypes.DWORD()
     if not _psapi.EnumProcesses(ids, ctypes.sizeof(ids), ctypes.byref(got)):
@@ -151,10 +151,15 @@ def running_programs():
         try:
             size = wintypes.DWORD(len(buf))
             if _kernel.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
-                out.append(buf.value.lower())
+                out.append((pid, buf.value.lower()))
         finally:
             _kernel.CloseHandle(h)
     return out
+
+
+def running_programs():
+    """The full paths of the programs running now (those Windows lets Junction look at), lower case."""
+    return [path for _, path in running_processes()]
 
 
 def _is_running(folder, programs=None, exe=None):
