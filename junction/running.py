@@ -33,6 +33,9 @@ _user.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
 _user.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
 _user.SetForegroundWindow.argtypes = [wintypes.HWND]
 _user.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+_user.GetForegroundWindow.restype = wintypes.HWND
+_user.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+_user.BringWindowToTop.argtypes = [wintypes.HWND]
 _kernel.OpenProcess.restype = wintypes.HANDLE
 _kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 _kernel.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
@@ -101,36 +104,51 @@ class Games:
             return {gid: {"state": g["state"], "since": g["since"]} for gid, g in self._games.items()}
 
     def started(self, game_id, folder, exe=None):
-        """Play was pressed: watch for the game. Nothing happens for a game that's already watched or can't be."""
+        """Play was pressed: watch for the game. True when it's watched (now or already), False when it can't be."""
         if not watchable(folder, exe):
-            return
+            return False
         with self._lock:
             if game_id in self._games:
-                return
-            self._games[game_id] = {"state": "starting", "since": time.time(), "folder": folder, "exe": exe}
+                return True
+            entry = self._games[game_id] = {"state": "starting", "since": time.time(), "folder": folder, "exe": exe}
         self.on_change()
-        threading.Thread(target=self._watch, args=(game_id, folder, exe), daemon=True).start()
+        threading.Thread(target=self._watch, args=(game_id, entry), daemon=True).start()
+        return True
 
-    def _watch(self, game_id, folder, exe):
+    def _current(self, game_id, entry):
+        """Whether this watch is still the game's (Stop ends it, and Play may start a new one)."""
+        with self._lock:
+            return self._games.get(game_id) is entry
+
+    def _watch(self, game_id, entry):
+        folder, exe = entry["folder"], entry["exe"]
         try:
             t0 = time.time()
             while not processes(folder, exe):
-                if time.time() - t0 > START_WAIT:
+                if time.time() - t0 > START_WAIT or not self._current(game_id, entry):
                     return
                 time.sleep(CHECK_EVERY)
             with self._lock:
-                self._games[game_id].update(state="playing", since=time.time())
+                if self._games.get(game_id) is not entry:
+                    return
+                entry.update(state="playing", since=time.time())
             self.on_change()
             missing = 0
-            while missing < GONE_AFTER:
+            while missing < GONE_AFTER and self._current(game_id, entry):
                 time.sleep(CHECK_EVERY)
                 missing = 0 if processes(folder, exe) else missing + 1
         except Exception:  # noqa: BLE001 - never take the app down over this
             traceback.print_exc()
         finally:
-            with self._lock:
-                self._games.pop(game_id, None)
-            self.on_change()
+            self._end(game_id, entry)
+
+    def _end(self, game_id, entry):
+        """This watch is over: the game goes back to Play (unless a newer watch took its place)."""
+        with self._lock:
+            if self._games.get(game_id) is not entry:
+                return
+            self._games.pop(game_id)
+        self.on_change()
 
     def _where(self, game_id):
         with self._lock:
@@ -145,9 +163,21 @@ class Games:
         wins = windows(processes(folder, exe))
         if not wins:
             return False
-        if _user.IsIconic(wins[0]):
-            _user.ShowWindow(wins[0], SW_RESTORE)
-        return bool(_user.SetForegroundWindow(wins[0]))
+        w = wins[0]
+        if _user.IsIconic(w):
+            _user.ShowWindow(w, SW_RESTORE)
+        if _user.SetForegroundWindow(w):
+            return True
+        # Windows lets only the program in front hand the front over. If Junction isn't (any more), borrow the
+        # front window's input for a moment, the usual way round that.
+        front = _user.GetWindowThreadProcessId(_user.GetForegroundWindow(), None)
+        me = _kernel.GetCurrentThreadId()
+        _user.AttachThreadInput(me, front, True)
+        try:
+            _user.BringWindowToTop(w)
+            return bool(_user.SetForegroundWindow(w))
+        finally:
+            _user.AttachThreadInput(me, front, False)
 
     def stop(self, game_id):
         """Close the game: first ask its windows to close (as their X button would), then end what's left.
@@ -164,6 +194,7 @@ class Games:
         while time.time() < end:
             time.sleep(0.5)
             if not processes(folder, exe):
+                self._stopped(game_id)
                 return "closed"
         for pid in processes(folder, exe):
             h = _kernel.OpenProcess(TERMINATE, False, pid)
@@ -172,4 +203,12 @@ class Games:
                     _kernel.TerminateProcess(h, 1)
                 finally:
                     _kernel.CloseHandle(h)
+        self._stopped(game_id)
         return "ended"
+
+    def _stopped(self, game_id):
+        """Stopped: Play again straight away, without waiting for the watch to notice."""
+        with self._lock:
+            entry = self._games.get(game_id)
+        if entry:
+            self._end(game_id, entry)

@@ -1803,31 +1803,49 @@ html .run-group:has(.stop-x:hover) > .pill, html .run-group:has(.stop-x:focus-vi
 .run-group.stopping { opacity: .7; pointer-events: none; }
 html[data-style="sharp"] .run-group > .pill { clip-path: none; }
 @media (prefers-reduced-motion: reduce) { .pill.running .run-dot { animation: none; } }
-/* The controller's keyboard: A on a search box opens it at the bottom of the screen, above the button hints. */
-.vkb { position: fixed; z-index: 60; left: 50%; bottom: calc(62px + env(safe-area-inset-bottom, 0px)); translate: -50% 0; width: min(860px, calc(100vw - 32px));
-  display: grid; gap: 7px; padding: 14px; border-radius: calc(16px * var(--round)); background: var(--panel); border: 1px solid var(--rule); box-shadow: 0 30px 70px -24px rgb(0 0 0 / .8); }
-.vkb-text { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 14px; margin-bottom: 4px; border-radius: calc(10px * var(--round)); background: var(--raised);
+/* The controller's keyboard: A on a search box opens it at the bottom of the screen, above the button hints.
+   On top: what you typed and up to four names to fill in; then the keys; Search finishes. */
+.vkb { position: fixed; z-index: 60; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); translate: -50% 0; width: min(820px, calc(100vw - 32px));
+  display: grid; gap: 6px; padding: 12px; border-radius: calc(16px * var(--round)); background: var(--panel); border: 1px solid var(--rule); box-shadow: 0 30px 70px -24px rgb(0 0 0 / .8); }
+.vkb-text { display: flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: calc(10px * var(--round)); background: var(--raised);
   font-size: 17px; color: var(--ink); overflow: hidden; white-space: nowrap; }
-.vkb-text i { font-style: normal; color: var(--ink-faint); font-size: 13px; flex: none; }
 .vkb-text span { overflow: hidden; text-overflow: ellipsis; }
 .vkb-text b { font-weight: 400; color: var(--ink-faint); }
-.vkb-text::after { content: ""; flex: none; width: 2px; height: 22px; margin-left: -8px; background: var(--signal); animation: blink 1s steps(1) infinite; }
+.vkb-text::after { content: ""; flex: none; width: 2px; height: 20px; margin-left: 1px; background: var(--signal); animation: blink 1s steps(1) infinite; }
+.vkb-text:has(b)::after { order: -1; margin: 0 1px 0 0; }
 @keyframes blink { 50% { opacity: 0; } }
-.vkb-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
-.vkb button { height: 46px; padding: 0; border-radius: calc(8px * var(--round)); border: 1px solid var(--rule); background: var(--raised); color: var(--ink);
-  font: 600 18px/1 var(--font-body); display: grid; place-items: center; }
+.vkb-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 5px; }
+.vkb-sugg { display: flex; gap: 6px; min-height: 34px; overflow: hidden; }
+.vkb-sugg:empty::before { content: attr(data-empty); align-self: center; padding-left: 4px; font-size: 13px; color: var(--ink-faint); }
+.vkb .vkb-sugg button { flex: 0 1 auto; height: 34px; padding: 0 14px; min-width: 0; border-radius: var(--pill); font: 600 14px/1 var(--font-body);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.vkb button { height: 42px; padding: 0; border-radius: calc(8px * var(--round)); border: 1px solid var(--rule); background: var(--raised); color: var(--ink);
+  font: 600 18px/1 var(--font-body); display: grid; place-items: center; transition: transform .08s ease, background .08s ease; }
 .vkb button.vk-wide { grid-column: span 2; font-size: 14px; }
-.vkb button.space { grid-column: span 5; }
+.vkb button.space { grid-column: span 5; font-size: 14px; }
 .vkb button:hover { background: var(--raised-2); }
 .vkb button:focus-visible { outline: 3px solid var(--signal); outline-offset: 1px; background: var(--raised-2); }
+.vkb button.hit { transform: scale(.93); background: color-mix(in srgb, var(--signal) 35%, var(--raised-2)); }
 .vkb button.on { background: var(--signal); border-color: var(--signal); color: #1a1205; }
-.vkb button.done { background: var(--go); border-color: var(--go); color: var(--on-go); }
-.vkb-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 4px; font-size: 12.5px; color: var(--ink-dim); }
+.vkb button.go { background: var(--go); border-color: var(--go); color: var(--on-go); }
+.vkb-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin-top: 2px; font-size: 12.5px; color: var(--ink-dim); }
 .vkb-foot kbd { margin-right: 6px; }
 body:has(#vkb) .pad-hints { display: none; }
+/* Room above the keyboard: the search palette and its results stay in view while you type. */
+body:has(#vkb) .scrim.top { align-items: start; padding-bottom: calc(var(--vkb-h, 360px) + 24px); }
+body:has(#vkb) .palette { max-height: calc(100vh - var(--vkb-h, 360px) - 60px); }
+body:has(#vkb) :is(#main, #cl-page, .cl-list) { scroll-padding-bottom: calc(var(--vkb-h, 360px) + 20px); }
+/* Short windows: smaller keys, so the results above stay in view. */
+@media (max-height: 720px) {
+  .vkb { gap: 4px; padding: 9px; bottom: 8px; }
+  .vkb button { height: 33px; font-size: 16px; }
+  .vkb-text { min-height: 30px; font-size: 15px; }
+  .vkb-sugg, .vkb .vkb-sugg button { min-height: 28px; height: 28px; }
+  .vkb-foot { margin-top: 0; font-size: 11px; }
+}
 html[data-style="glass"] .vkb { background: rgb(16 21 30 / .94); backdrop-filter: blur(24px) saturate(1.3); }
 html[data-style="glass"][data-theme="light"] .vkb { background: rgb(255 255 255 / .94); }
-@media (prefers-reduced-motion: reduce) { .vkb-text::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .vkb-text::after { animation: none; } .vkb button { transition: none; } }
 /* With a controller, the search palette's first result is only chosen once you move down into the results. */
 html.pad-input .palette:not(.moved) .pal-item[aria-selected="true"]:not(:hover) { background: none; }
 </style>
@@ -2901,7 +2919,11 @@ function moveFocus(dir) {
     return requestAnimationFrame(() => moveFocus('down'));
   }
   if (h && dir === 'up' && best && best.closest('#focus') && !h.classList.contains('intro')) collapseIntro();
-  if (best) { best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); if (dir === 'up') clearOfBar(best); }
+  if (best) {
+    best.focus({ preventScroll: true });
+    best.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (dir === 'up' || !$('#app').classList.contains('top-hidden')) clearOfBar(best);
+  }
 }
 // The top bar floats over Home, the Store and game pages, and moving up brings it back: scroll a little further, so
 // what's chosen (a whole banner, not half of it) shows below the bar.
@@ -3013,7 +3035,7 @@ function padPress(k) {
   const a = document.activeElement;
   if ((!a || a === document.body || a === $('#main')) && !padBox()) {
     const el = padPress.last?.isConnected ? padPress.last : findByKey(padPress.lastKey) || (pageFocus?.isConnected ? pageFocus : findByKey(pageFocusKey));
-    if (el && el.offsetParent !== null) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'nearest' }); return; }
+    if (el && el.offsetParent !== null) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'nearest' }); clearOfBar(el); return; }
   }
   // Remember where the controller left the selection on the page.
   setTimeout(() => {
@@ -3074,7 +3096,7 @@ function padPress(k) {
   if (k === 'lb' || k === 'rb') {
     const order = ['home', 'library', 'store', 'wishlist', 'stats'];
     const i = order.indexOf(sectionOf(state.view)), next = order[(i + (k === 'rb' ? 1 : -1) + order.length) % order.length];
-    return (next === 'home' ? Promise.resolve(goHome()) : go({ name: next })).then?.(() => setTimeout(() => moveFocus('down'), 60));
+    return (next === 'home' ? goHome() : go({ name: next })).then(() => setTimeout(() => moveFocus('down'), 60));
   }
   if (k === 'lt' || k === 'rt') return jumpRow(k === 'rt' ? 1 : -1);
   moveFocus(k);
@@ -3527,6 +3549,7 @@ function friendStatus(f) {
 function startGame(t) {
   const run = runningCopy(t);
   if (run?.[1] === 'playing') return focusGame(run[0].id);
+  if (run) return toast(`${t.name} is starting…`, run[0].launcher);  // pressed again while it starts
   const options = playOptions(t), saved = savedOption(t);
   if (options.length === 1 || saved) return runOption(saved || options[0]);
   state.pendingOptions = { title: t, options };
@@ -3855,7 +3878,7 @@ async function liveSearch() {
     if (liveFound.size > 100) liveFound.delete(liveFound.keys().next().value);
     for (const g of found) if (!store.games[g.id]) { store.games[g.id] = g; liveGames.set(g.id, g); }
   }
-  if (state.view.name === 'browse' && liveKey() === q) redrawBrowseKeeping();
+  if (state.view.name === 'browse' && liveKey() === q) { redrawBrowseKeeping(); vkbShow(); }
 }
 // Draw Browse again with what came in, keeping the scroll, the selection and the cursor in the search box.
 function redrawBrowseKeeping() {
@@ -5409,7 +5432,8 @@ function leavePrice() {
   const to = ['wishlist', 'browse'].includes(state.view.from) ? state.view.from : 'store';
   return go({ name: to }).then(() => { if (to === 'store') $('#main').scrollTop = state.scroll.store || 0; });
 }
-function goHome() { state.view = { name: 'home' }; render(); }
+// Home opens at its top, like any other page (#main keeps the scroll of the page before otherwise).
+function goHome() { state.view = { name: 'home' }; return render().then(() => { scroller('home').scrollTop = 0; }); }
 // Back to Home where you left it, on the card you opened.
 function backHome(sel) {
   const y = state.scroll.home || 0;
@@ -5610,7 +5634,7 @@ async function play(g, steamId) {
   const res = await host.play(g, steamId);
   const switchTo = switchNeeded(steamId);
   // Not started (an error, or the preview without the app): back to Play.
-  if (!res || res.error || res.prototype) setTimeout(() => { delete state.running[g.id]; markRunning(); }, res?.prototype ? 2400 : 0);
+  if (!res || res.error || res.prototype || !res.watching) setTimeout(() => { if (state.running[g.id]?.state !== 'playing') delete state.running[g.id]; markRunning(); }, res?.error ? 0 : 2400);
   if (res && res.prototype) toast(switchTo
     ? `Preview only: the app restarts Steam on ${accountName(switchTo)} (about 15 seconds), then starts ${g.name}.`
     : `Preview only: the app starts ${g.name} through ${LAUNCH_VIA[g.launcher]}.`, g.launcher);
@@ -5657,10 +5681,13 @@ function addGameDialog() {
 }
 
 // ---------- a keyboard for the controller ----------
-// A on a search box opens it. A types the chosen key, X deletes, Y types a space, B or ☰ closes it again. The box
-// it types into can be drawn anew while you type (the Store and Library searches do): it follows the box by its
-// id, or the box that takes the cursor next (the Store's search moves to Browse all's).
+// A on a search box opens it. A types the chosen key, X deletes, Y types a space, ☰ searches, B closes it. Arrows
+// wrap around at the edges. The top row offers names to fill in (your games, then the Store's), so a few letters are
+// usually enough. Text always goes at the end of the box: a search box drawn anew while you type (the Store and
+// Library searches are) starts with its cursor elsewhere. Search boxes don't take the cursor back while it's open.
 const VKB_ROWS = ['1234567890', 'qwertyuiop', "asdfghjkl'", 'zxcvbnm-.:'];
+const VKB_ALIAS = { 'store-search': 'browse-search' };  // the Store's search carries on in Browse all's box
+const isSearchBox = el => el.type === 'search' || el.id === 'pal-q';
 function openKeyboard(input) {
   closeKeyboard();
   const kb = document.createElement('div');
@@ -5669,41 +5696,112 @@ function openKeyboard(input) {
   kb.setAttribute('role', 'dialog');
   kb.setAttribute('aria-label', 'Keyboard');
   kb.dataset.for = input.id;
+  const search = isSearchBox(input);
   const k = (key, label = key, cls = '') => `<button type="button" class="${cls}" data-vk="${esc(key)}" aria-label="${esc(label)}">${esc(label)}</button>`;
   kb.innerHTML = `<div class="vkb-text" aria-hidden="true"></div>
+    ${search ? '<div class="vkb-row vkb-sugg" data-empty="Type a few letters for names to pick"></div>' : ''}
     ${VKB_ROWS.map(r => `<div class="vkb-row">${[...r].map(c => k(c)).join('')}</div>`).join('')}
-    <div class="vkb-row">${k('shift', 'Shift', 'vk-wide')}${k(' ', 'Space', 'space')}${k('back', 'Delete', 'vk-wide')}${k('done', 'Done', 'vk-wide done')}</div>
-    <div class="vkb-foot"><span><kbd class="pad">A</kbd>Type</span><span><kbd class="pad">X</kbd>Delete</span><span><kbd class="pad">Y</kbd>Space</span><span><kbd class="pad">B</kbd>Close</span></div>`;
+    <div class="vkb-row">${k('shift', 'Shift', 'vk-wide')}${k(' ', 'Space', 'space')}${k('back', 'Delete', 'vk-wide')}${k('go', search ? 'Search' : 'Done', 'vk-wide go')}</div>
+    <div class="vkb-foot"><span><kbd class="pad">A</kbd>Type</span><span><kbd class="pad">X</kbd>Delete</span><span><kbd class="pad">Y</kbd>Space</span><span><kbd class="pad">☰</kbd>${search ? 'Search' : 'Done'}</span><span><kbd class="pad">B</kbd>Close</span></div>`;
   document.body.append(kb);
+  document.documentElement.style.setProperty('--vkb-h', `${kb.offsetHeight}px`);
   kb.addEventListener('click', e => {
-    const b = e.target.closest('[data-vk]');
+    const b = e.target.closest('[data-vk], [data-fill]');
     if (!b) return;
-    kb.last = b;
+    kb.last = b.matches('[data-fill]') ? kb.querySelector('[data-vk="go"]') : b;  // after picking a name, Search is next
+    b.classList.add('hit');
+    setTimeout(() => b.classList.remove('hit'), 110);
+    if (b.dataset.fill != null) { vkbSet(b.dataset.fill); return kb.last.focus({ preventScroll: true }); }
     const key = b.dataset.vk;
-    if (key === 'done') return closeKeyboard(true);
-    if (key === 'shift') { b.classList.toggle('on'); return kb.querySelectorAll('[data-vk]').forEach(x => { if (x.dataset.vk.length === 1 && /[a-z]/.test(x.dataset.vk)) x.textContent = b.classList.contains('on') ? x.dataset.vk.toUpperCase() : x.dataset.vk; }); }
+    if (key === 'go') return vkbGo();
+    if (key === 'shift') {
+      const on = b.classList.toggle('on');
+      kb.querySelectorAll('[data-vk]').forEach(x => { if (/^[a-z]$/.test(x.dataset.vk)) x.textContent = on ? x.dataset.vk.toUpperCase() : x.dataset.vk; });
+      return;
+    }
     vkbType(key === 'back' ? '\b' : kb.querySelector('[data-vk="shift"]').classList.contains('on') ? key.toUpperCase() : key);
-    b.focus({ preventScroll: true });
+    if (document.activeElement !== b) b.focus({ preventScroll: true });
   });
   vkbShow();
   kb.querySelector('[data-vk="q"]').focus({ preventScroll: true });
 }
-const vkbTarget = () => { const kb = $('#vkb'); return kb && document.getElementById(kb.dataset.for); };
+function vkbTarget() {
+  const kb = $('#vkb');
+  if (!kb) return null;
+  const el = document.getElementById(kb.dataset.for) || document.getElementById(VKB_ALIAS[kb.dataset.for]);
+  if (el) kb.dataset.for = el.id;
+  return el;
+}
+// What's typed so far, and the names that start with it (or have a word that does).
 function vkbShow() {
   const kb = $('#vkb'), el = vkbTarget();
   if (!kb) return;
   const label = el?.getAttribute('aria-label') || el?.placeholder || 'Type';
   kb.querySelector('.vkb-text').innerHTML = el?.value ? `<span>${esc(el.value)}</span>` : `<b>${esc(label)}</b>`;
+  const box = kb.querySelector('.vkb-sugg');
+  if (!box) return;
+  const q = (el?.value || '').trim().toLowerCase();
+  const had = box.contains(document.activeElement) ? document.activeElement.dataset.fill : null;
+  const names = q.length < 2 ? [] : vkbNames(q);
+  box.innerHTML = names.map(n => `<button type="button" data-fill="${esc(n)}">${esc(n)}</button>`).join('');
+  if (had != null) (box.querySelector(`[data-fill="${CSS.escape(had)}"]`) || box.firstElementChild || kb.querySelector('[data-vk="q"]')).focus({ preventScroll: true });
 }
-// Types `ch` where the box's cursor is ('\b' deletes the letter before it), as if typed on a real keyboard.
+function vkbNames(q) {
+  const inStore = /store|browse/.test($('#vkb')?.dataset.for || '');
+  const mine = titles.filter(t => !isHidden(t)).map(t => t.name);
+  const theirs = store ? Object.values(store.games).map(g => g.title) : [];
+  const pool = inStore ? [...theirs, ...mine] : [...mine, ...theirs];
+  const starts = [], words = [], seen = new Set();
+  for (const n of pool) {
+    const l = n.toLowerCase();
+    if (seen.has(l) || l === q) continue;
+    if (l.startsWith(q)) { starts.push(n); seen.add(l); }
+    else if (l.includes(` ${q}`)) { words.push(n); seen.add(l); }
+    if (starts.length >= 4) break;
+  }
+  return [...starts, ...words].slice(0, 4);
+}
+// Types `ch` at the end of the box ('\b' deletes the last letter), as if typed on a real keyboard.
 function vkbType(ch) {
   const el = vkbTarget();
   if (!el) return closeKeyboard();
-  const end = el.value.length, a = el.selectionStart ?? end, b = el.selectionEnd ?? a;
-  if (ch === '\b') { if (a !== b) el.setRangeText('', a, b, 'end'); else if (a > 0) el.setRangeText('', a - 1, a, 'end'); else return; }
-  else el.setRangeText(ch, a, b, 'end');
+  if (ch === '\b' && !el.value) return;
+  vkbSet(ch === '\b' ? el.value.slice(0, -1) : el.value + ch);
+}
+function vkbSet(text) {
+  const el = vkbTarget();
+  if (!el) return;
+  el.value = text;
   el.dispatchEvent(new Event('input', { bubbles: true }));
   vkbShow();
+}
+// Search (☰): finish typing and go to the results. Done on other boxes: back to the box.
+function vkbGo() {
+  const el = vkbTarget();
+  if (!el) return closeKeyboard();
+  const id = el.id;
+  closeKeyboard();
+  if (id === 'pal-q') {
+    el.focus({ preventScroll: true });
+    if (!state.pal.items.length) return;
+    state.pal.moved = true;
+    return $('.palette')?.classList.add('moved');
+  }
+  if (id === 'store-search' || id === 'browse-search') {
+    clearTimeout(searchTimer);
+    state.browse.q = el.value; state.browse.limit = 60;
+    const done = state.view.name === 'browse' ? Promise.resolve(renderBrowse()) : go({ name: 'browse' });
+    return done.then(() => ($('#main .deal-grid .deal') || $('#browse-search'))?.focus({ preventScroll: true }));
+  }
+  if (id === 'lib-search') {
+    clearTimeout(libTimer);
+    state.query = el.value;
+    renderLibrary();
+    return ($('#main .tile, #main .lrow') || $('#lib-search'))?.focus({ preventScroll: true });
+  }
+  if (id === 'cl-q') return ($('#cl-list .cl-row') || el).focus({ preventScroll: true });
+  el.focus({ preventScroll: true });
+  if (el.form) el.form.requestSubmit();
 }
 function closeKeyboard(back) {
   const kb = $('#vkb');
@@ -5712,33 +5810,46 @@ function closeKeyboard(back) {
   kb.remove();
   if (back && el) { el.focus({ preventScroll: true }); el.setSelectionRange?.(el.value.length, el.value.length); }
 }
+// Arrows: along the row, wrapping at its ends; up and down to the key nearest above or below, wrapping top to bottom.
+function vkbMove(dir) {
+  const kb = $('#vkb'), cur = document.activeElement;
+  const rows = [...kb.querySelectorAll('.vkb-row')].map(r => [...r.querySelectorAll('button')]).filter(r => r.length);
+  const at = rows.findIndex(r => r.includes(cur));
+  if (at < 0) return (kb.last || kb.querySelector('[data-vk="q"]')).focus({ preventScroll: true });
+  const row = rows[at], i = row.indexOf(cur);
+  let next;
+  if (dir === 'left' || dir === 'right') next = row[(i + (dir === 'right' ? 1 : -1) + row.length) % row.length];
+  else {
+    const to = rows[(at + (dir === 'down' ? 1 : -1) + rows.length) % rows.length], r = cur.getBoundingClientRect(), x = r.left + r.width / 2;
+    next = to.reduce((best, b) => { const q = b.getBoundingClientRect(), d = Math.abs(q.left + q.width / 2 - x); return d < best[0] ? [d, b] : best; }, [Infinity, null])[1];
+  }
+  next?.focus({ preventScroll: true });
+  kb.last = next?.matches('[data-fill]') ? kb.last : next;
+}
 function keyboardPad(k) {
   const kb = $('#vkb'), inside = kb.contains(document.activeElement);
-  if (ARROWS[k]) return inside ? moveWithin(kb, k) : (kb.last || kb.querySelector('button')).focus({ preventScroll: true });
-  if (k === 'a') return inside ? document.activeElement.click() : (kb.last || kb.querySelector('button')).focus({ preventScroll: true });
-  if (k === 'b' || k === 'menu') return closeKeyboard(true);
-  if (k === 'x') return vkbType('\b');
-  if (k === 'y') return vkbType(' ');
+  // The selection always stays on the keyboard; if something took it, a press both brings it back and acts.
+  if (!inside) (kb.last || kb.querySelector('[data-vk="q"]')).focus({ preventScroll: true });
+  if (ARROWS[k]) return vkbMove(k);
+  if (k === 'a') return document.activeElement.click();
+  if (k === 'b') return closeKeyboard(true);
+  if (k === 'menu') return vkbGo();
+  if (k === 'x') return kb.querySelector('[data-vk="back"]').click();
+  if (k === 'y') return kb.querySelector('[data-vk=" "]').click();
 }
-// A search box drawn anew takes the cursor: keep typing into it, and stay on the key you were on.
-document.addEventListener('focusin', e => {
-  const kb = $('#vkb');
-  if (!kb || kb.contains(e.target)) return;
-  if (e.target.matches?.('input[id]')) kb.dataset.for = e.target.id;
-  vkbShow();
-  setTimeout(() => { if (kb.isConnected && !kb.contains(document.activeElement)) (kb.last || kb.querySelector('[data-vk="q"]')).focus({ preventScroll: true }); }, 0);
-});
 // Keys on a real keyboard while the controller's keyboard is open: arrows move over it, Escape closes it.
 document.addEventListener('keydown', e => {
   const kb = $('#vkb');
   if (!kb || !kb.contains(e.target)) return;
   const dir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key];
-  if (dir) { e.preventDefault(); e.stopPropagation(); return moveWithin(kb, dir); }
+  if (dir) { e.preventDefault(); e.stopPropagation(); return vkbMove(dir); }
   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return closeKeyboard(true); }
   if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();  // the key's own click types it
 }, true);
 // Using the mouse somewhere else puts the keyboard away.
 addEventListener('pointerdown', e => { if (e.isTrusted && !e.target.closest?.('#vkb')) closeKeyboard(); }, true);
+// The room it takes, for the palette above it: again when the window changes size.
+addEventListener('resize', () => { const kb = $('#vkb'); if (kb) document.documentElement.style.setProperty('--vkb-h', `${kb.offsetHeight}px`); });
 
 // ---------- a game you started: "Playing" until it closes ----------
 // The app tells the page which of the games it started are starting or running (junctionRunning). Their Play
@@ -5826,6 +5937,8 @@ function stopDialog(id) {
     document.querySelectorAll('.run-group.stopping').forEach(x => x.classList.remove('stopping'));
     if (res?.prototype) return toast(`Preview only: the app closes ${t.name}.`, c.launcher);
     if (!res?.ok) return toast(res?.error || `Junction couldn’t stop ${t.name}.`, c.launcher);
+    delete state.running[id];
+    markRunning();
     toast(res.how === 'ended' ? `${t.name} didn’t close by itself, so Junction ended it.` : `Closed ${t.name}.`, c.launcher);
   };
 }
@@ -6071,12 +6184,16 @@ document.addEventListener('input', e => {
   liveFailed = null;  // a new search may reach every store again
   state.browse.limit = 60;
   clearTimeout(searchTimer);
+  // With the controller's keyboard, wait for a pause between letters, and leave the selection on the keyboard.
+  const kb = !!$('#vkb');
   searchTimer = setTimeout(async () => {
-    if (state.view.name === 'browse') renderBrowse(); else await go({ name: 'browse' });
+    const y = $('#main').scrollTop;
+    if (state.view.name === 'browse') { renderBrowse(); $('#main').scrollTop = y; } else await go({ name: 'browse' });
+    if (kb && $('#vkb')) return vkbShow();
     const box = $('#browse-search');
     box.focus();
     box.setSelectionRange(box.value.length, box.value.length);
-  }, 180);
+  }, kb ? 650 : 180);
 });
 // The Library's name filter narrows the grid as you type, keeping the cursor in the box.
 let libTimer;
@@ -6084,12 +6201,15 @@ document.addEventListener('input', e => {
   if (e.target.id !== 'lib-search') return;
   state.query = e.target.value;
   clearTimeout(libTimer);
+  const kb = !!$('#vkb');
   libTimer = setTimeout(() => {
+    const y = $('#main').scrollTop;
     renderLibrary();
+    if (kb && $('#vkb')) { $('#main').scrollTop = y; return; }
     const box = $('#lib-search');
     box.focus();
     box.setSelectionRange(box.value.length, box.value.length);
-  }, 150);
+  }, kb ? 450 : 150);
 });
 // Pointing at a game, by mouse or keyboard, shows its art behind Home and the Library.
 let pointTimer;

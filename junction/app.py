@@ -309,7 +309,8 @@ class Api:
             exe = target
         if result.get("ok") and game and game.get("installed"):
             self._tracker.started(game, exe=exe)  # counts play time where no launcher does
-            self._running.started(game_id, game.get("installDir"), exe)  # "Playing" until it closes
+            # "Playing" until it closes; the page needs to know when the game can't be watched
+            result["watching"] = self._running.started(game_id, game.get("installDir"), exe)
         return result
 
     def get_running(self):
@@ -318,7 +319,7 @@ class Api:
 
     def focus_game(self, game_id):
         """Bring a running game's window to the front."""
-        return {"ok": True} if self._running.focus(str(game_id)) else {"error": "Junction couldn't find the game's window."}
+        return {"ok": True} if self._running.focus(str(game_id)) else {"error": "Junction couldn't switch to the game. Use Alt+Tab to get to it."}
 
     def stop_game(self, game_id):
         """Close a running game (asked first in the page)."""
