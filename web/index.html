@@ -1626,7 +1626,7 @@ html[data-style="sharp"] .big-rail .tile:focus-visible .art { box-shadow: 0 24px
 .cl-dots button[aria-current] { background: var(--ink); width: 34px; }
 .cl-dots button:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
 /* Played before: wide capsules with the game's header art. */
-.cl-caps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px 14px; }
+.cl-caps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px 14px; }
 .cl-cap { display: grid; gap: 4px; padding: 0; border: 0; background: none; text-align: left; color: var(--ink-dim); min-width: 0; }
 .cl-cap .img { position: relative; display: block; aspect-ratio: 460 / 215; border-radius: calc(8px * var(--round)); overflow: hidden; background: var(--raised); transition: transform .16s ease, box-shadow .16s ease; }
 .cl-cap .img img { width: 100%; height: 100%; object-fit: cover; }
@@ -1660,7 +1660,7 @@ html[data-style="sharp"] .cl-dots button[aria-current] { background: var(--signa
 /* Best deals for you: a banner of discounted games under the carousel. */
 .cl-deals { display: grid; gap: 14px; padding: 18px 20px 20px; border-radius: var(--radius); border: 1px solid var(--rule);
   background: linear-gradient(120deg, color-mix(in srgb, var(--good) 16%, var(--panel)), var(--panel) 55%); }
-.cl-deal-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+.cl-deal-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
 .cl-deal { display: grid; align-content: start; gap: 5px; padding: 0; border: 0; background: none; text-align: left; color: var(--ink-dim); min-width: 0; }
 .cl-deal .img { position: relative; display: block; aspect-ratio: 460 / 215; border-radius: calc(8px * var(--round)); overflow: hidden; background: var(--raised); transition: transform .16s ease, box-shadow .16s ease; }
 .cl-deal .img img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -1685,7 +1685,10 @@ html[data-style="sharp"] :is(.cl-deals, .cl-deal .img) { --cut: 12px; clip-path:
 .cl-sec-head i { font-style: normal; font-size: 13px; color: var(--ink-faint); }
 .cl-sec-head .link-btn { margin-left: auto; font-size: 13px; }
 .cl-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 16px 14px; }
-.cl-tiles.land { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.cl-tiles.land { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* Column counts that the rows divide into (12 played, 8 suggestions, 5 deals), so no row ends half empty. */
+@media (max-width: 1200px) { .cl-caps { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .cl-caps, .cl-tiles.land, .cl-deal-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .cl-tiles .tile, .cl-tiles .tile.land { width: auto; }
 .classic .gp-tabs { margin: 4px calc(-1 * var(--gutter-r)) 0 -26px; padding-left: 26px; }
 .classic .gp-panel { padding: 16px 0 48px; background: none; min-height: 0; animation: none; }
@@ -1999,7 +2002,7 @@ let lib = { games: [], launchers: {} };
 let prefs = loadPrefs();
 const state = { view: { name: 'home' }, query: '', lines: new Set(), accounts: new Set(), showHidden: false,
                 genre: '', collection: '', showAll: false, copy: {},
-                special: '', sort: prefs.libSort || 'name', focus: null, returnTo: 'home', scroll: {}, opened: {}, achSid: {}, achFilter: 'all', achAll: false,
+                special: '', sort: prefs.libSort || 'name', focus: null, returnTo: 'home', scroll: {}, backFocus: {}, opened: {}, achSid: {}, achFilter: 'all', achAll: false,
                 shops: new Set(),
                 browse: { q: '', genres: new Set(), maxPrice: '', onSale: false, sort: 'rank', limit: 60 } };
 let store = null;  // price data, loaded the first time the Store or Wishlist opens
@@ -2877,7 +2880,8 @@ function moveClassic(dir) {
     if (dir === 'up') return toBar(cur);
     return;
   }
-  return show(chosen);
+  // Nothing chosen yet: the game in the list, or on Home (no list) the carousel's Play.
+  return show(chosen || $('#cl-page .cl-feat .pill.primary') || page[0]);
 }
 let padPrev = {};
 function pollPads() {
@@ -2962,12 +2966,12 @@ function padPress(k) {
     // A drop-down list opens as a menu the controller can move through.
     if (el?.matches?.('select')) return selectMenu(el);
     // Most buttons here draw the page again; stay on the same button afterwards.
-    const keep = focusKey(el), y = $('#main').scrollTop;
+    const keep = focusKey(el), y = scroller(state.view.name).scrollTop;
     el?.click();
     return setTimeout(() => {
       if (document.activeElement && document.activeElement !== document.body) return;
       const again = findByKey(keep);
-      if (again) { $('#main').scrollTop = y; again.focus({ preventScroll: true }); }
+      if (again) { scroller(state.view.name).scrollTop = y; again.focus({ preventScroll: true }); }
     }, 80);
   }
   if (k === 'b') {
@@ -3001,13 +3005,17 @@ function jumpRow(dir) {
   const h = introPage();
   if (dir > 0 && h?.classList.contains('intro')) { expandIntro(); return requestAnimationFrame(() => jumpRow(dir)); }
   const y = document.activeElement?.getBoundingClientRect?.().top ?? 0;
-  const marks = [...document.querySelectorAll('#main .hrow, #main .letter')].filter(el => el.offsetParent !== null);
+  // Classic's Home has sections instead of rows.
+  const marks = [...document.querySelectorAll('#main .hrow, #main .letter, #main .cl-home-in > :is(section, .cl-dl)')].filter(el => el.offsetParent !== null);
   const pick = dir > 0 ? marks.find(m => m.getBoundingClientRect().top > y + 8)
     : marks.filter(m => m.getBoundingClientRect().bottom < y - 8).pop();
   if (!pick) return;
-  const target = pick.classList.contains('letter') ? pick.nextElementSibling : pick.querySelector('.tile, .all-games, .line-chip');
+  const sec = pick.matches('.cl-home-in > *');
+  const target = pick.classList.contains('letter') ? pick.nextElementSibling
+    : sec ? ['.pill.primary', '.cl-deal', '.cl-news', '.cl-cap', '.tile', 'button'].map(q => pick.querySelector(q)).find(Boolean)
+    : pick.querySelector('.tile, .all-games, .line-chip');
   target?.focus({ preventScroll: true });
-  pick.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  pick.scrollIntoView({ block: sec ? 'start' : 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 }
 addEventListener('gamepadconnected', () => {
   if (!pollPads.on) { pollPads.on = true; requestAnimationFrame(pollPads); }
@@ -3291,7 +3299,14 @@ function renderClassic() {
 }
 // Classic's Home, laid out like a store front page: your recent games in a big carousel, news from your games,
 // downloads, the games you played before, and a few store suggestions. One wide page, without the game list.
-const classicFeatured = () => titles.filter(x => !isHidden(x) && x.lastPlayed).sort((x, y) => y.lastPlayed - x.lastPlayed).slice(0, 6);
+// Without much play history yet (a launcher that doesn't say when you played), installed games fill it up.
+const classicFeatured = () => {
+  const seen = titles.filter(x => !isHidden(x));
+  const played = seen.filter(x => x.lastPlayed).sort((x, y) => y.lastPlayed - x.lastPlayed).slice(0, 6);
+  return played.length >= 6 ? played : played.concat(classicInstalled(played).slice(0, 6 - played.length));
+};
+const classicInstalled = (skip = []) => titles.filter(x => !isHidden(x) && !x.lastPlayed && isInstalled(x) && !skip.includes(x))
+  .sort((x, y) => (y.playtimeMinutes || 0) - (x.playtimeMinutes || 0) || x.name.localeCompare(y.name));
 function classicFeatHtml() {
   const games = classicFeatured();
   if (!games.length) return '';
@@ -3306,7 +3321,7 @@ function classicFeatHtml() {
             ${a.logo && a.hero ? `<img class="logo" src="${esc(a.logo)}" alt="">` : ''}
           </button>
           <div class="cl-feat-side">
-            <span class="cc-label">${i ? 'Recently played' : 'Continue'}</span>
+            <span class="cc-label">${!t.lastPlayed ? 'Installed' : i ? 'Recently played' : 'Continue'}</span>
             <h2>${esc(t.name)}</h2>
             <p class="cl-feat-meta">${esc(meta || launcherNames(t))} ${launcherBadge(t)}</p>
             ${ach ? `<p class="cl-feat-meta">${ach[1][0]} of ${ach[1][1]} achievements</p>` : ''}
@@ -3332,7 +3347,8 @@ function classicNews() {
 function classicHomeHtml() {
   const all = titles.filter(x => !isHidden(x));
   const feat = classicFeatured();
-  const played = all.filter(x => x.lastPlayed).sort((x, y) => y.lastPlayed - x.lastPlayed).slice(feat.length, feat.length + 12);
+  const played = all.filter(x => x.lastPlayed && !feat.includes(x)).sort((x, y) => y.lastPlayed - x.lastPlayed).slice(0, 12);
+  const installed = played.length ? [] : classicInstalled(feat).slice(0, 12);
   const news = classicNews();
   const sec = (title, note, body, more) => `
         <section class="cl-sec"><div class="cl-sec-head"><h2>${esc(title)}</h2>${note ? `<i>${esc(note)}</i>` : ''}${more || ''}</div>${body}</section>`;
@@ -3374,7 +3390,7 @@ function classicHomeHtml() {
         </section>` : ''}
         <div class="downloads cl-dl" id="downloads" hidden></div>
         ${news.length ? sec('News from your games', 'Patch notes and announcements from the developers', `<div class="cl-news-grid">${news.map(newsCard).join('')}</div>`) : ''}
-        ${played.length ? sec('Played before', '', `<div class="cl-caps">${played.map(capsule).join('')}</div>`,
+        ${played.length || installed.length ? sec(played.length ? 'Played before' : 'Installed', '', `<div class="cl-caps">${(played.length ? played : installed).map(capsule).join('')}</div>`,
           '<button class="link-btn" data-nav="library">Library</button>') : ''}
         ${wishSale.length ? sec('On sale from your wishlist', '', `<div class="cl-tiles land">${wishSale.map(storeTile).join('')}</div>`,
           '<button class="link-btn" data-store-tab="wishlist">Wishlist</button>') : ''}
@@ -5284,13 +5300,16 @@ function slidePage(dir) {
   }
 }
 function go(view) { state.view = view; return render().then(() => { $('#main').scrollTop = 0; }); }
+// What scrolls on a page: Classic's Home scrolls in its own pane, every other page in #main.
+const scroller = name => (name === 'home' && $('#main .classic[data-pick="home"] #cl-page')) || $('#main');
 function open(id, from, tab, backTo) {
   // Remember where we came from, so Back returns to the same row or letter. Each game page keeps its own way back
   // (a game opened from another game goes back where that one would; a price page hands back its game's).
   const prev = state.view;
   let back = backTo;
   if (['home', 'library', 'store', 'wishlist', 'stats', 'price', 'browse'].includes(prev.name)) {
-    state.scroll[prev.name] = $('#main').scrollTop;
+    state.scroll[prev.name] = scroller(prev.name).scrollTop;
+    state.backFocus[prev.name] = focusKey(document.activeElement);  // the very card you opened, for Back
     back ||= prev.name === 'price' && prev.back === (findGame(id)?.id || id) ? prev.gameBack : { ...prev };
   }
   back ||= prev.name === 'game' ? prev.back : null;
@@ -5304,20 +5323,30 @@ function open(id, from, tab, backTo) {
 }
 function leavePrice() {
   if (state.view.from === 'library') return state.view.back ? open(state.view.back, state.view.gameFrom, undefined, state.view.gameBack) : go({ name: 'library' });
-  if (state.view.from === 'home') return goHome();  // a suggestion on Classic's Home
+  if (state.view.from === 'home') return backHome(`[data-price="${CSS.escape(state.view.id)}"]`);  // a suggestion on Classic's Home
   const to = ['wishlist', 'browse'].includes(state.view.from) ? state.view.from : 'store';
   return go({ name: to }).then(() => { if (to === 'store') $('#main').scrollTop = state.scroll.store || 0; });
 }
 function goHome() { state.view = { name: 'home' }; render(); }
+// Back to Home where you left it, on the card you opened.
+function backHome(sel) {
+  const y = state.scroll.home || 0;
+  state.view = { name: 'home' };
+  return render().then(() => { scroller('home').scrollTop = y; $(`#main ${sel}`)?.focus({ preventScroll: true }); });
+}
 function goBack() {
   const back = state.view.back || state.returnTo || 'home', to = typeof back === 'string' ? { name: back } : back;
   const y = state.scroll[to.name] || 0, id = state.view.id;
   state.view = { ...to };
   render().then(() => {
-    $('#main').scrollTop = y;
+    scroller(to.name).scrollTop = y;
     const q = id && CSS.escape(id);
-    const el = q && document.querySelector(`#main [data-focus="${q}"], #main [data-cl-pick="${q}"], #main [data-open="${q}"]`);
-    el?.focus({ preventScroll: true });
+    // The card you opened the game with; or else one that opens it (the same game can be on a page more than
+    // once, so the one in view).
+    const had = findByKey(state.backFocus[to.name]);
+    const els = q ? [...document.querySelectorAll(`#main [data-focus="${q}"], #main [data-cl-pick="${q}"], #main [data-open="${q}"]`)] : [];
+    const seen = els.find(e => { const r = e.getBoundingClientRect(); return r.height && r.top >= 0 && r.bottom <= innerHeight; });
+    ((had && $('#main').contains(had) && had.matches(`[data-open="${q}"], [data-focus="${q}"], [data-cl-pick="${q}"]`) && had) || seen || els[0])?.focus({ preventScroll: true });
   });
 }
 function closePops() {
@@ -5612,6 +5641,7 @@ document.addEventListener('click', e => {
   if (t.dataset.nav) return go({ name: t.dataset.nav });
   if (t.dataset.price) {
     if (state.view.name === 'store') state.scroll.store = $('#main').scrollTop;
+    if (state.view.name === 'home') state.scroll.home = scroller('home').scrollTop;
     // From a game page, Back on the store page returns to that game.
     if (state.view.name === 'game') return go({ name: 'price', id: t.dataset.price, from: 'library', back: state.view.id, gameFrom: state.view.from, gameBack: state.view.back });
     if (shownGame()) return go({ name: 'price', id: t.dataset.price, from: 'library', back: shownGame().id, gameFrom: sectionOf(state.view) });
