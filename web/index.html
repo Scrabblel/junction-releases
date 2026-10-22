@@ -1592,21 +1592,93 @@ html[data-style="glass"] .big-info { flex: 0 1 auto; margin-left: calc(var(--gut
 html[data-style="mono"] .bighome .backdrop img { filter: blur(40px) grayscale(1) brightness(.7); }
 html[data-style="sharp"] .big-rail .tile:focus-visible .art { box-shadow: 0 24px 50px -16px #000; }
 
-.cl-home { gap: 26px; padding-bottom: 40px; }
-.cl-continue { position: relative; min-height: clamp(230px, 38vh, 400px); box-sizing: border-box; border-radius: var(--radius); overflow: hidden; display: flex; align-items: flex-end;
-  padding: 26px 28px; background: var(--raised) center / cover no-repeat; }
-.cl-continue::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, rgb(0 0 0 / .72), rgb(0 0 0 / .1) 70%), linear-gradient(90deg, rgb(0 0 0 / .45), transparent 60%); }
-.cc-txt { position: relative; z-index: 1; display: grid; gap: 10px; justify-items: start; min-width: 0; }
-.cc-label { font: 600 11px/1 var(--font-display); letter-spacing: .16em; text-transform: uppercase; color: color-mix(in srgb, var(--on-image) 75%, transparent); }
-/* A set height, so the pane doesn't change size when the logo arrives (and a redraw holds its place). */
-.cl-continue .logo { height: clamp(80px, 13vh, 130px); max-width: min(360px, 70%); object-fit: contain; object-position: left bottom; filter: drop-shadow(0 4px 18px rgb(0 0 0 / .5)); }
-.cl-continue h1 { margin: 0; font: 800 clamp(28px, 3.4vw, 46px)/1.04 var(--font-display); letter-spacing: -.02em; color: var(--on-image); text-wrap: balance; text-shadow: var(--title-shadow); }
-.cc-meta { margin: 0; color: color-mix(in srgb, var(--on-image) 82%, transparent); font-size: 14px; text-shadow: 0 1px 8px rgb(0 0 0 / .6); }
+.classic.cl-wide { grid-template-columns: minmax(0, 1fr); }
+.cl-home { padding: 22px var(--gutter-r) 0 calc(var(--gutter-l) + 16px); }
+.cl-home-in { width: 100%; max-width: 1240px; margin: 0 auto; display: grid; gap: 30px; padding-bottom: 44px; min-width: 0; }
+.cc-label { font: 600 11px/1 var(--font-display); letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); }
 .cc-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
-/* Over the art, so the same in light and dark. */
-.cc-btns .pill:not(.primary) { background: rgb(0 0 0 / .45); color: #fff; border-color: rgb(255 255 255 / .22); backdrop-filter: blur(8px); }
-.cc-btns .pill:not(.primary):hover { background: rgb(0 0 0 / .62); }
+/* Featured: a big picture with the game's details beside it, like a store's front page. */
+.cl-feat { position: relative; display: grid; gap: 12px; }
+.cl-feat-card { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(260px, 1fr); min-height: clamp(260px, 40vh, 420px); border-radius: var(--radius); overflow: hidden;
+  background: var(--panel); border: 1px solid var(--rule); box-shadow: 0 24px 60px -30px rgb(0 0 0 / .6); }
+.cl-feat-art { position: relative; border: 0; padding: 22px 26px; display: flex; align-items: flex-end; background: var(--raised) center / cover no-repeat; min-height: 100%; }
+.cl-feat-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, rgb(0 0 0 / .45), transparent 45%); transition: background .2s; }
+.cl-feat-art:hover::after { background: linear-gradient(0deg, rgb(0 0 0 / .3), transparent 45%); }
+.cl-feat-art:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; }
+.cl-feat-art .logo { position: relative; z-index: 1; max-width: min(320px, 70%); max-height: 120px; object-fit: contain; object-position: left bottom; filter: drop-shadow(0 4px 18px rgb(0 0 0 / .55)); }
+.cl-feat-side { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 24px 24px 22px; min-width: 0; }
+.cl-feat-side > :not(.cl-feat-news) { align-self: flex-start; }
+.cl-feat-side h2 { margin: 0; font: 800 clamp(22px, 2.2vw, 30px)/1.1 var(--font-display); letter-spacing: -.01em; color: var(--ink); text-wrap: balance; }
+.cl-feat-meta { margin: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--ink-dim); font-size: 14px; }
+.cl-feat-news { display: grid; gap: 4px; text-align: left; padding: 10px 12px; border-radius: calc(8px * var(--round)); border: 1px solid var(--rule); background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink); font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+.cl-feat-news i { font-style: normal; font-weight: 600; font-size: 11.5px; color: var(--signal); text-transform: uppercase; letter-spacing: .08em; }
+.cl-feat-news:hover { border-color: var(--ink-faint); }
+.cl-feat .cc-btns { margin-top: auto; padding-top: 6px; }
+.cl-feat-arrow { position: absolute; top: calc(50% - 22px); translate: 0 -50%; z-index: 2; width: 40px; height: 64px; display: grid; place-items: center; padding: 0; border: 0;
+  border-radius: calc(8px * var(--round)); background: rgb(0 0 0 / .45); color: #fff; backdrop-filter: blur(8px); opacity: .75; }
+.cl-feat-arrow svg { width: 20px; height: 20px; }
+.cl-feat-arrow.prev { left: 10px; }
+.cl-feat-arrow.next { left: calc(63.6% - 50px); }
+.cl-feat-arrow:hover, .cl-feat-arrow:focus-visible { opacity: 1; background: rgb(0 0 0 / .7); }
+.cl-dots { display: flex; justify-content: center; gap: 6px; }
+.cl-dots button { width: 22px; height: 6px; padding: 0; border: 0; border-radius: 3px; background: color-mix(in srgb, var(--ink) 22%, transparent); }
+.cl-dots button[aria-current] { background: var(--ink); width: 34px; }
+.cl-dots button:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+/* Played before: wide capsules with the game's header art. */
+.cl-caps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px 14px; }
+.cl-cap { display: grid; gap: 4px; padding: 0; border: 0; background: none; text-align: left; color: var(--ink-dim); min-width: 0; }
+.cl-cap .img { position: relative; display: block; aspect-ratio: 460 / 215; border-radius: calc(8px * var(--round)); overflow: hidden; background: var(--raised); transition: transform .16s ease, box-shadow .16s ease; }
+.cl-cap .img img { width: 100%; height: 100%; object-fit: cover; }
+.cl-cap .img .ph { position: absolute; inset: 0; display: grid; place-items: center; font: 700 22px var(--font-display); color: var(--ink-faint); }
+.cl-cap .img .badge, .cl-cap .img > span:not(.ph) { position: absolute; left: 6px; top: 6px; }
+.cl-cap.off .img img { filter: saturate(.55) brightness(.8); }
+.cl-cap .nm { margin-top: 4px; font-size: 13.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-cap .sub { font-size: 12.5px; color: var(--ink-faint); }
+.cl-cap:hover .img, .cl-cap:focus-visible .img { transform: scale(1.03); box-shadow: 0 0 0 3px var(--ink), 0 14px 30px -12px #000; }
+.cl-cap:focus-visible { outline: none; }
+/* News from your games */
+.cl-news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 12px; }
+.cl-news { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; align-items: start; padding: 10px; text-align: left; border-radius: var(--radius);
+  border: 1px solid var(--rule); background: color-mix(in srgb, var(--panel) 88%, transparent); color: var(--ink-dim); }
+.cl-news .img { aspect-ratio: 460 / 215; border-radius: calc(6px * var(--round)); overflow: hidden; background: var(--raised); }
+.cl-news .img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cl-news .txt { display: grid; gap: 4px; min-width: 0; }
+.cl-news .when { font-size: 12px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-news .when i { font-style: normal; font-weight: 700; color: var(--ink-dim); margin-right: 6px; }
+.cl-news .when i.patch { color: var(--signal); }
+.cl-news b { color: var(--ink); font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cl-news .sn { font-size: 12.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cl-news:hover { border-color: var(--ink-faint); }
+.cl-news:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+@media (max-width: 1100px) { .cl-feat-card { grid-template-columns: minmax(0, 1.3fr) minmax(240px, 1fr); } .cl-feat-arrow.next { left: calc(56.5% - 50px); } }
+html[data-style="glass"] :is(.cl-feat-card, .cl-news) { background: rgb(16 21 30 / .5); backdrop-filter: blur(24px) saturate(1.3); }
+html[data-style="mono"] :is(.cl-feat-art, .cl-cap .img img, .cl-news .img img) { filter: grayscale(1); }
+html[data-style="sharp"] :is(.cl-feat-card, .cl-cap .img, .cl-news) { --cut: 12px; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+html[data-style="sharp"] .cl-dots button[aria-current] { background: var(--signal); }
 .cl-dl:not([hidden]) { display: grid; gap: 8px; }
+/* Best deals for you: a banner of discounted games under the carousel. */
+.cl-deals { display: grid; gap: 14px; padding: 18px 20px 20px; border-radius: var(--radius); border: 1px solid var(--rule);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--good) 16%, var(--panel)), var(--panel) 55%); }
+.cl-deal-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+.cl-deal { display: grid; align-content: start; gap: 5px; padding: 0; border: 0; background: none; text-align: left; color: var(--ink-dim); min-width: 0; }
+.cl-deal .img { position: relative; display: block; aspect-ratio: 460 / 215; border-radius: calc(8px * var(--round)); overflow: hidden; background: var(--raised); transition: transform .16s ease, box-shadow .16s ease; }
+.cl-deal .img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cl-deal .img .ph { position: absolute; inset: 0; display: grid; place-items: center; font: 700 22px var(--font-display); color: var(--ink-faint); }
+.cl-deal .cut { position: absolute; left: 8px; bottom: 8px; padding: 3px 8px; border-radius: var(--pill); background: var(--good); color: #062b14; font: 800 13px/1.2 var(--font-body); }
+.cl-deal .nm { margin-top: 4px; font-size: 13.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-deal .pr { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.cl-deal .pr .was { color: var(--ink-faint); text-decoration: line-through; }
+.cl-deal .pr b { color: var(--ink); font-size: 15px; }
+.cl-deal .pr .low { font-size: 11.5px; font-weight: 700; color: var(--good); }
+.cl-deal .why { font-size: 12px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-deal:hover .img, .cl-deal:focus-visible .img { transform: scale(1.03); box-shadow: 0 0 0 3px var(--ink), 0 14px 30px -12px #000; }
+.cl-deal:focus-visible { outline: none; }
+html[data-style="glass"] .cl-deals { background: rgb(16 21 30 / .5); backdrop-filter: blur(24px) saturate(1.3); }
+html[data-style="mono"] .cl-deals { background: var(--panel); }
+html[data-style="mono"] .cl-deal .img img { filter: grayscale(1); }
+html[data-style="mono"] .cl-deal .cut { background: var(--ink); color: var(--ground); }
+html[data-style="sharp"] :is(.cl-deals, .cl-deal .img) { --cut: 12px; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
 .cl-sec { display: grid; gap: 12px; min-width: 0; }
 .cl-sec-head { display: flex; align-items: baseline; gap: 10px; }
 .cl-sec-head h2 { margin: 0; font: 700 18px/1.2 var(--font-display); color: var(--ink); }
@@ -1620,9 +1692,9 @@ html[data-style="sharp"] .big-rail .tile:focus-visible .art { box-shadow: 0 24px
 html[data-style="glass"] .classic .gp-panel { background: none; backdrop-filter: none; border: 0; }
 html[data-style="glass"] .classic .backdrop { opacity: .6; }
 html[data-style="glass"] :is(.cl-side, .cl-stat) { background: rgb(16 21 30 / .5); backdrop-filter: blur(24px) saturate(1.3); }
-html[data-style="mono"] :is(.cl-banner, .cl-continue) { filter: grayscale(1); }
-html[data-style="sharp"] :is(.cl-banner, .cl-continue, .cl-stat, .cl-search input, .cl-chips button) { clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
-html[data-style="sharp"] :is(.cl-banner, .cl-continue) { --cut: 18px; }
+html[data-style="mono"] .cl-banner { filter: grayscale(1); }
+html[data-style="sharp"] :is(.cl-banner, .cl-stat, .cl-search input, .cl-chips button) { clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+html[data-style="sharp"] .cl-banner { --cut: 18px; }
 html[data-style="sharp"] .cl-chips button[aria-pressed="true"] { background: var(--signal); border-color: var(--signal); color: var(--on-go); }
 html[data-style="sharp"] .cl-row[aria-current] { background: linear-gradient(90deg, color-mix(in srgb, var(--signal) 24%, transparent), transparent); }
 
@@ -2362,7 +2434,10 @@ function sizeIntro() {
   h.classList.add('measuring', 'intro');
   let first = 0;
   for (const el of rows.children) if (!el.classList.contains('later')) first += el.offsetHeight + 26;
-  h.style.setProperty('--intro-h', `${Math.max(300, $('#main').clientHeight - first - 46 + 26 - 6)}px`);
+  // Downloads in progress sit between the panel and the first row: they take their room from the panel.
+  const dl = h.querySelector(':scope > .downloads');
+  const downloadsH = dl && !dl.hidden ? dl.offsetHeight : 0;
+  h.style.setProperty('--intro-h', `${Math.max(300, $('#main').clientHeight - first - 46 + 26 - 6 - downloadsH)}px`);
   // How tall the panel is with everything in it: a full-size logo, achievements and a news line.
   const f = h.classList.contains('games-home') && h.querySelector('#focus');
   if (f) {
@@ -3176,13 +3251,13 @@ function renderClassic() {
   const ach = t && achievementsOf(t)[0];
   const banner = a.hero || a.header || customCover(t || {}) || a.cover || '';
   $('#main').innerHTML = `
-    <div class="classic"${home ? ' data-pick="home"' : t ? ` data-pick="${esc(t.id)}"` : ''}>
+    <div class="classic${home ? ' cl-wide' : ''}"${home ? ' data-pick="home"' : t ? ` data-pick="${esc(t.id)}"` : ''}>
       <div class="backdrop" id="backdrop" aria-hidden="true"><div class="shade"></div></div>
-      <aside class="cl-side" aria-label="Your games">
+      ${home ? '' : `<aside class="cl-side" aria-label="Your games">
         <label class="cl-search">${ICON.search}<input id="cl-q" type="search" placeholder="Search ${titles.filter(x => !isHidden(x)).length} games" value="${esc(state.clQuery || '')}" autocomplete="off"></label>
         <div class="cl-chips">${Object.entries(CL_FILTERS).map(([k, n]) => `<button data-cl-filter="${k}" aria-pressed="${(state.clFilter || 'all') === k}">${n}</button>`).join('')}</div>
         <div class="cl-list" id="cl-list">${classicRows(t)}</div>
-      </aside>
+      </aside>`}
       ${home ? classicHomeHtml() : `<section class="cl-page" id="cl-page">${!t ? `<p class="empty">Junction hasn't found any games yet.</p>` : `
         ${state.view.name === 'game' ? `<button class="pill back" data-home>${ICON.back} Back</button>` : ''}
         <div class="cl-banner"${banner ? ` style="background-image:url('${esc(banner)}')"` : ''}>
@@ -3198,14 +3273,14 @@ function renderClassic() {
         ${gameTabsHtml(t, b)}${gamePanelHtml(t, b)}`}
       </section>`}
     </div>`;
-  $('#cl-list').scrollTop = listY;
+  if ($('#cl-list')) $('#cl-list').scrollTop = listY;
   if (sameGame && state.tabSwitch) $('#cl-page').scrollTop = paneY;
   if (home) {
     renderDownloads();
     // Home drawn again (a refresh, prices arriving): it stays where you were.
     if (before?.dataset.pick === 'home') $('#cl-page').scrollTop = paneY;
-    const last = classicDefault();
-    setBackdrop(last && ((last.art || {}).hero || (last.art || {}).header) || '', true);
+    const f = classicFeatured()[state.clFeat || 0];
+    setBackdrop(f && ((f.art || {}).hero || (f.art || {}).header) || '', true);
     // Its store suggestions need the prices: draw them in once they're here.
     if (!store) loadStoreQuiet().then(s => s && state.view.name === 'home' && $('#main .classic[data-pick="home"]') && renderClassic());
   }
@@ -3214,41 +3289,109 @@ function renderClassic() {
   if (cur && !before) cur.scrollIntoView({ block: 'center' });
   if (t) afterGame(t, b, true);
 }
-// Classic's Home: the game you played last, the ones before it, downloads, and a few store suggestions.
-// Picking a game in the list opens it, like on the Library tab.
-function classicHomeHtml() {
-  const all = titles.filter(x => !isHidden(x));
-  const played = all.filter(x => x.lastPlayed).sort((x, y) => y.lastPlayed - x.lastPlayed);
-  const last = played[0] || classicDefault();
-  const recent = played.filter(x => x !== last).slice(0, 8);
-  const a = (last && last.art) || {};
-  const banner = a.hero || a.header || customCover(last || {}) || a.cover || '';
-  const on = last && isInstalled(last);
-  const sec = (title, note, body, more) => `
-        <section class="cl-sec"><div class="cl-sec-head"><h2>${esc(title)}</h2>${note ? `<i>${esc(note)}</i>` : ''}${more || ''}</div>${body}</section>`;
-  const wishSale = store ? wishlistIds().map(id => store.games[id]).filter(sg => sg && !hideOwned(sg) && bestDeal(sg)?.cut > 0)
-    .sort((x, y) => bestDeal(y).cut - bestDeal(x).cut).slice(0, 8) : [];
-  const forYou = store ? forYouGames().slice(0, 8) : [];
-  return `<section class="cl-page cl-home" id="cl-page">
-        ${last ? `
-        <div class="cl-continue"${banner ? ` style="background-image:url('${esc(banner)}')"` : ''}>
-          <div class="cc-txt">
-            <span class="cc-label">${last.lastPlayed ? 'Continue' : 'Ready to play'}</span>
-            ${a.logo && a.hero ? `<img class="logo" src="${esc(a.logo)}" alt="${esc(last.name)}">` : `<h1>${esc(last.name)}</h1>`}
-            <p class="cc-meta">${esc([last.playtimeMinutes && `${hours(last.playtimeMinutes)} played`, last.lastPlayed && `last played ${whenLower(last.lastPlayed)}`].filter(Boolean).join(' · ') || launcherNames(last))}</p>
+// Classic's Home, laid out like a store front page: your recent games in a big carousel, news from your games,
+// downloads, the games you played before, and a few store suggestions. One wide page, without the game list.
+const classicFeatured = () => titles.filter(x => !isHidden(x) && x.lastPlayed).sort((x, y) => y.lastPlayed - x.lastPlayed).slice(0, 6);
+function classicFeatHtml() {
+  const games = classicFeatured();
+  if (!games.length) return '';
+  const i = Math.min(state.clFeat || 0, games.length - 1), t = games[i], a = t.art || {};
+  const art = a.hero || a.header || customCover(t) || a.cover || '';
+  const on = isInstalled(t), news = latestNews(t, 30), ach = achievementsOf(t)[0];
+  const meta = [t.playtimeMinutes && `${hours(t.playtimeMinutes)} played`, t.lastPlayed && `last played ${whenLower(t.lastPlayed)}`].filter(Boolean).join(' · ');
+  const step = d => (i + d + games.length) % games.length;
+  return `
+        <div class="cl-feat-card">
+          <button class="cl-feat-art" data-open="${esc(t.id)}" aria-label="${esc(t.name)}"${art ? ` style="background-image:url('${esc(art)}')"` : ''}>
+            ${a.logo && a.hero ? `<img class="logo" src="${esc(a.logo)}" alt="">` : ''}
+          </button>
+          <div class="cl-feat-side">
+            <span class="cc-label">${i ? 'Recently played' : 'Continue'}</span>
+            <h2>${esc(t.name)}</h2>
+            <p class="cl-feat-meta">${esc(meta || launcherNames(t))} ${launcherBadge(t)}</p>
+            ${ach ? `<p class="cl-feat-meta">${ach[1][0]} of ${ach[1][1]} achievements</p>` : ''}
+            ${news ? `<button class="cl-feat-news" data-open="${esc(t.id)}" data-tab="news"><i>${newsKind(news)} · ${esc(whenLower(news.date))}</i>${esc(news.title)}</button>` : ''}
             <div class="cc-btns">
-              <button class="pill primary big${on ? '' : ' install'}" data-quick="${esc(last.id)}">${on ? ICON.play : ICON.download}<span>${on ? 'Play' : 'Install'}</span></button>
-              <button class="pill" data-open="${esc(last.id)}">Game page</button>
+              <button class="pill primary${on ? '' : ' install'}" data-quick="${esc(t.id)}">${on ? ICON.play : ICON.download}<span>${on ? 'Play' : 'Install'}</span></button>
+              <button class="pill" data-open="${esc(t.id)}">Game page</button>
             </div>
           </div>
-        </div>` : ''}
+        </div>
+        ${games.length > 1 ? `
+        <button class="cl-feat-arrow prev" data-cl-feat="${step(-1)}" aria-label="Previous game"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="cl-feat-arrow next" data-cl-feat="${step(1)}" aria-label="Next game"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="cl-dots">${games.map((g, k) => `<button data-cl-feat="${k}" aria-label="${esc(g.name)}"${k === i ? ' aria-current="true"' : ''}></button>`).join('')}</div>` : ''}`;
+}
+// News from your games: the newest posts, at most two per game, from the last month.
+function classicNews() {
+  const now = Date.now() / 1000;
+  return titles.filter(x => !isHidden(x) && (isInstalled(x) || x.lastPlayed))
+    .flatMap(x => newsOf(x).filter(n => now - n.date < 30 * 864e2).slice(0, 2).map(n => [x, n]))
+    .sort((p, q) => q[1].date - p[1].date).slice(0, 6);
+}
+function classicHomeHtml() {
+  const all = titles.filter(x => !isHidden(x));
+  const feat = classicFeatured();
+  const played = all.filter(x => x.lastPlayed).sort((x, y) => y.lastPlayed - x.lastPlayed).slice(feat.length, feat.length + 12);
+  const news = classicNews();
+  const sec = (title, note, body, more) => `
+        <section class="cl-sec"><div class="cl-sec-head"><h2>${esc(title)}</h2>${note ? `<i>${esc(note)}</i>` : ''}${more || ''}</div>${body}</section>`;
+  const capsule = g => {
+    const a = g.art || {}, img = a.header || a.hero || customCover(g) || a.cover;
+    return `<button class="cl-cap${isInstalled(g) ? '' : ' off'}" data-open="${esc(g.id)}" data-focus="${esc(g.id)}" style="${lineVar(g.launcher)}">
+            <span class="img">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : `<span class="ph">${esc(initials(g.name))}</span>`}${launcherBadge(g)}</span>
+            <span class="nm">${esc(g.name)}</span>
+            <span class="sub">${esc([g.playtimeMinutes && hours(g.playtimeMinutes), g.lastPlayed && when(g.lastPlayed)].filter(Boolean).join(' · ') || (isInstalled(g) ? 'Installed' : 'Not installed'))}</span>
+          </button>`;
+  };
+  const newsCard = ([g, n]) => {
+    const a = g.art || {}, img = a.header || a.hero || a.cover;
+    return `<button class="cl-news" data-open="${esc(g.id)}" data-tab="news">
+            <span class="img">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ''}</span>
+            <span class="txt"><span class="when"><i class="${n.patch ? 'patch' : ''}">${newsKind(n)}</i>${esc(g.name)} · ${esc(when(n.date))}</span>
+              <b>${esc(n.title)}</b>${n.text ? `<span class="sn">${esc(n.text)}</span>` : ''}</span>
+          </button>`;
+  };
+  const wishSale = store ? wishlistIds().map(id => store.games[id]).filter(sg => sg && !hideOwned(sg) && bestDeal(sg)?.cut > 0)
+    .sort((x, y) => bestDeal(y).cut - bestDeal(x).cut).slice(0, 8) : [];
+  const dealPicks = store ? forYouGames({ sale: true }) : [], deals = dealPicks.slice(0, 5), dealWhy = dealPicks.why || new Map();
+  const forYou = store ? forYouGames().filter(sg => !deals.includes(sg)).slice(0, 8) : [];
+  const dealCardHtml = sg => {
+    const d = bestDeal(sg), why = dealWhy.get(sg.id);
+    return `<button class="cl-deal" data-price="${esc(sg.id)}" aria-label="${esc(sg.title)}, ${esc(money(d.price))}, ${d.cut}% off">
+            <span class="img">${storeImg(sg)}<span class="cut">-${d.cut}%</span></span>
+            <span class="nm">${esc(sg.title)}</span>
+            <span class="pr"><span class="was">${esc(money(d.regular))}</span><b>${esc(money(d.price))}</b>${isLow(sg, d) ? '<span class="low">Lowest ever</span>' : ''}</span>
+            ${why ? `<span class="why">${esc(why)}</span>` : ''}
+          </button>`;
+  };
+  return `<section class="cl-page cl-home" id="cl-page"><div class="cl-home-in">
+        ${feat.length ? `<section class="cl-feat" id="cl-feat" aria-label="Your recent games">${classicFeatHtml()}</section>` : ''}
+        ${deals.length ? `<section class="cl-deals" aria-labelledby="cl-deals-h">
+          <div class="cl-sec-head"><h2 id="cl-deals-h">Best deals for you</h2><i>On sale now, like the games you play</i>
+            <button class="link-btn" data-browse="sale">All deals</button></div>
+          <div class="cl-deal-row">${deals.map(dealCardHtml).join('')}</div>
+        </section>` : ''}
         <div class="downloads cl-dl" id="downloads" hidden></div>
-        ${recent.length ? sec('Recently played', '', `<div class="cl-tiles">${recent.map(g => tile(g)).join('')}</div>`) : ''}
+        ${news.length ? sec('News from your games', 'Patch notes and announcements from the developers', `<div class="cl-news-grid">${news.map(newsCard).join('')}</div>`) : ''}
+        ${played.length ? sec('Played before', '', `<div class="cl-caps">${played.map(capsule).join('')}</div>`,
+          '<button class="link-btn" data-nav="library">Library</button>') : ''}
         ${wishSale.length ? sec('On sale from your wishlist', '', `<div class="cl-tiles land">${wishSale.map(storeTile).join('')}</div>`,
           '<button class="link-btn" data-store-tab="wishlist">Wishlist</button>') : ''}
         ${forYou.length ? sec('For you in the Store', 'Like the games you play most', `<div class="cl-tiles land">${forYou.map(storeTile).join('')}</div>`,
           '<button class="link-btn" data-store-tab="store">Store</button>') : ''}
-      </section>`;
+      </div></section>`;
+}
+// The carousel's arrows and dots: only the carousel is drawn again, so the page stays where it is.
+function classicFeat(i) {
+  state.clFeat = i;
+  const box = $('#cl-feat');
+  if (!box) return;
+  const keep = document.activeElement?.closest('#cl-feat') && (document.activeElement.matches('.cl-feat-arrow.prev') ? '.prev' : document.activeElement.matches('.cl-feat-arrow.next') ? '.next' : `.cl-dots [data-cl-feat="${i}"]`);
+  box.innerHTML = classicFeatHtml();
+  if (keep) box.querySelector(keep)?.focus({ preventScroll: true });
+  const f = classicFeatured()[i];
+  if (f) setBackdrop((f.art || {}).hero || (f.art || {}).header || '', true);
 }
 // A game chosen in the list: shown on the right, and the Library tab is where you are now.
 function classicPick(id) {
@@ -3449,7 +3592,9 @@ const browseTile = (count, preset) => `
 
 // Store games that match the genres you spend hours in, with the game that matches best as the reason.
 const forYouWhy = new Map();
-function forYouGames() {
+// With `sale`: only games with a real discount, and a bigger one counts for more. Its reasons come back as `.why`
+// (the Store's own "For you" row keeps forYouWhy).
+function forYouGames({ sale = false } = {}) {
   const played = titles.filter(t => t.playtimeMinutes > 60 && !isHidden(t) && t.tags.length)
     .sort((a, b) => b.playtimeMinutes - a.playtimeMinutes).slice(0, 80);
   const w = {};
@@ -3459,14 +3604,16 @@ function forYouGames() {
   const scored = [];
   for (const sg of catalogGames()) {
     if (ownsOf(sg).length || wished.has(sg.id) || !bestDeal(sg) || libraryTitleFor(sg)) continue;
+    if (sale && !(bestDeal(sg).cut >= 25)) continue;
     const tags = (sg.tags || []).slice(0, 8);
     if (tags.length < 3) continue;
     const fit = tags.reduce((s, g, i) => s + (w[g] || 0) / top / Math.sqrt(i + 1), 0) / Math.sqrt(tags.length);
     const liked = sg.score != null && sg.scoreCount > 300 ? sg.score / 100 : .55;
-    scored.push([sg, fit * (.35 + liked)]);
+    scored.push([sg, fit * (.35 + liked) * (sale ? .5 + bestDeal(sg).cut / 100 : 1)]);
   }
   const picks = scored.sort((a, b) => b[1] - a[1]).slice(0, ROW_MAX).map(([sg]) => sg);
-  forYouWhy.clear();
+  const why = sale ? new Map() : forYouWhy;
+  why.clear();
   for (const sg of picks) {
     const tags = (sg.tags || []).slice(0, 6);
     // The reason is the played game that shares the most of its main genres; hours only break ties.
@@ -3475,8 +3622,9 @@ function forYouGames() {
       const shared = tags.reduce((s, g, i) => s + (mine.includes(g) ? 1 / Math.sqrt(i + 1) : 0), 0);
       return [t, shared * shared * Math.log10(t.playtimeMinutes + 10), tags.filter(g => mine.includes(g)).length];
     }).sort((a, b) => b[1] - a[1])[0];
-    if (best && best[2] >= 2) forYouWhy.set(sg.id, `Because you play ${best[0].name}`);
+    if (best && best[2] >= 2) why.set(sg.id, `Because you play ${best[0].name}`);
   }
+  picks.why = why;
   return picks;
 }
 function storeRows() {
@@ -5020,7 +5168,11 @@ const size = b => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e
 function renderDownloads() {
   const box = $('#downloads');
   if (!box) return;
+  const before = box.hidden ? 0 : box.offsetHeight;
+  queueMicrotask(() => { if (box.isConnected && (box.hidden ? 0 : box.offsetHeight) !== before && box.parentElement.classList.contains('home')) sizeIntro(); });
   box.hidden = !downloads.length;
+  // Drawn again every few seconds: a controller's selection on a download stays on it.
+  const had = box.contains(document.activeElement) && document.activeElement.dataset.open;
   box.innerHTML = !downloads.length ? '' : `<div class="list-label"><span>Downloads</span><span>${downloads.length}</span></div>` +
     downloads.map(d => {
       const pct = d.total ? d.done / d.total * 100 : 0;
@@ -5031,6 +5183,7 @@ function renderDownloads() {
         <span class="bar"><i style="width:${pct.toFixed(1)}%"></i></span>
       </button>`;
     }).join('');
+  if (had) box.querySelector(`[data-open="${CSS.escape(had)}"]`)?.focus({ preventScroll: true });
 }
 async function pollDownloads() {
   if (!host.inApp) return;
@@ -5487,6 +5640,7 @@ document.addEventListener('click', e => {
   if (t.dataset.achFilter) { state.achFilter = t.dataset.achFilter; state.achAll = false; return fillAchievements(shownGame()); }
   if ('achMore' in t.dataset) { state.achAll = true; return fillAchievements(shownGame()); }
   if (t.dataset.clPick) return classicPick(t.dataset.clPick);
+  if (t.dataset.clFeat) return classicFeat(Number(t.dataset.clFeat));
   if (t.dataset.clFilter) { state.clFilter = t.dataset.clFilter; return refreshClassicList(); }
   if ('revealName' in t.dataset) {
     const txt = t.closest('.txt');
