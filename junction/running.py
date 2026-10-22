@@ -108,11 +108,16 @@ class Games:
         if not watchable(folder, exe):
             return False
         with self._lock:
-            if game_id in self._games:
+            entry = self._games.get(game_id)
+            if entry and entry["state"] == "playing":
                 return True
-            entry = self._games[game_id] = {"state": "starting", "since": time.time(), "folder": folder, "exe": exe}
+            fresh = not entry
+            if fresh:
+                entry = self._games[game_id] = {"state": "starting", "folder": folder, "exe": exe}
+            entry["since"] = time.time()  # pressed again while it starts: wait again from now
         self.on_change()
-        threading.Thread(target=self._watch, args=(game_id, entry), daemon=True).start()
+        if fresh:
+            threading.Thread(target=self._watch, args=(game_id, entry), daemon=True).start()
         return True
 
     def _current(self, game_id, entry):
@@ -123,9 +128,8 @@ class Games:
     def _watch(self, game_id, entry):
         folder, exe = entry["folder"], entry["exe"]
         try:
-            t0 = time.time()
             while not processes(folder, exe):
-                if time.time() - t0 > START_WAIT or not self._current(game_id, entry):
+                if time.time() - entry["since"] > START_WAIT or not self._current(game_id, entry):
                     return
                 time.sleep(CHECK_EVERY)
             with self._lock:

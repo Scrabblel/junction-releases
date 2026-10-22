@@ -5375,10 +5375,27 @@ const focusSize = new ResizeObserver(([e]) => {
   if (!e.target.isConnected) return focusSize.unobserve(e.target);
   const el = e.target, h = el.offsetHeight, was = +el.dataset.h || h, main = $('#main'), home = el.closest('.home');
   el.dataset.h = h;
-  if (h === was || main.scrollTop < 1 || !home || home.matches('.intro, .reveal, .leaving') || Date.now() < introLock) return;
+  if (h === was || main.scrollTop < 1 || !home) return;
+  // Not while the rows open or close, which changes it on purpose. A game chosen meanwhile (a quick controller)
+  // may have moved with it, so look again once they're open. (The rows sliding in afterwards move nothing.)
+  if (home.matches('.intro, .leaving') || Date.now() < introLock) {
+    clearTimeout(focusSize.later);
+    focusSize.later = setTimeout(chosenInView, Math.max(0, introLock - Date.now()) + 60);
+    return;
+  }
   main.scrollTop += h - was;
   lastY = main.scrollTop;
 });
+// The game chosen with the controller or the keyboard all in view again (not under the top bar).
+function chosenInView() {
+  const el = document.activeElement, main = $('#main');
+  if (!el?.matches(':focus-visible') || !main.contains(el)) return;
+  const r = el.getBoundingClientRect(), m = main.getBoundingClientRect();
+  if (r.top >= m.top && r.bottom <= m.bottom) return;
+  el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  if (!$('#app').classList.contains('top-hidden')) clearOfBar(el);
+  lastY = main.scrollTop;
+}
 const renderPage = render;
 render = async function () {
   const r = await renderPage();
@@ -5621,7 +5638,7 @@ const switchNeeded = steamId => steamId && lib.steamSignedIn && steamId !== lib.
 function launchingFeedback(g) {
   const t = titleOf.get(g.id) || g;
   // The Play buttons say Starting… (markRunning), until the app sees the game running or gives up.
-  state.running[g.id] ||= { state: 'starting', since: Date.now() / 1000 };
+  if (state.running[g.id]?.state !== 'playing') state.running[g.id] = { state: 'starting', since: Date.now() / 1000 };
   markRunning();
   setTimeout(markRunning, STARTING_FOR * 1000 + 50);
   document.querySelectorAll(`#main [data-focus="${CSS.escape(t.id)}"] .play-hint, #main [data-focus="${CSS.escape(t.id)}"] .lplay`).forEach(el => {
@@ -5631,7 +5648,8 @@ function launchingFeedback(g) {
 }
 async function play(g, steamId) {
   launchingFeedback(g);
-  const res = await host.play(g, steamId);
+  play.waiting.add(g.id);
+  const res = await host.play(g, steamId).finally(() => play.waiting.delete(g.id));
   const switchTo = switchNeeded(steamId);
   // Not started (an error, or the preview without the app): back to Play.
   if (!res || res.error || res.prototype || !res.watching) setTimeout(() => { if (state.running[g.id]?.state !== 'playing') delete state.running[g.id]; markRunning(); }, res?.error ? 0 : 2400);
@@ -5750,7 +5768,7 @@ function vkbNames(q) {
   const inStore = /store|browse/.test($('#vkb')?.dataset.for || '');
   const mine = titles.filter(t => !isHidden(t)).map(t => t.name);
   const theirs = store ? Object.values(store.games).map(g => g.title) : [];
-  const pool = inStore ? [...theirs, ...mine] : [...mine, ...theirs];
+  const pool = (inStore ? [...theirs, ...mine] : [...mine, ...theirs]).filter(Boolean);
   const starts = [], words = [], seen = new Set();
   for (const n of pool) {
     const l = n.toLowerCase();
@@ -5901,7 +5919,15 @@ function markRunning() {
     } else group.querySelector('.stop-x').dataset.stop = run[0].id;
   }
 }
-window.junctionRunning = m => { state.running = m || {}; markRunning(); };
+// The app's list replaces the page's, except for a game whose Play the app is still busy with (a Steam switch
+// takes a while): that one keeps saying Starting…
+play.waiting = new Set();
+window.junctionRunning = m => {
+  const had = state.running;
+  state.running = m || {};
+  for (const id of play.waiting) if (had[id] && !state.running[id]) state.running[id] = had[id];
+  markRunning();
+};
 new MutationObserver(() => {
   if (markRunning.queued || (!Object.keys(state.running).length && !document.querySelector('[data-run]'))) return;
   markRunning.queued = requestAnimationFrame(() => { markRunning.queued = 0; markRunning(); });
