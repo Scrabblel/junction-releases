@@ -1,4 +1,4 @@
-"""Signing in to Epic, so Junction can show the play time the Epic Games Launcher counts.
+"""Signing in to Epic, so Junction can show the play time the Epic Games Launcher counts, and your achievements.
 
 The sign-in is Epic's own page in a small Junction window. When it's done, Epic's page shows a one-time
 code; Junction swaps it for a refresh token and keeps that (encrypted, see signins.py), never the
@@ -6,13 +6,15 @@ password. This is the same way Legendary, Heroic and Playnite sign in: as the Ep
 public client id they all use. Epic doesn't offer this as an official API, so it can stop working.
 """
 import base64
+import datetime
 import json
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
-from . import signins
+from . import config, signins
 
 CLIENT = ("34a02cf8f4414e29b15921876da36f9a", "daafbccc737745039dffe53d94fc76cf")  # the Epic Games Launcher's
 TOKEN_URL = "https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/token"
@@ -136,3 +138,92 @@ def playtime():
 
 def sign_out():
     signins.put("epic", None)
+
+
+# ---------- achievements ----------
+# The same requests as the Epic store's own achievement pages (and Playnite's SuccessStory). A game's list is public;
+# what you unlocked needs the sign-in.
+
+GRAPHQL_URL = "https://launcher.store.epicgames.com/graphql"
+ACHIEVEMENTS_QUERY = """query Achievement($sandboxId: String!, $locale: String!) { Achievement {
+  productAchievementsRecordBySandbox(sandboxId: $sandboxId, locale: $locale) { achievements { achievement {
+    name hidden unlockedDisplayName unlockedDescription unlockedIconLink lockedIconLink rarity { percent } } } } } }"""
+PLAYER_QUERY = """query PlayerAchievement($epicAccountId: String!, $sandboxId: String!) { PlayerAchievement {
+  playerAchievementGameRecordsBySandbox(epicAccountId: $epicAccountId, sandboxId: $sandboxId) { records {
+    playerAchievements { playerAchievement { achievementName unlocked unlockDate } } } } } }"""
+TOTALS_TTL = 7 * 86400  # seconds a game's number of achievements is remembered
+
+
+def _graphql(query, variables, token=None):
+    headers = {"Content-Type": "application/json", "User-Agent": UA}
+    if token:
+        headers["Authorization"] = f"bearer {token}"
+    req = urllib.request.Request(GRAPHQL_URL, data=json.dumps({"query": query, "variables": variables}).encode(), headers=headers)
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r).get("data") or {}
+
+
+def _schema(namespace):
+    """Every achievement of the game in this catalogue namespace; [] when it has none."""
+    rec = (_graphql(ACHIEVEMENTS_QUERY, {"sandboxId": namespace, "locale": "en-US"}).get("Achievement") or {}
+           ).get("productAchievementsRecordBySandbox") or {}
+    return [a["achievement"] for a in rec.get("achievements") or [] if (a.get("achievement") or {}).get("name")]
+
+
+def _unlocked(token, account, namespace):
+    """{achievement name: unlock unix time} for what you unlocked in this game."""
+    def ask():
+        return ((_graphql(PLAYER_QUERY, {"epicAccountId": account, "sandboxId": namespace}, token).get("PlayerAchievement") or {}
+                 ).get("playerAchievementGameRecordsBySandbox") or {}).get("records")
+    records = ask()
+    if records is None:  # sometimes Epic has nothing the first time it's asked about a game, and does a moment later
+        time.sleep(1)
+        records = ask()
+    out = {}
+    for rec in records or []:
+        for item in rec.get("playerAchievements") or []:
+            a = item.get("playerAchievement") or {}
+            if a.get("unlocked") and a.get("achievementName"):
+                try:
+                    out[a["achievementName"]] = int(datetime.datetime.fromisoformat(a.get("unlockDate") or "").timestamp())
+                except ValueError:
+                    out[a["achievementName"]] = 1  # unlocked, date unknown
+    return out
+
+
+def achievement_counts(namespaces):
+    """{namespace: [unlocked, total], or None when Epic didn't answer for that game} for these games; games without
+    achievements are left out. {} when not signed in."""
+    if not signins.get("epic"):
+        return {}
+    token, account = _access()
+    totals = config.read_cache("epic_achievements.json", {})  # {namespace: [number of achievements, when asked]}
+
+    def one(ns):
+        try:
+            if time.time() - (totals.get(ns) or [0, 0])[1] > TOTALS_TTL:
+                totals[ns] = [len(_schema(ns)), time.time()]
+            if not totals[ns][0]:
+                return ns, False
+            return ns, [len(_unlocked(token, account, ns)), totals[ns][0]]
+        except (*config.NET_ERRORS, KeyError, TypeError):
+            return ns, None
+    with ThreadPoolExecutor(4) as pool:
+        out = {ns: v for ns, v in pool.map(one, namespaces) if v is not False}
+    config.write_cache("epic_achievements.json", totals)
+    return out
+
+
+def achievement_list(namespace):
+    """One game's achievements in the page's format, under "epic" as whose they are; None without any."""
+    items = _schema(namespace)
+    if not items:
+        return None
+    got = _unlocked(*_access(), namespace) if signins.get("epic") else {}
+    return {
+        # [name, description, hidden, % of players, sheet, slot, icon, grey icon]
+        "list": [[a.get("unlockedDisplayName") or a["name"], a.get("unlockedDescription") or "", int(bool(a.get("hidden"))),
+                  (a.get("rarity") or {}).get("percent"), -1, -1, a.get("unlockedIconLink"), a.get("lockedIconLink")]
+                 for a in items],
+        "who": {"epic": [got.get(a["name"], 0) for a in items]} if signins.get("epic") else {},
+    }

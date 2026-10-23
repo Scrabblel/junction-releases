@@ -1,4 +1,4 @@
-"""Signing in to EA, so Junction can show the play time the EA app counts.
+"""Signing in to EA, so Junction can show the play time the EA app counts, and your achievements.
 
 The sign-in is EA's own page in a small Junction window. EA only lets the EA app sign in this way, so
 Junction signs in as the EA app, like the GOG Galaxy EA plugin does: with the EA app's public client id
@@ -16,8 +16,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
-from . import pcsign, signins
+from . import config, pcsign, signins
 from .art import normalize
 
 CLIENT = ("JUNO_PC_CLIENT", "4mRLtYMb6vq9qglomWEaT4ChxsXWcyqbQpuBNfMPOYOiDmYYQmjuaBsF2Zp0RyVeWkfqhE9TuGgAw7te")  # the EA app's
@@ -29,7 +30,10 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 SIGN_IN_WAIT = 15 * 60   # seconds the sign-in window stays open
 OWNED_QUERY = ("query{me{ownedGameProducts(storefronts:[EA] locale:\"DEFAULT\" paging:{limit:9999,next:null} "
                "productFound:true ownershipMethod:[PURCHASE,REDEMPTION,ENTITLEMENT_GRANT] downloadableOnly:false "
-               "entitlementEnabled:true platforms:[PC]){items{product{name gameSlug baseItem(availabilities:[VISIBLE]){title}}}}}}")
+               "entitlementEnabled:true platforms:[PC]){items{originOfferId product{name gameSlug baseItem(availabilities:[VISIBLE]){title}}}}}}")
+# Your achievements in one game (by its offer id), as the EA app shows them. EA gives no pictures and no rarity.
+ACHIEVEMENTS_QUERY = ("query{{achievements(offerId:{} playerPsd:{} showHidden:true locale:\"US\")"
+                      "{{achievements{{name description isHidden awardCount date}}}}}}")
 
 
 class SignInError(Exception):
@@ -211,19 +215,27 @@ def _when(text):
         return None
 
 
+def _owned(token):
+    """Your EA games, as EA lists them."""
+    return (((_query(token, OWNED_QUERY).get("me") or {}).get("ownedGameProducts") or {}).get("items")) or []
+
+
+def _names(item):
+    p = item.get("product") or {}
+    return {n for n in (p.get("name"), (p.get("baseItem") or {}).get("title")) if n}
+
+
 def playtime():
     """{normalized game name: (minutes played, last played unix time)} as the EA app counts it; {} when not signed in.
     EA's games are matched by name, since Junction knows the installed ones by their uninstall entry."""
     if not signins.get("ea"):
         return {}
     token = _access()
-    items = (((_query(token, OWNED_QUERY).get("me") or {}).get("ownedGameProducts") or {}).get("items")) or []
     names = {}
-    for it in items:
+    for it in _owned(token):
         p = it.get("product") or {}
         if p.get("gameSlug"):
-            names.setdefault(p["gameSlug"], set()).update(
-                n for n in (p.get("name"), (p.get("baseItem") or {}).get("title")) if n)
+            names.setdefault(p["gameSlug"], set()).update(_names(it))
     out = {}
     slugs = sorted(names)
     for i in range(0, len(slugs), 50):
@@ -236,6 +248,43 @@ def playtime():
             for n in names.get(r.get("gameSlug"), ()):
                 out[normalize(n)] = (round(seconds / 60), _when(r.get("lastSessionEndDate")))
     return out
+
+
+def _achievements(names):
+    """{normalized game name: [(name, description, hidden, unlock unix time or 0)], or None when EA didn't answer for
+    that game} for these games; games without achievements are left out. {} when not signed in."""
+    if not signins.get("ea"):
+        return {}
+    token = _access()
+    psd = ((_query(token, "query{me{player{psd}}}").get("me") or {}).get("player") or {}).get("psd")
+    if not psd:
+        raise ValueError("EA didn't say who you are.")
+    offers = {normalize(n): it["originOfferId"] for it in _owned(token) if it.get("originOfferId") for n in _names(it)}
+
+    def one(name):
+        try:
+            sets = _query(token, ACHIEVEMENTS_QUERY.format(json.dumps(offers[name]), json.dumps(psd))).get("achievements") or []
+        except (*config.NET_ERRORS, TimeoutError):
+            return name, None
+        items = (sets[0].get("achievements") if sets else None) or []
+        return name, [(a.get("name") or "", a.get("description") or "", bool(a.get("isHidden")),
+                       (_when(a.get("date")) or 1) if a.get("awardCount") else 0) for a in items]
+    with ThreadPoolExecutor(4) as pool:
+        return {n: v for n, v in pool.map(one, [n for n in names if n in offers]) if v != []}
+
+
+def achievement_counts(names):
+    """{normalized game name: [unlocked, total], or None when EA didn't answer for that game}, like _achievements."""
+    return {n: v and [sum(1 for *_, at in v if at), len(v)] for n, v in _achievements(names).items()}
+
+
+def achievement_list(name):
+    """One game's achievements in the page's format, under "ea" as whose they are; None without any."""
+    v = _achievements([name]).get(name)
+    if not v:
+        return None
+    # [name, description, hidden, % of players, sheet, slot, icon, grey icon]: EA has no pictures or rarity.
+    return {"list": [[n, d, int(h), None, -1, -1, None, None] for n, d, h, _ in v], "who": {"ea": [at for *_, at in v]}}
 
 
 def sign_out():

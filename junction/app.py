@@ -23,8 +23,8 @@ import webbrowser
 
 import webview
 
-from . import (config, ea_account, epic_account, keys, launchers, library, live_store, logs, pad, playtime, running, signins,
-               startup, steam_switch, titlebar, ubisoft_account, updates)
+from . import (art, config, ea_account, epic_account, keys, launchers, library, live_store, logs, pad, playtime, running,
+               signins, startup, steam_switch, titlebar, ubisoft_account, updates)
 
 LIB_VERSION = 1          # bump when the cached library's shape changes
 ACH_TTL = 10 * 60        # seconds a game's achievements stay cached
@@ -418,17 +418,30 @@ class Api:
     # ---------- game page details ----------
 
     def get_achievements(self, appid=None):
-        """Without an app id: the empty shell the page starts from. With one: that game's achievements."""
+        """Without an id: the empty shell the page starts from. With a Steam app id, or a GOG or Epic game's own id
+        ("gog:<product id>", "epic:<app name>", "ea:<id>"): that game's achievements."""
         if appid is None:
             return {"icon": 48, "cols": 40, "games": {}, "perGame": True}
         appid = str(appid)
         hit = self._ach.get(appid)
         if hit and time.time() - hit[0] < ACH_TTL:
             return hit[1]
-        owners = sorted({s for g in (self._lib or {}).get("games", []) if str(g.get("steamAppId")) == appid
-                         for s in g.get("owners") or []})
         try:
-            data = library.achievements_for(appid, owners)
+            if appid.startswith("gog:"):
+                data = library.gog_achievements_for(appid[4:])
+            elif appid.startswith(("epic:", "ea:")):
+                g = next((g for g in (self._lib or {}).get("games", []) if g["id"] == appid), None)
+                if not g:
+                    data = None
+                elif g["launcher"] == "epic":
+                    ns = library.epic_namespace(g)
+                    data = epic_account.achievement_list(ns) if ns else None
+                else:  # EA knows its games by name here, as for play time
+                    data = ea_account.achievement_list(art.normalize(g["name"]))
+            else:
+                owners = sorted({s for g in (self._lib or {}).get("games", []) if str(g.get("steamAppId")) == appid
+                                 for s in g.get("owners") or []})
+                data = library.achievements_for(appid, owners)
         except Exception:  # noqa: BLE001 - Steam didn't answer: ask again next time instead of keeping "none"
             traceback.print_exc()
             return None

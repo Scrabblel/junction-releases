@@ -13,6 +13,7 @@ Play time comes from the same kind of files: GOG Galaxy's database, Ubisoft Conn
 (cache/game_stats) and, for last played only, Battle.net's settings file.
 """
 import base64
+import contextlib
 import datetime
 import glob
 import json
@@ -49,30 +50,39 @@ def _copy_db(path, copy):
                 pass
 
 
-def gog_owned():
-    """[(product id, title, cover url)] for GOG games in this PC's Galaxy library, DLC and hidden duplicates left out."""
+@contextlib.contextmanager
+def _galaxy():
+    """Galaxy's database, or None without Galaxy. Galaxy keeps it open while it runs, so this reads a copy."""
     path = _galaxy_db()
     if not os.path.isfile(path):
-        return []
-    # Galaxy keeps the database open while it runs, so read a copy.
+        yield None
+        return
     with tempfile.TemporaryDirectory() as tmp:
         copy = os.path.join(tmp, "galaxy.db")
         _copy_db(path, copy)
         db = sqlite3.connect(copy)
         try:
-            rows = db.execute("""
-                select lr.releaseKey, gp.value from LibraryReleases lr
-                join GamePieces gp on gp.releaseKey = lr.releaseKey
-                join GamePieceTypes t on t.id = gp.gamePieceTypeId and t.type = 'title'
-                left join ReleaseProperties rp on rp.releaseKey = lr.releaseKey
-                where lr.releaseKey like 'gog\\_%' escape '\\'
-                  and coalesce(rp.isDlc, 0) = 0 and coalesce(rp.isVisibleInLibrary, 1) = 1
-                group by lr.releaseKey""").fetchall()
-            covers = dict(db.execute("""
-                select gp.releaseKey, gp.value from GamePieces gp
-                join GamePieceTypes t on t.id = gp.gamePieceTypeId and t.type = 'originalImages'""").fetchall())
+            yield db
         finally:
             db.close()
+
+
+def gog_owned():
+    """[(product id, title, cover url)] for GOG games in this PC's Galaxy library, DLC and hidden duplicates left out."""
+    with _galaxy() as db:
+        if db is None:
+            return []
+        rows = db.execute("""
+            select lr.releaseKey, gp.value from LibraryReleases lr
+            join GamePieces gp on gp.releaseKey = lr.releaseKey
+            join GamePieceTypes t on t.id = gp.gamePieceTypeId and t.type = 'title'
+            left join ReleaseProperties rp on rp.releaseKey = lr.releaseKey
+            where lr.releaseKey like 'gog\\_%' escape '\\'
+              and coalesce(rp.isDlc, 0) = 0 and coalesce(rp.isVisibleInLibrary, 1) = 1
+            group by lr.releaseKey""").fetchall()
+        covers = dict(db.execute("""
+            select gp.releaseKey, gp.value from GamePieces gp
+            join GamePieceTypes t on t.id = gp.gamePieceTypeId and t.type = 'originalImages'""").fetchall())
     games = []
     for key, value in rows:
         try:
@@ -378,28 +388,48 @@ def battlenet_last_played():
 
 def gog_playtime():
     """{GOG product id: (minutes played, last played unix time)} from GOG Galaxy's own tracking."""
-    path = _galaxy_db()
-    if not os.path.isfile(path):
-        return {}
-    with tempfile.TemporaryDirectory() as tmp:
-        copy = os.path.join(tmp, "galaxy.db")
-        _copy_db(path, copy)
-        db = sqlite3.connect(copy)
-        try:
-            minutes = dict(db.execute("select releaseKey, sum(minutesInGame) from GameTimes group by releaseKey").fetchall())
-            last = dict(db.execute("select gameReleaseKey, max(lastPlayedDate) from LastPlayedDates group by gameReleaseKey").fetchall())
-        finally:
-            db.close()
+    with _galaxy() as db:
+        if db is None:
+            return {}
+        minutes = dict(db.execute("select releaseKey, sum(minutesInGame) from GameTimes group by releaseKey").fetchall())
+        last = dict(db.execute("select gameReleaseKey, max(lastPlayedDate) from LastPlayedDates group by gameReleaseKey").fetchall())
+    return {key[4:]: (int(minutes.get(key) or 0), _galaxy_time(last.get(key)))
+            for key in set(minutes) | set(last) if key.startswith("gog_")}
+
+
+def _galaxy_time(text):
+    """Galaxy's "2021-02-04 20:05:47" (UTC) as a unix time, or None."""
+    try:
+        return int(datetime.datetime.strptime(text[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc).timestamp())
+    except (TypeError, ValueError):
+        return None
+
+
+# Galaxy keeps the names and descriptions in several languages: English where it has it, like Steam's.
+_GOG_ACHIEVEMENTS = """
+    select a.gameReleaseKey, coalesce(en.name, other.name, a.apikey), coalesce(en.description, other.description, ''),
+           case when a.raritySlug is null then null else a.rarity end, a.imageUnlockedUrl, a.imageLockedUrl,
+           (select max(u.unlockTime) from UserAchievements u
+            where u.gameReleaseKey = a.gameReleaseKey and u.apikey = a.apikey and u.isUnlocked = 1)
+    from Achievements a
+    left join LocalizedAchievements en on en.gameReleaseKey = a.gameReleaseKey and en.apikey = a.apikey
+         and en.languageId = (select id from Languages where code = 'en-US')
+    left join LocalizedAchievements other on other.rowid = (
+         select min(o.rowid) from LocalizedAchievements o where o.gameReleaseKey = a.gameReleaseKey and o.apikey = a.apikey)
+    where a.gameReleaseKey {} order by a.rowid"""
+
+
+def gog_achievements(product=None):
+    """{GOG product id: [(name, description, % of players or None, icon, grey icon, unlock time or 0)]} from Galaxy's
+    copy of your achievements, as fresh as the last time Galaxy ran. `product`: only that game."""
+    with _galaxy() as db:
+        if db is None:
+            return {}
+        if product is None:
+            rows = db.execute(_GOG_ACHIEVEMENTS.format("like 'gog\\_%' escape '\\'")).fetchall()
+        else:
+            rows = db.execute(_GOG_ACHIEVEMENTS.format("= ?"), ("gog_" + str(product),)).fetchall()
     out = {}
-    for key in set(minutes) | set(last):
-        if not key.startswith("gog_"):
-            continue
-        when = None
-        if last.get(key):
-            try:
-                when = int(datetime.datetime.strptime(last[key][:19], "%Y-%m-%d %H:%M:%S")
-                           .replace(tzinfo=datetime.timezone.utc).timestamp())
-            except ValueError:
-                pass
-        out[key[4:]] = (int(minutes.get(key) or 0), when)
+    for key, name, desc, pct, icon, gray, unlocked in rows:
+        out.setdefault(key[4:], []).append((name, desc, pct, icon, gray, (_galaxy_time(unlocked) or 1) if unlocked else 0))
     return out

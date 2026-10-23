@@ -2,7 +2,7 @@
 
 Two steps, so the window has something to show quickly:
 - scan(): launchers, owned games, Steam accounts, art and store details. Takes seconds.
-- enrich(): achievements, disk space, launcher play time, DLC sales, friends, profile pictures and news.
+- enrich(): launcher play time, achievements, disk space, DLC sales, friends, profile pictures and news.
   Slower; runs in the background after a scan.
 
 Art stays as web addresses here (the app can load pictures from Steam itself); the artifact export
@@ -12,6 +12,7 @@ import base64
 import concurrent.futures
 import mimetypes
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -246,11 +247,9 @@ def add_launcher_playtime(games):
 
 
 def add_extras(lib, settings=None, inline=web_uri, store_appids=(), progress=None):
-    """Launcher play time, DLC on sale, Steam friends and your own profile pictures (also used by tools/export_extras.py)."""
+    """DLC on sale, Steam friends and your own profile pictures (also used by tools/export_extras.py)."""
     settings = settings if settings is not None else config.load_settings()
     games = lib["games"]
-
-    add_launcher_playtime(games)
 
     _log(progress, "Checking DLC sales")
     appids = sorted({g["steamAppId"] for g in games if g["launcher"] == "steam" and g.get("steamAppId")
@@ -288,14 +287,52 @@ def add_news(lib):
     lib["news"] = {str(a): n for a, n in extras.steam_news(appids).items()}
 
 
+def epic_namespace(g):
+    """An Epic game's catalogue namespace, from the launcher link Junction made for it (see launchers.find_epic)."""
+    m = re.match(r"com\.epicgames\.launcher://apps/([^%/?]+)%3A", g.get("launch") or "")
+    return m.group(1) if m else None
+
+
+def _signed_in_counts(games, launcher, key, read):
+    """game["achievements"] = {launcher: [unlocked, total]} for the played games of a launcher you sign in to.
+    `key(game)` names a game the way `read(keys)` answers: {key: [unlocked, total], or None when the launcher didn't
+    answer for that game}, games without achievements left out, {} when not signed in."""
+    mine = [g for g in games if g["launcher"] == launcher]
+    played = {g["id"]: k for g in mine if g.get("playtimeMinutes") and (k := key(g))}
+    try:
+        counts = read(sorted(set(played.values())))
+    except Exception:  # noqa: BLE001 - the sign-in ran out or the launcher didn't answer: keep the counts there were
+        return
+    for g in mine:
+        n = counts.get(played.get(g["id"]), False)
+        if n is not None:
+            g["achievements"] = {launcher: n} if n else None
+
+
 def add_achievement_counts(lib, settings=None):
-    """{steamid: [unlocked, total]} per played Steam game."""
+    """game["achievements"] = {whose: [unlocked, total]}: per Steam account for played Steam games, "gog" for GOG
+    games you played or unlocked something in (from Galaxy, on this PC), and "epic" and "ea" for played Epic and EA
+    games (signed in)."""
     settings = settings if settings is not None else config.load_settings()
     _, keys = accounts_and_keys(settings)
+    try:
+        gog = owned_local.gog_achievements()
+    except Exception:  # noqa: BLE001 - a changed database keeps the counts it had
+        gog = None
+    for g in lib["games"]:
+        mine = gog.get(g["id"].split(":", 1)[1]) if gog is not None and g["launcher"] == "gog" else None
+        done = sum(1 for a in mine or [] if a[5])
+        if mine and (done or g.get("playtimeMinutes")):
+            g["achievements"] = {"gog": [done, len(mine)]}
+        elif gog is not None and g["launcher"] == "gog":
+            g["achievements"] = None
+    _signed_in_counts(lib["games"], "epic", epic_namespace, epic_account.achievement_counts)
+    _signed_in_counts(lib["games"], "ea", lambda g: art.normalize(g["name"]), ea_account.achievement_counts)
+    steam = [g for g in lib["games"] if g["launcher"] == "steam"]
     shim = [{"launcher": g["launcher"], "playtimeMinutes": g.get("playtimeMinutes"), "owners": g.get("owners") or [],
-             "artAppId": g.get("steamAppId")} for g in lib["games"]]
+             "artAppId": g.get("steamAppId")} for g in steam]
     extras.achievements(shim, keys)
-    for g, s in zip(lib["games"], shim):
+    for g, s in zip(steam, shim):
         # Steam not answering for a game keeps the counts it had, but only for accounts still listed with a key
         # (a removed account's counts go).
         kept = {sid: v for sid, v in (g.get("achievements") or {}).items() if keys.get(sid)}
@@ -307,6 +344,8 @@ def enrich(lib, settings=None, store_appids=(), progress=None):
     """Everything slower than a scan. Changes `lib` in place."""
     settings = settings if settings is not None else config.load_settings()
     steps = [
+        # Play time first: which games count as played decides whose achievements are counted.
+        ("Reading launcher play time", lambda: add_launcher_playtime(lib["games"])),
         ("Counting achievements", lambda: add_achievement_counts(lib, settings)),
         ("Measuring installed games", lambda: add_sizes(lib)),
         ("Friends, DLC sales and profile pictures",
@@ -344,6 +383,15 @@ def achievements_for(appid, owners, settings=None):
                  for a in v["list"]],
         "who": v["who"],
     }
+
+
+def gog_achievements_for(product):
+    """One GOG game's achievements from Galaxy, in the same format, under "gog" as whose they are."""
+    v = owned_local.gog_achievements(product).get(str(product))
+    if not v:
+        return None
+    return {"list": [[name, desc, 0, pct, -1, -1, icon, gray] for name, desc, pct, icon, gray, _ in v],
+            "who": {"gog": [at for *_, at in v]}}
 
 
 def media_for(appid):

@@ -32,6 +32,7 @@ def main():
     except (OSError, ValueError):
         store_appids = []
     # The artifact can't load pictures from Steam, so avatars are embedded.
+    library.add_launcher_playtime(lib["games"])
     library.add_extras(lib, inline=library.web_uri, store_appids=store_appids, progress=print)
     print(f'DLC on sale for {len(lib["dlcSales"])} games; {len(lib["friends"])} Steam friends; '
           f'profile pictures for {sum(1 for a in lib["steamAccounts"] if a.get("avatar"))} accounts')
