@@ -119,6 +119,7 @@ class Api:
         self._tracker = playtime.Tracker(self._played)
         self._running = running.Games(lambda: self._js(f"window.junctionRunning && junctionRunning({json.dumps(self._running.view())})"))
         self._sign_in_lock = threading.Lock()
+        self._programs_lock = threading.Lock()  # one "Start this program?" at a time
         self._updates = updates.Updater(lambda info: self._js(f"window.junctionUpdate && junctionUpdate({json.dumps(info)})"))
 
     # ---------- talking back to the page ----------
@@ -276,11 +277,28 @@ class Api:
     def _game(self, game_id):
         return next((g for g in (self._lib or {}).get("games", []) if g["id"] == game_id), None)
 
+    def _program_allowed(self, path):
+        """A game added by hand is only a path the page hands over, so the first time each program starts, Windows
+        asks whether that's right. Otherwise anything that got into the page could start any program on the PC."""
+        key = os.path.normcase(os.path.abspath(path))
+        with self._programs_lock:
+            if key in (config.load_settings().get("allowedPrograms") or []):
+                return True
+            if not _ask_windows(f"Start this program?\n\n{path}\n\nIt was added to Junction by hand. Junction asks once "
+                                "for each program, so it never starts one you didn't choose."):
+                return False
+            s = config.load_settings()
+            s["allowedPrograms"] = (s.get("allowedPrograms") or []) + [key]
+            config.save_settings(s)
+            return True
+
     def _run(self, game_id, steam_id, target):
         launch = self._launch.get(game_id)
         if game_id.startswith("manual:") and target:
             if not os.path.isfile(target):
                 return {"error": f"{target} doesn't exist anymore."}
+            if not self._program_allowed(target):
+                return {"error": "Junction didn't start it."}
             launch = {"type": "exe", "target": target, "cwd": os.path.dirname(target)}
         if not launch:
             return {"error": "Junction can't find this game anymore. Press Rescan at the top right."}
@@ -853,6 +871,30 @@ _kernel.SetEvent.argtypes = _kernel.CloseHandle.argtypes = [ctypes.c_void_p]
 _instance = None
 
 
+_browser_open = webbrowser.open
+
+
+def _open_web_link(url, *args, **kwargs):
+    """Every link that leaves Junction ends here: its own (open_url) and the page's, which pywebview hands to
+    webbrowser.open. Windows opens any address it's given, a file or another program's link too, and news and deal
+    links come from other sites: so only web pages on the internet get through."""
+    u = urllib.parse.urlparse(str(url))
+    host = (u.hostname or "").lower()
+    if u.scheme not in ("http", "https") or not host or host == "localhost" or host.startswith("127.") or host == "::1":
+        logging.getLogger("junction").warning("Didn't open a link that isn't a web page (%s:)", u.scheme or "no scheme")
+        return False
+    return _browser_open(url, *args, **kwargs)
+
+
+webbrowser.open = _open_web_link
+
+
+def _ask_windows(text):
+    """Yes or no in a Windows message box: an answer the page can't give for the person."""
+    MB_YESNO, MB_ICONQUESTION, MB_SETFOREGROUND, MB_TOPMOST, IDYES = 0x4, 0x20, 0x10000, 0x40000, 6
+    return ctypes.windll.user32.MessageBoxW(None, text, "Junction", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST) == IDYES
+
+
 def _first_instance(quiet, wait=20):
     """True when this is the only Junction. Otherwise the open one is asked to come to the front. If that one is
     just closing (it doesn't confirm), this start waits until it's gone and then starts after all."""
@@ -976,6 +1018,10 @@ def main():
     if not _first_instance(quiet=in_tray):
         return
     logs.setup()
+    try:
+        config.protect_saved_keys()
+    except Exception:  # noqa: BLE001 - the keys still work as they are
+        traceback.print_exc()
     api = Api()
     icon = config.resource("web", "icon.ico")
     own_frame = titlebar.prepare()

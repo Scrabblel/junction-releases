@@ -1,7 +1,7 @@
 """Where Junction keeps its settings and cache.
 
 - Settings (API keys, Steam accounts): %APPDATA%\\Junction\\settings.json. Each person's own file;
-  nothing in it is ever part of the app itself.
+  nothing in it is ever part of the app itself. The keys in it are encrypted (see PROTECTED).
 - Cache (last scan, store prices, lookups): %LOCALAPPDATA%\\Junction\\cache.
 
 While developing from this folder (not as Junction.exe), a local_settings.json next to the code is
@@ -10,6 +10,8 @@ used instead whenever it exists, so running the installed app never takes the de
 JUNCTION_HOME=<folder> keeps all of it (settings, cache, logs, play time) in that one folder instead,
 as a separate copy of Junction: for testing a build without touching anyone's real settings.
 """
+import base64
+import copy
 import http.client
 import json
 import os
@@ -63,32 +65,76 @@ def replace_file(tmp, path, tries=10):
             time.sleep(0.1)
 
 
+def _read_settings():
+    path = settings_path()
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except OSError:
+        return {}
+    except ValueError:
+        # Damaged: keep it aside, so saving the next change doesn't quietly drop every key and account in it.
+        try:
+            os.replace(path, path + ".damaged")
+        except OSError:
+            pass
+        return {}
+
+
+# The API keys in settings.json are saved encrypted with Windows' own per-user protection (DPAPI), like the
+# sign-ins: another program can't just read them from the file. Only the developer's local_settings.json stays
+# plain, so it can be edited by hand. Everything else in Junction gets the keys back as plain text.
+PROTECTED = "protected:"
+
+
+def _key_fields(settings):
+    """(dict, name) for every API key in the settings."""
+    fields = [(settings, "itadApiKey"), (settings, "steamGridDbKey")]
+    for acc in settings.get("steamAccounts") or []:
+        if isinstance(acc, dict):
+            fields.append((acc, "apiKey"))
+    return [(d, k) for d, k in fields if isinstance(d.get(k), str) and d[k]]
+
+
+def _protects():
+    return settings_path() != DEV_SETTINGS
+
+
 def load_settings():
     with _settings_lock:
-        path = settings_path()
-        try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-            return data if isinstance(data, dict) else {}
-        except OSError:
-            return {}
-        except ValueError:
-            # Damaged: keep it aside, so saving the next change doesn't quietly drop every key and account in it.
-            try:
-                os.replace(path, path + ".damaged")
-            except OSError:
-                pass
-            return {}
+        data = _read_settings()
+        from .signins import unprotect
+        for d, k in _key_fields(data):
+            if d[k].startswith(PROTECTED):
+                try:
+                    d[k] = unprotect(base64.b64decode(d[k][len(PROTECTED):])).decode("utf-8")
+                except (OSError, ValueError):  # saved by another Windows user or PC: it has to be entered again
+                    d[k] = ""
+        return data
 
 
 def save_settings(settings):
     with _settings_lock:
         path = settings_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        if _protects():
+            from .signins import protect
+            settings = copy.deepcopy(settings)
+            for d, k in _key_fields(settings):
+                if not d[k].startswith(PROTECTED):
+                    d[k] = PROTECTED + base64.b64encode(protect(d[k].encode("utf-8"))).decode("ascii")
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(settings, f, ensure_ascii=False, indent=2)
         replace_file(tmp, path)
+
+
+def protect_saved_keys():
+    """An older Junction saved the keys as plain text: save them again, protected."""
+    with _settings_lock:
+        if _protects() and any(not d[k].startswith(PROTECTED) for d, k in _key_fields(_read_settings())):
+            save_settings(load_settings())
 
 
 _cache_lock = threading.RLock()

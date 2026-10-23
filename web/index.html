@@ -5460,6 +5460,12 @@ async function render() {
   render.prev = { ...state.view };
   if (state.view.name !== 'game' && state.view.name !== 'price') main.style.removeProperty('--game');
   if (section === 'stats' && state.view.name !== 'game') return renderStats();
+  // A deal on Classic's Home opens its store page, which stays under Home (Back returns there).
+  if (section === 'home' && state.view.name === 'price') {
+    if (!(await ensureStore())) return;
+    if (store.games[state.view.id]) return renderPrice(store.games[state.view.id]);
+    state.view = { name: 'home' };
+  }
   // A game page opened from the Store or Wishlist still belongs to those tabs, but it's a game page.
   if ((section === 'store' || section === 'wishlist') && state.view.name !== 'game') {
     if (!(await ensureStore())) return;
