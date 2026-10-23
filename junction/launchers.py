@@ -424,7 +424,41 @@ def find_rockstar():
         else:
             continue
         games.append(_game("rockstar", title, v["DisplayName"], launch=launch, install_dir=install))
+    # Newer installs (GTA V Enhanced) leave no uninstall entry, only Rockstar's own key with the game's folder in
+    # InstallFolder. A copy from Steam or Epic has InstallFolderSteam or InstallFolderEpic there instead: it's found
+    # under that launcher.
+    seen = {os.path.normcase(g["installDir"]) for g in games if g["installDir"]}
+    if folder:
+        seen.add(os.path.normcase(folder.strip('"').rstrip("\\")))
+    for sub in _reg_subkeys(HKLM, ROCKSTAR_KEY):
+        if sub.lower() in ROCKSTAR_NOT_GAMES:
+            continue
+        install = ((_reg_values(HKLM, ROCKSTAR_KEY + "\\" + sub) or {}).get("InstallFolder") or "").strip().strip('"').rstrip("\\")
+        if not install or os.path.normcase(install) in seen or not os.path.isdir(install):
+            continue
+        exe = _rockstar_exe(install)
+        if exe:
+            seen.add(os.path.normcase(install))
+            games.append(_game("rockstar", re.sub(r"\W+", "", sub.lower()), os.path.basename(install),
+                               launch={"type": "exe", "target": exe, "cwd": install}, install_dir=install))
     return games
+
+
+ROCKSTAR_KEY = r"SOFTWARE\WOW6432Node\Rockstar Games"
+ROCKSTAR_NOT_GAMES = {"launcher", "rockstar games social club", "social club", "steam", "epic"}
+
+
+def _rockstar_exe(folder):
+    """The program that starts a Rockstar game from its folder: Rockstar's own Play… starter when there is one, else
+    the biggest program, the game itself (it hands off to the launcher when started directly)."""
+    try:
+        exes = [e for e in os.scandir(folder) if e.is_file() and e.name.lower().endswith(".exe")
+                and not re.search(r"uninst|crash|report|redist|setup|patch|install", e.name, re.I)]
+        play = [e for e in exes if e.name.lower().startswith("play")]
+        best = play or sorted(exes, key=lambda e: e.stat().st_size, reverse=True)
+    except OSError:
+        return None
+    return best[0].path if best else None
 
 
 # ---------- Xbox / Microsoft Store (PC Game Pass) ----------
