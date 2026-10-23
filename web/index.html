@@ -2948,7 +2948,10 @@ function moveFocus(dir) {
   }
   // Up and down stay in their own column: Browse's filters on the left, the results on the right.
   const inPanel = el => !!el.closest('.filter-panel');
-  const pool = dir === 'up' || dir === 'down' ? items.filter(el => inPanel(el) === inPanel(cur)) : items;
+  // Left and right stay in their own row of covers (Home, the Store): at its end, they go nowhere.
+  const strip = (dir === 'left' || dir === 'right') && cur.closest('.hrow .tiles, .big-rail');
+  const pool = strip ? items.filter(el => strip.contains(el))
+    : dir === 'up' || dir === 'down' ? items.filter(el => inPanel(el) === inPanel(cur)) : items;
   const best = nearestIn(pool, cur, dir);
   // Up from the top of the page goes into the top bar, starting on the tab you're on.
   if (!best && dir === 'up') {
