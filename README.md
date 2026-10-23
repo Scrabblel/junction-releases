@@ -1,25 +1,14 @@
 # junction-releases
-Junction 0.9.16: a new Classic Home, with deals and news
-Classic Home, rebuilt
+## Junction 0.9.20: prices for your country, and Rockstar games found
 
-    Home is now one wide page like a store's front page. The game list stays on the Library tab, so Home and Library no longer look alike.
-    At the top, a big banner of your six most recent games. Flip through them with the arrows or the dots. Each one has Play, its game page, and its latest news.
-    Best deals for you: five games that are at least 25% off, picked from the games you play. Each card shows the old and new price, says when it's the lowest price ever, and tells you why it was picked ("Because you play …"). "All deals" opens every sale in the Store.
-    Underneath:
-        downloads in progress;
-        News from your games: patch notes and announcements from the last month;
-        the games you played before;
-        wishlist games on sale;
-        Store suggestions like the games you play.
-    New to Junction, or using launchers that don't record play time? Home shows your installed games instead of an empty page.
+### Prices for your country
+- **The Store now shows prices for the country you buy your games in, in its own currency.** Before, everyone saw Dutch prices in euros.
+- **Junction starts with the region set in Windows,** so most people don't have to change anything. The first time you open the Store after updating, Junction says which country the prices are for.
+- **Choose another country** under your picture → Preferences → **Prices**, or click the country's name at the top of the Store ("Prices for …"). Type to find yours: its English name, its name in your Windows language, or its two-letter code.
+- New users pick their country during the first-start setup.
+- Everything follows the country: the deals, the price history, search, the free games, the top sellers and sales on DLC.
+- Prices are written the way your Windows writes money, and the Store's price filter has steps that fit your currency.
+- After a change, Junction fetches the prices again (about a minute). Wishlist deal notices start fresh, so a switch doesn't set off a pile of "it got cheaper" notices.
 
-Fixes
-
-    Console Home: while a download was running, the first row of games was pushed down and partly cut off. It fits again.
-    Back returns to the same spot. After opening a deal, a news post or a game from Classic Home, Back takes you to where you were, on the card you opened. On Console Home, Back now selects the game you opened instead of its news button.
-    With a controller on Classic Home:
-        The first press selects Play.
-        LT and RT jump from section to section.
-        Switching to Home with LB or RB selects something straight away.
-    Rows on Classic Home fill evenly at every window size, with no row left with one or two games on it.
-
+### Fixed
+- **Games bought and installed in the Rockstar Games Launcher are found again,** like GTA V Enhanced. Newer Rockstar installs don't show up in Windows' list of installed programs, which is where Junction used to look. Rockstar games you bought on Steam or Epic stay under Steam or Epic.
