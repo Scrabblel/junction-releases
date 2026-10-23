@@ -1044,6 +1044,10 @@ a.pill { text-decoration: none; }
 .games-home .focus { min-height: max(clamp(300px, 46vh, 460px), var(--focus-h, 0px)); }
 .games-home.intro .focus, .games-home.leaving .focus { min-height: max(var(--intro-h, calc(100vh - 320px)), var(--focus-h, 0px)); }
 .games-home .focus h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; padding-bottom: .06em; }
+/* The Store and the wishlist do the same, with the tallest game on the page measured (holdStorePanel). */
+:is(.store-front, .wish-front) .focus { min-height: max(clamp(300px, 46vh, 460px), var(--focus-h, 0px)); }
+.store-front.intro .focus, .store-front.leaving .focus { min-height: max(var(--intro-h, calc(100vh - 320px)), var(--focus-h, 0px)); }
+:is(.store-front, .wish-front) .focus h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; padding-bottom: .06em; }
 .games-home .focus .meta { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
 .games-home .focus .ach-strip { flex-wrap: nowrap; overflow: hidden; }
 .home.intro .rows { padding-bottom: 46px; }
@@ -3865,28 +3869,33 @@ function renderFront() {
       <button class="scroll-hint" data-expand>${ICON.chevron} More rows</button>
     </div>`;
   if (first) setStoreFocus(first);
+  holdStorePanel();
   sizeIntro();
 }
 function setStoreFocus(id) {
   const f = $('#focus');
   if (!f || (state.view.name !== 'store' && state.view.name !== 'wishlist')) return;
   state.sfocus = id;
+  const p = storePanel(id);
+  if (!p) return;
+  setBackdrop(...p.bg);
+  f.innerHTML = p.html;
+}
+// What the panel above the Store's and the wishlist's rows says about a game: its HTML and the picture behind it.
+function storePanel(id) {
   if (id.startsWith('free:')) {
     const fr = store.free[Number(id.slice(5))];
-    if (!fr) return;
+    if (!fr) return null;
     const have = libraryTitleFor(fr);
-    setBackdrop(fr.image || '', true);
-    f.innerHTML = `
+    return { bg: [fr.image || '', true], html: `
       <h1>${esc(fr.title)}</h1>
       <p class="price-now">Free <span class="at">on ${esc(fr.store)}</span></p>
       <p>${have ? `Already in your library (${esc(launcherNames(have))})` : `Yours to keep if you claim it${fr.until ? ` before ${esc(freeDate(fr))}` : ''}.`}</p>
-      <div class="btns"><a class="pill primary" href="${esc(fr.url)}" target="_blank" rel="noopener">Claim on ${esc(fr.store)}</a></div>`;
-    return;
+      <div class="btns"><a class="pill primary" href="${esc(fr.url)}" target="_blank" rel="noopener">Claim on ${esc(fr.store)}</a></div>` };
   }
   const sg = store.games[id];
-  if (!sg) return;
+  if (!sg) return null;
   const d = bestDeal(sg), shots = sg.screenshots || [];
-  setBackdrop(shots[0] || sg.image || '', !shots[0]);
   const mine = ownsOf(sg).length ? libraryTitleFor(sg) : null;
   const meta = [
     d && isLow(sg, d) ? 'Lowest price ever' : sg.historyLow ? `Lowest ever ${money(sg.historyLow.price)}` : null,
@@ -3894,7 +3903,7 @@ function setStoreFocus(id) {
     sg.released ? releasedLabel(sg.released) : null,
     ownsOf(sg).length ? `You own this on ${ownsOf(sg).map(o => o.label).join(', ')}` : null,
   ].filter(Boolean).join(' · ');
-  f.innerHTML = `
+  return { bg: [shots[0] || sg.image || '', !shots[0]], html: `
     <h1>${esc(sg.title)}</h1>
     ${d ? `<p class="price-now">${d.cut > 0 ? `<i>-${d.cut}%</i>` : ''}${money(d.price)}${d.cut > 0 ? `<s>${money(d.regular)}</s>` : ''} <span class="at">at ${esc(shopName(d.shop))}</span></p>` : ''}
     ${meta ? `<p>${esc(meta)}</p>` : ''}
@@ -3908,7 +3917,24 @@ function setStoreFocus(id) {
         : ownsOf(sg).length ? `<button class="pill" data-nav="library">In your library</button>`
         : d ? `<a class="pill" href="${esc(d.url)}" target="_blank" rel="noopener">Buy at ${esc(shopName(d.shop))}</a>` : ''}
       ${wishBtn(sg.id, `data-swish="${esc(sg.id)}"`)}
-    </div>`;
+    </div>` };
+}
+// The panel keeps the height of its tallest game on the page, so moving along a row never moves the rows.
+function holdStorePanel() {
+  const page = $('#focus')?.closest('.store-front, .wish-front');
+  if (!page || !page.querySelector('.rows')) return;
+  const probe = document.createElement('section');
+  probe.className = 'focus';
+  probe.setAttribute('aria-hidden', 'true');
+  probe.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;min-height:0;width:100%';
+  page.append(probe);
+  let tall = 0;
+  for (const id of new Set([...page.querySelectorAll('[data-sfocus]')].map(el => el.dataset.sfocus))) {
+    probe.innerHTML = storePanel(id)?.html || '';
+    tall = Math.max(tall, probe.offsetHeight);
+  }
+  probe.remove();
+  page.style.setProperty('--focus-h', `${Math.ceil(tall)}px`);
 }
 // A labelled star button: "Add to wishlist", or "On your wishlist" once it's on.
 function wishBtn(id, attr) {
@@ -4374,6 +4400,7 @@ function renderWishlist() {
   const first = (state.sfocus && items.find(sg => sg.id === state.sfocus)) || sale[0] || items[0];
   if (first) setStoreFocus(first.id);
   else setBackdrop('', false);
+  holdStorePanel();
 }
 
 // Where the wishlist lives, said once on its page: starring in Junction never changes Steam.
