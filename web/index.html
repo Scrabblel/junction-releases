@@ -974,6 +974,7 @@ a.pill { text-decoration: none; }
 .tile:hover .play-hint, .tile:focus-visible .play-hint { opacity: 1; translate: 0 0; }
 .tile.all .art { display: grid; place-content: center; text-align: center; gap: 4px; background: color-mix(in srgb, var(--ink) 7%, transparent); border: 1px solid var(--rule); color: var(--ink-dim); font-weight: 600; font-size: 13px; box-sizing: border-box; }
 .tile.all b { font-size: 26px; color: var(--ink); }
+.tile.all.unneeded { display: none; }
 
 /* ---------- console look: Library ---------- */
 .library { position: relative; min-height: 100%; }
@@ -2518,7 +2519,7 @@ function renderHome() {
         ${rows.map((r, i) => `
           <section class="hrow${i ? ' later' : ''}" style="--i:${i}" aria-label="${esc(r.title)}">
             <h2>${esc(r.title)}${r.note ? ` <i>${esc(r.note)}</i>` : ''}</h2>
-            <div class="tiles">${r.games.slice(0, ROW_MAX).map(g => tile(g, r.big, r.news ? { tab: 'news', chip: [newsKind(latestNews(g, UPDATED_DAYS)), when(latestNews(g, UPDATED_DAYS).date)] } : {})).join('')}${r.preset ? seeAll(r.count, r.preset) : ''}</div>
+            <div class="tiles" data-count="${r.count}">${r.games.slice(0, ROW_MAX).map(g => tile(g, r.big, r.news ? { tab: 'news', chip: [newsKind(latestNews(g, UPDATED_DAYS)), when(latestNews(g, UPDATED_DAYS).date)] } : {})).join('')}${r.preset ? seeAll(r.count, r.preset) : ''}</div>
           </section>`).join('')}
         <section class="hrow later" style="--i:${rows.length}">
           <button class="all-games" data-see="all">
@@ -2852,9 +2853,21 @@ function jumpTo(letter) {
 
 // ---------- sideways rows: arrow buttons for the mouse (keys and controllers already move along them) ----------
 const stripSizes = new ResizeObserver(entries => entries.forEach(e => updateArrows(e.target)));
+// A Home row's "See all" is only there when some of its games are out of sight: more than the row holds, or more
+// than fit next to each other on the screen.
+function fitSeeAll(strip) {
+  const all = strip.querySelector(':scope > .tile.all[data-see]');
+  if (!all || !strip.closest('.games-home')) return;
+  const games = strip.querySelectorAll(':scope > .tile:not(.all)');
+  const last = games[games.length - 1];
+  // Layout positions, not on-screen ones: tiles that are still sliding in would measure wrong.
+  const end = last ? last.offsetLeft + last.offsetWidth - (last.offsetParent === strip ? 0 : strip.offsetLeft + strip.clientLeft) : 0;
+  all.classList.toggle('unneeded', Number(strip.dataset.count) <= games.length && end <= strip.clientWidth + 1);
+}
 function updateArrows(strip) {
   const [prev, next] = strip.arrows || [];
   if (!strip.isConnected) return stripSizes.unobserve(strip);  // the page it was on is gone
+  fitSeeAll(strip);
   if (!prev) return;
   prev.hidden = strip.scrollLeft <= 4;
   next.hidden = strip.scrollLeft >= strip.scrollWidth - strip.clientWidth - 4;
