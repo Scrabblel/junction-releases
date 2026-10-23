@@ -10,6 +10,7 @@ import os
 import urllib.error
 import urllib.parse
 
+from . import config
 from .art import get_json, steam_items
 from .config import NET_ERRORS
 from .launchers import (STEAM_SKIP_IDS, STEAM_SKIP_NAME, STEAM_TOOL_IDS, _ci, _game, _read,
@@ -19,10 +20,6 @@ from .launchers import (STEAM_SKIP_IDS, STEAM_SKIP_NAME, STEAM_TOOL_IDS, _ci, _g
 # "Call of Duty: Black Ops II - Multiplayer". Skipped: 1 demo, 6 software, 12 beta.
 GAME_TYPES = {0, 14}
 STEAMID64_BASE = 76561197960265728
-
-def load_settings():
-    from .config import load_settings as load  # per-user settings, or local_settings.json while developing
-    return load()
 
 
 def owned_games(key, steamid):
@@ -73,7 +70,7 @@ def remembered_games(steamid, look_up=True):
 
 def steam_accounts(settings=None):
     """The Steam accounts listed in local_settings.json, in the user's order."""
-    settings = settings if settings is not None else load_settings()
+    settings = settings if settings is not None else config.load_settings()
     accounts = settings.get("steamAccounts")
     if accounts is None and settings.get("steamId"):  # first, single-account format
         accounts = [{"name": "Steam", "steamId": settings["steamId"], "apiKey": settings.get("steamApiKey", "")}]

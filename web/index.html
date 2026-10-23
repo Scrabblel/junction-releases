@@ -1,4 +1,7 @@
 <meta charset="utf-8">
+<!-- What the page may load: its own code, Google's fonts, and pictures and trailers from the web. Never another site's
+     script, a plug-in, a frame or a form that sends somewhere: the page has Junction's API behind it. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Junction</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2066,10 +2069,6 @@ const INSTALL_VIA = {
   gog: ["INSTALL opens the game's page in GOG Galaxy. Click Install there.", n => `GOG Galaxy is opening ${n}.`],
   ubisoft: ['INSTALL asks Ubisoft Connect to install the game.', n => `Ubisoft Connect is opening the install for ${n}.`],
 };
-// Where Junction learned that a game it can't see installed is owned.
-const OWNED_FROM = {
-  epic: "the Epic Games Launcher's library cache", gog: "GOG Galaxy's library", ubisoft: "Ubisoft Connect's ownership cache",
-};
 
 // ---------- per-viewer preferences (favourites, hidden games, collections, layout, theme) ----------
 const PREFS_KEY = 'junction.prefs.v1';
@@ -2183,7 +2182,6 @@ function hours(min) {
   const h = min / 60;
   return `${h < 9.95 ? h.toFixed(1) : Math.round(h).toLocaleString('en-GB')} h`;
 }
-const listOf = items => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : (items[0] || '');
 // "today", "yesterday" or a date, for the middle of a sentence.
 const whenLower = ts => ts && (/^(Today|Yesterday)$/.test(when(ts)) ? when(ts).toLowerCase() : when(ts));
 function when(ts) {
@@ -2258,7 +2256,6 @@ const launcherNames = t => [...new Set(t.copies.map(c => lib.launchers[c.launche
 const activeCopy = t => t.copies.find(c => c.id === state.copy[t.id]) || t.copies[0];
 
 // ---------- derived data ----------
-function allGames() { return titles; }
 function isHidden(t) {
   if (idsOf(t).some(id => prefs.hidden.includes(id))) return true;
   return t.hiddenByDefault && !idsOf(t).some(id => prefs.shown.includes(id));
@@ -2775,7 +2772,7 @@ function renderLibrary() {
           </div>
         </div>
         <div class="fbar">
-          <label class="lsearch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <label class="lsearch">${ICON.search}
             <input id="lib-search" type="search" placeholder="Filter by name" autocomplete="off" aria-label="Filter your games by name" value="${esc(state.query)}"></label>
           <div class="pop${state.pop === 'launchers' ? ' open' : ''}">
             <button class="fsel${state.lines.size ? ' on' : ''}" data-pop="launchers" aria-expanded="${state.pop === 'launchers'}">${state.lines.size === 1 ? esc(lib.launchers[[...state.lines][0]]) : 'Launchers'}${state.lines.size > 1 ? ` <b>${state.lines.size}</b>` : ''}${ICON.chevron}</button>
@@ -3590,7 +3587,7 @@ function startGame(t) {
       </div>
     </div>`;
   $('#layer .option').focus();
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
 }
 function chooseOption(i) {
   const { title, options } = state.pendingOptions || {};
@@ -3798,7 +3795,7 @@ function renderFront() {
       <section class="focus" id="focus" aria-live="polite"></section>
       <div class="rows">
         <div class="store-tools">
-          <label class="lsearch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <label class="lsearch">${ICON.search}
             <input id="store-search" type="search" placeholder="Search every store" autocomplete="off" aria-label="Search every store for a game"></label>
           <button class="pill" data-store-tab="browse">Browse all</button>
           <label class="check"><input type="checkbox" id="show-owned" ${prefs.showOwned ? 'checked' : ''}> Show games I own</label>
@@ -3963,7 +3960,7 @@ function renderBrowse() {
       <div class="browse">
         <aside class="filter-panel${state.browseFiltersOpen ? '' : ' collapsed'}" aria-label="Filters">
           <label class="store-search small">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+            ${ICON.search}
             <input id="browse-search" type="search" placeholder="Search every store" autocomplete="off" aria-label="Search every store for a game" value="${esc(b.q)}">
           </label>
           <div class="filter-group">
@@ -4329,7 +4326,7 @@ function coverDialog(t) {
         </div>
       </div>
     </div>`;
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
   $('#cover-reset')?.addEventListener('click', () => {
     for (const id of idsOf(t)) delete customCovers[id];
     saveCovers(); closeLayer(); render();
@@ -4586,8 +4583,19 @@ const refocus = () => setTimeout(() => {
   el?.focus({ preventScroll: true });
 }, 0);
 const closeLayer = () => { $('#layer').innerHTML = ''; state.lb = null; if (!vkbTarget()) closeKeyboard(); refocus(); };
+// A click on the dimmed backdrop around a dialog closes it.
+const closeOnScrim = () => { $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); }; };
 
 // ---------- right-click menu ----------
+// ↑ and ↓ move through a menu's buttons, round and round.
+function menuArrows(menu) {
+  menu.addEventListener('keydown', e => {
+    const btns = [...menu.querySelectorAll('button')], i = btns.indexOf(document.activeElement);
+    const go = b => { b.focus({ preventScroll: true }); b.scrollIntoView({ block: 'nearest' }); };
+    if (e.key === 'ArrowDown') { e.preventDefault(); go(btns[(i + 1) % btns.length]); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); go(btns[(i - 1 + btns.length) % btns.length]); }
+  });
+}
 function closeMenu() { const m = document.getElementById('ctx'); if (m) { m.remove(); (m.back || refocus)(); } }
 function contextMenu(t, x, y) {
   closeMenu();
@@ -4622,12 +4630,7 @@ function contextMenu(t, x, y) {
     items[Number(b.dataset.ctx)][1]();
   };
   menu.querySelector('button').focus();
-  menu.addEventListener('keydown', e => {
-    const btns = [...menu.querySelectorAll('button')], i = btns.indexOf(document.activeElement);
-    const go = b => { b.focus({ preventScroll: true }); b.scrollIntoView({ block: 'nearest' }); };
-    if (e.key === 'ArrowDown') { e.preventDefault(); go(btns[(i + 1) % btns.length]); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); go(btns[(i - 1 + btns.length) % btns.length]); }
-  });
+  menuArrows(menu);
 }
 
 // A drop-down list as a menu, so a controller can choose from it (a native list can't be driven).
@@ -4658,12 +4661,7 @@ function selectMenu(sel) {
   const on = menu.querySelector('.strong') || menu.querySelector('button');
   on.focus({ preventScroll: true });
   on.scrollIntoView({ block: 'nearest' });
-  menu.addEventListener('keydown', e => {
-    const btns = [...menu.querySelectorAll('button')], i = btns.indexOf(document.activeElement);
-    const go = b => { b.focus({ preventScroll: true }); b.scrollIntoView({ block: 'nearest' }); };
-    if (e.key === 'ArrowDown') { e.preventDefault(); go(btns[(i + 1) % btns.length]); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); go(btns[(i - 1 + btns.length) % btns.length]); }
-  });
+  menuArrows(menu);
 }
 
 // ---------- settings: the menu under your profile picture (or the controller's ☰ button) ----------
@@ -4936,7 +4934,7 @@ async function keysDialog(kind) {
   const dlg = $('#layer .dialog');
   (dlg.querySelector('.key-row input') || $('#keys-done')).focus();
   $('#keys-done').onclick = closeLayer;
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
   wireKeys(dlg);
 }
 // Saving, removing and the "get a key" links, for every key form inside `dlg`.
@@ -5150,7 +5148,7 @@ async function reportDialog() {
     msg.textContent = 'The report is open in File Explorer, ready to attach to a message.';
   };
   $('#report-done').onclick = closeLayer;
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
   $('#report-copy').focus();
 }
 
@@ -5241,7 +5239,7 @@ function openPalette() {
     <div class="scrim top" id="scrim">
       <div class="palette" role="dialog" aria-modal="true" aria-label="Search everything">
         <label class="pal-input">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          ${ICON.search}
           <input id="pal-q" placeholder="Search your games, the store, or what to do" autocomplete="off" aria-controls="pal-results">
           <kbd>Esc</kbd>
         </label>
@@ -5250,7 +5248,7 @@ function openPalette() {
       </div>
     </div>`;
   state.pal = { items: [], index: 0 };
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
   $('#pal-q').addEventListener('input', paletteResults);
   $('#pal-q').focus();
   paletteResults();
@@ -5688,7 +5686,7 @@ function earlierDialog(t) {
   };
   $('#early-cancel').onclick = () => closeLayer();
   $('#early-remove')?.addEventListener('click', () => save(0));
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
   $('#early-form').onsubmit = e => {
     e.preventDefault();
     const value = Number(input.value.trim().replace(',', '.'));
@@ -5714,7 +5712,7 @@ function collectionDialog(t) {
     </div>`;
   $('#col-name').focus();
   $('#col-cancel').onclick = () => closeLayer();
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
   $('#col-form').onsubmit = e => {
     e.preventDefault();
     const name = $('#col-name').value.trim();
@@ -5798,7 +5796,7 @@ function addGameDialog() {
     </div>`;
   $('#add-name').focus();
   $('#add-cancel').onclick = () => closeLayer();
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
   $('#add-form').onsubmit = e => {
     e.preventDefault();
     const name = $('#add-name').value.trim(), path = $('#add-path').value.trim();
@@ -6068,7 +6066,7 @@ function stopDialog(id) {
     </div>`;
   $('#stop-cancel').focus();
   $('#stop-cancel').onclick = () => closeLayer();
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
   $('#stop-yes').onclick = async () => {
     closeLayer();
     document.querySelectorAll(`[data-stop="${CSS.escape(id)}"]`).forEach(x => x.closest('.run-group')?.classList.add('stopping'));
@@ -6741,7 +6739,7 @@ function whatsNewDialog(info) {
     </div>`;
   $('#wn-ok').onclick = closeLayer;
   if ($('#wn-page')) $('#wn-page').onclick = () => host.openUrl(info.page);
-  $('#scrim').onclick = e => { if (e.target.id === 'scrim') closeLayer(); };
+  closeOnScrim();
   $('#wn-ok').focus();
 }
 

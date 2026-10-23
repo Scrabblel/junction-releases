@@ -277,12 +277,17 @@ class Api:
     def _game(self, game_id):
         return next((g for g in (self._lib or {}).get("games", []) if g["id"] == game_id), None)
 
+    @staticmethod
+    def _program_known(path):
+        """A program added by hand that the person already said yes to."""
+        return os.path.normcase(os.path.abspath(path)) in (config.load_settings().get("allowedPrograms") or [])
+
     def _program_allowed(self, path):
         """A game added by hand is only a path the page hands over, so the first time each program starts, Windows
         asks whether that's right. Otherwise anything that got into the page could start any program on the PC."""
         key = os.path.normcase(os.path.abspath(path))
         with self._programs_lock:
-            if key in (config.load_settings().get("allowedPrograms") or []):
+            if self._program_known(path):
                 return True
             if not _ask_windows(f"Start this program?\n\n{path}\n\nIt was added to Junction by hand. Junction asks once "
                                 "for each program, so it never starts one you didn't choose."):
@@ -392,7 +397,12 @@ class Api:
 
     def open_folder(self, game_id, target=None):
         g = self._game(game_id)
-        folder = (g or {}).get("installDir") or (os.path.dirname(target) if target else None)
+        folder = (g or {}).get("installDir")
+        if not folder and target:
+            # A game added by hand: only the folder of a program the person said yes to (see _program_allowed).
+            if not self._program_known(target):
+                return {"error": "Start the game once first, so Junction knows its program."}
+            folder = os.path.dirname(target)
         if not folder or not os.path.isdir(folder):
             return {"error": "That folder doesn't exist anymore."}
         os.startfile(folder)
@@ -746,20 +756,19 @@ class Api:
             threading.Thread(target=then, daemon=True).start()
         return result
 
+    def _rescan_all(self):
+        """An account or key changed: every launcher read again (games, play time, achievements)."""
+        self._ach.clear()
+        self._background(rescan=True)
+
     def set_steam_key(self, steam_id, key):
-        def refresh():
-            self._ach.clear()
-            self._background(rescan=True)  # that account's games, play time and achievements
-        return self._after_key(keys.set_steam_key(steam_id, key), refresh)
+        return self._after_key(keys.set_steam_key(steam_id, key), self._rescan_all)
 
     def remove_steam_account(self, steam_id):
-        def refresh():
-            self._ach.clear()
-            self._background(rescan=True)  # its games leave the library
-        return self._after_key(keys.remove_account(steam_id), refresh)
+        return self._after_key(keys.remove_account(steam_id), self._rescan_all)
 
     def restore_steam_account(self, steam_id):
-        return self._after_key(keys.restore_account(steam_id), lambda: self._background(rescan=True))
+        return self._after_key(keys.restore_account(steam_id), self._rescan_all)
 
     def set_prices_key(self, key):
         def refresh():
@@ -770,7 +779,7 @@ class Api:
         return self._after_key(keys.set_prices_key(key), refresh)
 
     def set_art_key(self, key):
-        return self._after_key(keys.set_art_key(key), lambda: self._background(rescan=True))
+        return self._after_key(keys.set_art_key(key), self._rescan_all)
 
     # ---------- updates ----------
 
@@ -887,6 +896,38 @@ def _open_web_link(url, *args, **kwargs):
 
 
 webbrowser.open = _open_web_link
+
+
+def _keep_on_page(window):
+    """pywebview gives Junction's API to any page its window shows, so the window never leaves Junction's own page:
+    a link or file dragged onto it, or anything else that would send it elsewhere, is stopped (a web page opens in
+    the browser instead). Hooked once the page has loaded, on the window's own thread (see ea_account.sign_in)."""
+    origin = []
+
+    def going(_sender, args):
+        uri = str(args.Uri)
+        if not uri.startswith(origin[0]):
+            args.Cancel = True
+            threading.Thread(target=_open_web_link, args=(uri,), daemon=True).start()
+
+    def loaded():
+        if origin:
+            return
+        u = urllib.parse.urlparse(window.get_current_url() or "")
+        if u.scheme != "http" or u.hostname != "127.0.0.1":
+            return
+        origin.append(f"http://{u.netloc}/")
+
+        def attach():
+            control = window.native.browser.webview
+            control.NavigationStarting += going
+        try:
+            from System import Action
+            window.native.Invoke(Action(attach))
+        except Exception:  # noqa: BLE001
+            logging.getLogger("junction").exception("Couldn't keep the window on Junction's page")
+
+    window.events.loaded += loaded
 
 
 def _ask_windows(text):
@@ -1029,6 +1070,7 @@ def main():
         "Junction", url=page_url(), js_api=api, hidden=in_tray,
         width=1440, height=900, min_size=(900, 600), background_color="#0B0E13", text_select=False)
     api._window = window
+    _keep_on_page(window)
     try:
         from . import tray
         api._tray = tray.Tray(icon, on_open=api.show_window, on_play=api._tray_play, on_quit=api._quit)

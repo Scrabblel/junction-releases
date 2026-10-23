@@ -106,11 +106,3 @@ def switch_and_open(steamid, uri, timeout=30):
 
     os.startfile(uri)  # starts Steam on the new account, then the game
     return True
-
-
-def pick_account(owners, account_order):
-    """Which account to use for a game: the signed-in one if it owns it, else the first owner in the user's order."""
-    current = signed_in_steamid()
-    if not owners or current in owners:
-        return current
-    return next((sid for sid in account_order if sid in owners), owners[0])
