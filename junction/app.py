@@ -396,6 +396,23 @@ class Api:
         self._push("library")
         return {"ok": True}
 
+    def pick_program(self):
+        """Windows' own file picker, for the program of a game added by hand: {"path", "name"}, or None when
+        cancelled. Picking it doesn't allow it to start: Windows still asks the first time (see _program_allowed)."""
+        try:
+            got = self._window.create_file_dialog(webview.FileDialog.OPEN, file_types=("Programs (*.exe)",))
+        except Exception:  # noqa: BLE001 - the window is closing
+            traceback.print_exc()
+            return None
+        path = os.path.normpath(got[0]) if got else None
+        if not path or not path.lower().endswith(".exe") or not os.path.isfile(path):
+            return None
+        try:
+            name = _program_name(path)
+        except (OSError, ValueError):
+            name = os.path.splitext(os.path.basename(path))[0]
+        return {"path": path, "name": name}
+
     def open_folder(self, game_id, target=None):
         g = self._game(game_id)
         folder = (g or {}).get("installDir")
@@ -969,6 +986,26 @@ def _ask_windows(text):
     """Yes or no in a Windows message box: an answer the page can't give for the person."""
     MB_YESNO, MB_ICONQUESTION, MB_SETFOREGROUND, MB_TOPMOST, IDYES = 0x4, 0x20, 0x10000, 0x40000, 6
     return ctypes.windll.user32.MessageBoxW(None, text, "Junction", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST) == IDYES
+
+
+def _program_name(path):
+    """The name a program gives itself (its product name, as File Explorer's Details show it), else its file name."""
+    ver = ctypes.windll.version
+    size = ver.GetFileVersionInfoSizeW(path, None)
+    data = ctypes.create_string_buffer(size) if size else None
+    if data and ver.GetFileVersionInfoW(path, 0, size, data):
+        ptr, n = ctypes.c_void_p(), ctypes.c_uint()
+        langs = []
+        if ver.VerQueryValueW(data, r"\VarFileInfo\Translation", ctypes.byref(ptr), ctypes.byref(n)) and n.value >= 4:
+            pairs = (ctypes.c_uint16 * (n.value // 2)).from_address(ptr.value)
+            langs = [f"{pairs[i]:04x}{pairs[i + 1]:04x}" for i in range(0, len(pairs) - 1, 2)]
+        for lang in langs + ["040904b0", "040904e4"]:
+            for field in ("ProductName", "FileDescription"):
+                if ver.VerQueryValueW(data, rf"\StringFileInfo\{lang}\{field}", ctypes.byref(ptr), ctypes.byref(n)) and n.value:
+                    name = " ".join(ctypes.wstring_at(ptr.value).replace("®", "").replace("™", "").split())
+                    if name and name != "Microsoft Windows Operating System":  # Windows' own programs: use the description
+                        return name
+    return os.path.splitext(os.path.basename(path))[0]
 
 
 def _first_instance(quiet, wait=20):

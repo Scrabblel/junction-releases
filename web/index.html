@@ -339,6 +339,8 @@ code.cmd {
 .dialog input { background: var(--raised); border: 1px solid var(--rule); border-radius: var(--radius); padding: 9px 10px; }
 .dialog .hint { font-size: 13px; color: var(--ink-faint); margin: 0; }
 .dialog .row-btns { display: flex; justify-content: flex-end; gap: 8px; }
+.dialog .add-path { display: flex; gap: 8px; }
+.dialog .add-path input { flex: 1; min-width: 0; }
 .btn.primary { background: var(--signal); color: #1a1205; border-color: var(--signal); font-weight: 600; }
 .btn.primary:hover { filter: brightness(1.08); background: var(--signal); }
 .toast {
@@ -1998,6 +2000,10 @@ const host = {
   },
   async rescan() {
     if (this.inApp) return window.pywebview.api.rescan();
+    return null;
+  },
+  async pickProgram() {
+    if (this.inApp) return window.pywebview.api.pick_program();
     return null;
   },
   async achievements(appid) {
@@ -5927,9 +5933,12 @@ function addGameDialog() {
     <div class="scrim" id="scrim">
       <form class="dialog" id="add-form">
         <h2>Add a game</h2>
-        <p class="hint">For games that aren't in a launcher Junction knows. In the app, Browse picks the program for you.</p>
+        <p class="hint">For games that aren't in a launcher Junction knows. ${host.inApp ? 'Browse to the game’s program (.exe), or type where it is.' : 'Type where the game’s program is.'}</p>
         <label>Name<input id="add-name" required placeholder="e.g. Factorio"></label>
-        <label>Program<input id="add-path" required placeholder="C:\\Games\\Factorio\\bin\\x64\\factorio.exe"></label>
+        <label>Program<span class="add-path">
+          <input id="add-path" required placeholder="C:\\Games\\Factorio\\bin\\x64\\factorio.exe">
+          ${host.inApp ? '<button type="button" class="btn" id="add-browse">Browse…</button>' : ''}
+        </span></label>
         <div class="row-btns">
           <button type="button" class="btn" id="add-cancel">Cancel</button>
           <button type="submit" class="btn primary">Add game</button>
@@ -5938,6 +5947,14 @@ function addGameDialog() {
     </div>`;
   $('#add-name').focus();
   $('#add-cancel').onclick = () => closeLayer();
+  // Windows' own file picker; the program's own name fills in the Name when it's still empty.
+  $('#add-browse')?.addEventListener('click', async () => {
+    const got = await host.pickProgram();
+    if (!got || !$('#add-path')) return $('#add-browse')?.focus();
+    $('#add-path').value = got.path;
+    if (!$('#add-name').value.trim()) $('#add-name').value = got.name;
+    $('#add-form button[type=submit]').focus();
+  });
   closeOnScrim();
   $('#add-form').onsubmit = e => {
     e.preventDefault();
