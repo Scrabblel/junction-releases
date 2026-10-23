@@ -4726,11 +4726,12 @@ async function profileMenu(page = 'main') {
     b.setAttribute('aria-checked', info[name]);
     toast(said[info[name] ? 1 : 0]);
   } });
-  // Layout and Style are one row each (only when there's a choice); the choices open in a side menu next to it.
-  const lookNow = key => (key === 'layout' ? document.documentElement.dataset.layout : style());
+  // Layout, Style and Theme are one row each (only when there's a choice); the choices open in a side menu next to it.
+  const lookNow = key => (key === 'layout' ? document.documentElement.dataset.layout : key === 'theme' ? prefs.theme : style());
   const lookChoices = (key, title, list) => Object.keys(list).length < 2 ? []
     : [{ label: title, value: list[lookNow(key)]?.name, fly: key }];
-  const LOOKS = { layout: ['Layout', LAYOUTS], style: ['Style', STYLES] };
+  const themes = { dark: { name: THEMES.dark }, light: { name: THEMES.light }, system: { name: THEMES.system, about: 'Light or dark, as Windows is set' } };
+  const LOOKS = { layout: ['Layout', LAYOUTS], style: ['Style', STYLES], theme: ['Theme', themes] };
   const nKeys = info ? info.accounts.filter(a => a.key).length : 0;
   const pages = {
     main: { items: [
@@ -4764,17 +4765,10 @@ async function profileMenu(page = 'main') {
     ] },
     prefs: { title: 'Preferences', items: [
       // Layout and Style show once there's more than one to choose from.
-      ...(Object.keys(LAYOUTS).length > 1 || Object.keys(STYLES).length > 1 ? [{ label: 'Look', heading: true }] : []),
+      ...(Object.keys(LAYOUTS).length > 1 || Object.keys(STYLES).length > 1 || STYLES[style()].themes ? [{ label: 'Look', heading: true }] : []),
       ...lookChoices('layout', 'Layout', LAYOUTS),
       ...lookChoices('style', 'Style', STYLES),
-      ...(STYLES[style()].themes ? [
-        { label: 'Theme', heading: true },
-        ...Object.entries(THEMES).map(([k, name]) => ({ icon: ICON[k === 'system' ? 'auto' : k === 'light' ? 'sun' : 'moon'], label: name, radio: prefs.theme === k, group: 'theme',
-          run: b => {
-            prefs.theme = k; savePrefs(); applyTheme();
-            b.closest('.ctx').querySelectorAll('[data-group="theme"]').forEach(x => x.setAttribute('aria-checked', x === b));
-          } })),
-      ] : []),
+      ...(STYLES[style()].themes ? lookChoices('theme', 'Theme', themes) : []),
       ...(info ? [
         { label: 'Prices', heading: true },
         { icon: ICON.tag, label: 'Country', value: countryName(info.country), run: () => (closeMenu(), countryDialog()) },
@@ -4802,7 +4796,7 @@ async function profileMenu(page = 'main') {
   menu.setAttribute('role', 'menu');
   menu.setAttribute('aria-label', 'Accounts and settings');
   let items = [];
-  // The side menu with the Layout or Style choices, next to its row: on the left of the menu, or on the right
+  // The side menu with the Layout, Style or Theme choices, next to its row: on the left of the menu, or on the right
   // when there's no room. Picking one applies it and opens the menu again, so the rows below can change too
   // (a style decides whether Theme shows).
   const closeFly = (refocus = true) => {
@@ -4851,11 +4845,10 @@ async function profileMenu(page = 'main') {
           <span><b>${me ? esc(me.name) : 'Junction'}</b><small>${me ? 'Signed in to Steam' : lib.steamSignedIn ? 'Steam account not in Junction' : 'Not signed in to Steam'}</small></span></div>`
       : `<button class="pm-back" data-pm-back>${ic(ICON.back)}${esc(p.title)}</button><div class="pm-sep"></div>`) +
       items.map((it, i) => it.heading ? `<div class="ctx-label">${esc(it.label)}</div>`
-        : `<button data-pm="${i}" ${it.cls ? `class="${it.cls}"` : ''} role="${it.on != null ? 'menuitemcheckbox' : it.radio != null ? 'menuitemradio' : 'menuitem'}"
-            ${it.on != null ? `aria-checked="${!!it.on}"` : it.radio != null ? `aria-checked="${it.radio}"` : ''} ${it.group ? `data-group="${it.group}"` : ''} ${it.fly ? `data-fly-row="${it.fly}"` : ''} ${it.go || it.fly ? 'aria-haspopup="menu"' : ''} ${it.fly ? 'aria-expanded="false"' : ''}>
+        : `<button data-pm="${i}" ${it.cls ? `class="${it.cls}"` : ''} role="${it.on != null ? 'menuitemcheckbox' : 'menuitem'}"
+            ${it.on != null ? `aria-checked="${!!it.on}"` : ''} ${it.fly ? `data-fly-row="${it.fly}"` : ''} ${it.go || it.fly ? 'aria-haspopup="menu"' : ''} ${it.fly ? 'aria-expanded="false"' : ''}>
             ${it.icon ? ic(it.icon) : ''}<span class="pm-label">${esc(it.label)}</span>
             ${it.on != null ? '<span class="pm-switch" aria-hidden="true"></span>'
-              : it.radio != null ? ic(PM.check, 'pm-check')
               : `<span class="pm-val">${esc(it.value || '')}${it.go || it.fly ? ICON.chevron : ''}</span>`}
           </button>`).join('') +
       (name === 'main' ? `<div class="pm-foot">Junction${info ? ` ${esc(info.version)}` : ''}</div>` : '');
