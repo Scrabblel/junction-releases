@@ -6,6 +6,11 @@
 
 ---
 
+<img width="2559" height="1391" alt="image" src="https://github.com/user-attachments/assets/34512048-52e1-4a29-9327-0a5ffeb00594" />
+
+
+---
+
 ## What it does
 
 - **One library for every launcher.** Steam, Epic Games, GOG Galaxy, Ubisoft Connect, EA app, Battle.net, Rockstar Games and Xbox, plus any game you add yourself. Junction finds them by itself.
