@@ -204,6 +204,7 @@ class Tray:
         self.recent = []  # [(game id, name)], newest first
         self._ready = threading.Event()
         self._icon = self._ctl = self._menu = None
+        self._tip_click = None  # what clicking the last notice does, besides opening Junction
 
     def start(self):
         t = Thread(ThreadStart(self._run))
@@ -220,7 +221,7 @@ class Tray:
         icon.Icon = Icon(self.icon_path)
         icon.Text = "Junction"
         icon.MouseClick += self._click
-        icon.BalloonTipClicked += lambda s, e: _later(self.on_open)
+        icon.BalloonTipClicked += lambda s, e: _later(self._tip_clicked)
         icon.Visible = True
         self._ready.set()
         WinForms.Application.Run()
@@ -248,8 +249,17 @@ class Tray:
             except Exception:  # noqa: BLE001 - the tray is already gone
                 pass
 
-    def tip(self, title, text):
-        self._on_thread(lambda: self._icon.ShowBalloonTip(5000, title, text, WinForms.ToolTipIcon.Info))
+    def _tip_clicked(self):
+        self.on_open()
+        if self._tip_click:
+            self._tip_click()
+
+    def tip(self, title, text, on_click=None):
+        """A Windows notice from the tray icon. Clicking it opens Junction, then runs on_click."""
+        def show():
+            self._tip_click = on_click
+            self._icon.ShowBalloonTip(5000, title[:63], text[:255], WinForms.ToolTipIcon.Info)  # Windows' limits
+        self._on_thread(show)
 
     def stop(self):
         if getattr(self, "_stopped", False):

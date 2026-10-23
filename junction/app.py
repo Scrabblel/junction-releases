@@ -28,6 +28,7 @@ from . import (config, ea_account, epic_account, keys, launchers, library, live_
 LIB_VERSION = 1          # bump when the cached library's shape changes
 ACH_TTL = 10 * 60        # seconds a game's achievements stay cached
 WATCH_EVERY = 5          # seconds between checks for games installed or removed while the app is open
+STORE_CHECK = 30 * 60    # seconds between checks whether the Store's prices are due again (also while in the tray)
 ENRICHED = ("friends", "friendOwners", "dlcSales", "news")
 # Pages the settings dialogs may open in the browser (where people make their keys).
 KEY_SITES = {"steamcommunity.com", "isthereanydeal.com", "www.steamgriddb.com"}
@@ -444,6 +445,27 @@ class Api:
                 threading.Thread(target=self._refresh_store, daemon=True).start()
             return self._store
 
+    def _keep_prices_fresh(self):
+        """Junction left in the tray still checks prices now and then, so it can tell about wishlist deals."""
+        while not self._quitting:
+            time.sleep(STORE_CHECK)
+            try:
+                with self._store_lock:
+                    age = config.cache_age("store.json")
+                    if age is None or age <= live_store.stale() or self._store_refreshing:
+                        continue
+                    self._store_refreshing = True
+                self._refresh_store()
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+
+    def deal_alert(self, title, text):
+        """The page found wishlist games that got cheaper: a Windows notice that opens the Wishlist."""
+        if not self._tray or not config.load_settings().get("dealAlerts", True):
+            return {"ok": False}
+        self._tray.tip(str(title), str(text), on_click=lambda: self._js("window.junctionGoto && junctionGoto('wishlist')"))
+        return {"ok": True}
+
     def get_price_history(self, itad_id):
         """A year of best prices for one Store game, for its page. None when it can't be fetched."""
         itad_id = str(itad_id)
@@ -482,16 +504,18 @@ class Api:
     def get_settings(self):
         s = config.load_settings()
         return {**keys.overview(), "version": config.VERSION, "setupDone": bool(s.get("setupDone")),
-                "closeToTray": s.get("closeToTray", True), "startWithWindows": startup.enabled(),
+                "closeToTray": s.get("closeToTray", True), "trayNotice": s.get("trayNotice", True),
+                "dealAlerts": s.get("dealAlerts", True),
+                "startWithWindows": startup.enabled(),
                 "tray": self._tray is not None, "signins": signins.overview()}
 
     def set_option(self, name, value):
-        """The on/off settings: setupDone, closeToTray, startWithWindows."""
+        """The on/off settings: setupDone, closeToTray, trayNotice, dealAlerts, startWithWindows."""
         value = bool(value)
         try:
             if name == "startWithWindows":
                 startup.set_enabled(value)
-            elif name in ("setupDone", "closeToTray"):
+            elif name in ("setupDone", "closeToTray", "trayNotice", "dealAlerts"):
                 s = config.load_settings()
                 s[name] = value
                 config.save_settings(s)
@@ -694,10 +718,9 @@ class Api:
         if ctypes.windll.user32.GetSystemMetrics(0x2000):  # SM_SHUTTINGDOWN: Windows is ending the session
             return True
         threading.Thread(target=self._window.hide, daemon=True).start()
-        if not settings.get("trayTipShown"):
-            self._tray.tip("Junction is still running", "It's here in the tray. Right-click it for your recent games or to quit.")
-            settings["trayTipShown"] = True
-            config.save_settings(settings)
+        if settings.get("trayNotice", True):  # every time: it's easy to forget it's still there
+            self._tray.tip("Junction is still running", "It's in the tray, by the clock. Right-click it to quit. "
+                           "You can turn this notice off in Preferences.")
         return False
 
     def _after_key(self, result, then):
@@ -975,6 +998,7 @@ def main():
         window.events.restored += api._window_state
     threading.Thread(target=api._watch, daemon=True).start()
     threading.Thread(target=api._tidy, daemon=True).start()
+    threading.Thread(target=api._keep_prices_fresh, daemon=True).start()
     api._tracker.look_around(lambda: (api._lib or {}).get("games"))  # games started outside Junction
     api._updates.start()
     threading.Thread(target=_listen_for_second_start, args=(api,), daemon=True).start()
