@@ -123,6 +123,7 @@ def report(lib=None, extra=None):
     accs = settings.get("steamAccounts") or []
     lines.append(f"Keys: Steam {sum(1 for a in accs if a.get('apiKey'))} of {len(accs)} accounts · "
                  f"prices {'own key' if settings.get('itadApiKey') else 'built in' if keys.builtin_prices_key() else 'no'} · cover art {'yes' if settings.get('steamGridDbKey') else 'no'}")
+    lines.append(f"Prices for: {config.country(settings)} (Windows region {config.windows_region() or 'unknown'})")
     for k, v in (extra or {}).items():
         lines.append(f"{k}: {v}")
     if lib:

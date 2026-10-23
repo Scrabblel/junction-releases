@@ -21,19 +21,18 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
+from . import config
 from .art import UA, get_json, normalize, steam_art, steam_items
 from .config import NET_ERRORS
 from .launchers import LAUNCHERS
 
 API = "https://api.isthereanydeal.com"
-COUNTRY = "NL"
 STEAM_SHOP = 61
 # The launchers' own stores (ITAD shop id: name shown in Junction). No resellers.
 FIRST_PARTY = {61: "Steam", 16: "Epic Games", 35: "GOG", 62: "Ubisoft Store",
                52: "EA app", 4: "Battle.net", 48: "Microsoft Store"}
 SHOPS_PARAM = ",".join(map(str, FIRST_PARTY))
-EPIC_FREE = ("https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
-             f"?locale=en-US&country={COUNTRY}&allowCountries={COUNTRY}")
+EPIC_FREE = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country={0}&allowCountries={0}"
 
 
 def _chunks(items, size):
@@ -55,9 +54,10 @@ class Itad:
     COOL_DOWN = 120   # seconds to stop asking after IsThereAnyDeal keeps turning requests away
     _quiet_until = 0.0
 
-    def __init__(self, key, log=None):
+    def __init__(self, key, log=None, country=None):
         self.key = key
         self.log = log or (lambda msg: None)
+        self.country = country or config.country()  # prices, deals and history are for this country, in its currency
         self._lock = threading.Lock()
         self._next = 0.0
 
@@ -102,7 +102,7 @@ class Itad:
         """
         found, offset = [], 0
         while len(found) < count:
-            params = {"country": COUNTRY, "limit": 200, "offset": offset, "sort": "rank", "shops": SHOPS_PARAM}
+            params = {"country": self.country, "limit": 200, "offset": offset, "sort": "rank", "shops": SHOPS_PARAM}
             if not on_sale_only:
                 params["nondeals"] = "true"
             page = self._request("/deals/v2", params)
@@ -115,7 +115,7 @@ class Itad:
     def prices(self, ids):
         out = {}
         for chunk in _chunks(ids, 200):
-            for p in self._request("/games/prices/v3", {"country": COUNTRY, "shops": SHOPS_PARAM}, chunk):
+            for p in self._request("/games/prices/v3", {"country": self.country, "shops": SHOPS_PARAM}, chunk):
                 out[p["id"]] = p
         return out
 
@@ -147,7 +147,7 @@ class Itad:
     def history(self, itad_id, days=365):
         """Price changes at the first-party stores over the last `days`, newest first."""
         since = datetime.fromtimestamp(time.time() - days * 86400, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        return self._request("/games/history/v2", {"id": itad_id, "country": COUNTRY, "shops": SHOPS_PARAM,
+        return self._request("/games/history/v2", {"id": itad_id, "country": self.country, "shops": SHOPS_PARAM,
                                                     "since": since})
 
     def search(self, title, results=30):
@@ -183,9 +183,9 @@ def steam_details(appids, tag_count=8):
     return out
 
 
-def steam_top_sellers():
-    """App ids of Steam's current top sellers in the Netherlands."""
-    data = get_json(f"https://store.steampowered.com/api/featuredcategories?cc={COUNTRY.lower()}&l=english")
+def steam_top_sellers(country):
+    """App ids of Steam's current top sellers in this country."""
+    data = get_json(f"https://store.steampowered.com/api/featuredcategories?cc={country.lower()}&l=english")
     return list(dict.fromkeys(i["id"] for i in data.get("top_sellers", {}).get("items", []) if i.get("id")))
 
 
@@ -198,11 +198,11 @@ def steam_wishlist(steamid, key=""):
 
 # ---------- free games ----------
 
-def epic_free():
-    """Games Epic is giving away right now."""
+def epic_free(country):
+    """Games Epic is giving away right now in this country."""
     now = time.time()
     out = []
-    for el in get_json(EPIC_FREE)["data"]["Catalog"]["searchStore"]["elements"]:
+    for el in get_json(EPIC_FREE.format(country))["data"]["Catalog"]["searchStore"]["elements"]:
         offers = ((el.get("promotions") or {}).get("promotionalOffers") or [{}])[0].get("promotionalOffers") or []
         live = [o for o in offers if o["discountSetting"]["discountPercentage"] == 0
                 and _ts(o["startDate"]) <= now <= _ts(o["endDate"])]
@@ -321,7 +321,7 @@ def build_store(itad, library_games, accounts, deal_count=150, catalog_count=600
     catalog = [add(d) for d in itad.deals(catalog_count, on_sale_only=False)]
     front = [add(d) for d in itad.deals(deal_count)]
     try:
-        sellers = itad.ids_for_steam(steam_top_sellers())
+        sellers = itad.ids_for_steam(steam_top_sellers(itad.country))
     except NET_ERRORS:
         sellers = {}
     steam_of.update({i: a for a, i in sellers.items()})
@@ -360,7 +360,7 @@ def build_store(itad, library_games, accounts, deal_count=150, catalog_count=600
                  owned=[{"launcher": o["launcher"], "label": _owned_label(o, account_names)} for o in owned.get(itad_id, [])])
 
     free = []
-    for source in (epic_free, lambda: itad_free(itad)):
+    for source in (lambda: epic_free(itad.country), lambda: itad_free(itad)):
         try:
             free += source()
         except (*NET_ERRORS, KeyError, ValueError):
@@ -371,7 +371,9 @@ def build_store(itad, library_games, accounts, deal_count=150, catalog_count=600
             seen.add(normalize(f["title"]))
             unique_free.append(f)
 
-    return {"fetchedAt": int(time.time()), "currency": "EUR", "country": COUNTRY,
+    # The currency comes with the prices: the country's own (a few countries pay in US dollars).
+    currency = next((x["price"]["currency"] for p in prices.values() for x in p.get("deals") or []), None)
+    return {"fetchedAt": int(time.time()), "currency": currency or "USD", "country": itad.country,
             "shops": {str(k): v for k, v in FIRST_PARTY.items()}, "games": games, "frontDeals": front,
             "catalog": browsable, "topSellers": top_sellers, "free": unique_free,
             "wishlist": [{"id": i, "from": f} for i, f in wished.items()], "wishlistAccounts": wishlist_accounts}

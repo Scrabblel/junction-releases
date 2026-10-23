@@ -9,6 +9,8 @@ import re
 import urllib.parse
 import urllib.request
 
+from . import config
+
 UA = {"User-Agent": "Junction/0.1 (personal game launcher)"}
 CDN = "https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/{file}"
 ART_FILES = {"cover": "library_600x900.jpg", "hero": "library_hero.jpg", "logo": "logo.png", "header": "header.jpg"}
@@ -65,7 +67,7 @@ def steam_items(appids, data_request=None):
     items = []
     for i in range(0, len(appids), 50):
         query = {"ids": [{"appid": a} for a in appids[i:i + 50]],
-                 "context": {"language": "english", "country_code": "NL"},
+                 "context": {"language": "english", "country_code": config.country()},
                  "data_request": data_request or {}}
         url = ("https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json="
                + urllib.parse.quote(json.dumps(query)))

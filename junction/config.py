@@ -12,9 +12,11 @@ as a separate copy of Junction: for testing a build without touching anyone's re
 """
 import base64
 import copy
+import ctypes
 import http.client
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -161,7 +163,39 @@ def write_cache(name, data):
 def cache_age(name):
     """Seconds since the cache file was written, or None."""
     try:
-        import time
         return time.time() - os.path.getmtime(os.path.join(CACHE_DIR, name))
     except OSError:
         return None
+
+
+# ---------- where prices are for ----------
+
+def windows_region():
+    """The country set in Windows (Settings > Time & language > Region) as a two-letter code, or None."""
+    buf = ctypes.create_unicode_buffer(16)
+    try:
+        if ctypes.windll.kernel32.GetUserDefaultGeoName(buf, len(buf)) and re.fullmatch("[A-Z]{2}", buf.value):
+            return buf.value
+    except (AttributeError, OSError):  # older Windows 10
+        pass
+    return None
+
+
+def windows_money_style():
+    """How Windows writes money for this person: {"locale": "en-NL", "decimal": ",", "group": "."}. The page
+    writes prices with that locale, but with Windows' own marks: browsers don't always agree with Windows on those
+    (English (Netherlands) is "1.234,50" in Windows, "1,234.50" in the page)."""
+    def info(kind):
+        buf = ctypes.create_unicode_buffer(85)
+        try:
+            return buf.value if ctypes.windll.kernel32.GetLocaleInfoEx(None, kind, buf, len(buf)) else None
+        except (AttributeError, OSError):
+            return None
+    LOCALE_SNAME, LOCALE_SMONDECIMALSEP, LOCALE_SMONTHOUSANDSEP = 0x5C, 0x16, 0x17
+    return {"locale": info(LOCALE_SNAME), "decimal": info(LOCALE_SMONDECIMALSEP), "group": info(LOCALE_SMONTHOUSANDSEP)}
+
+
+def country(settings=None):
+    """The country the Store's prices are for: the one the person chose, else Windows' region."""
+    chosen = str((settings if settings is not None else load_settings()).get("country") or "")
+    return chosen if re.fullmatch("[A-Z]{2}", chosen) else windows_region() or "US"

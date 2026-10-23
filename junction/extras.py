@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
+from . import config
 from .art import ASSET_BASE, UA, get_json, steam_items
 from .config import NET_ERRORS
 
@@ -116,10 +117,13 @@ def achievement_list(key, appid, steamids):
 
 
 def steam_dlc_sales(appids):
-    """{appid: [{"id", "name", "price", "regular", "cut"}]} for DLC of these games that's discounted on Steam now."""
+    """{appid: [{"id", "name", "price", "regular", "cut", "currency"}]} for DLC of these games that's discounted on Steam
+    now, in the country prices are for. Steam says the currency itself: for some countries it isn't IsThereAnyDeal's."""
+    cc = config.country().lower()
+
     def one(appid):
         try:
-            d = get_json(f"https://store.steampowered.com/api/dlcforapp/?appid={appid}&cc=nl&l=english", timeout=20)
+            d = get_json(f"https://store.steampowered.com/api/dlcforapp/?appid={appid}&cc={cc}&l=english", timeout=20)
         except (*NET_ERRORS, TimeoutError, ValueError):
             return appid, []
         out = []
@@ -127,7 +131,7 @@ def steam_dlc_sales(appids):
             p = x.get("price_overview") or {}
             if p.get("discount_percent"):
                 out.append({"id": x["id"], "name": x.get("name") or "", "price": p["final"] / 100,
-                            "regular": p["initial"] / 100, "cut": p["discount_percent"]})
+                            "regular": p["initial"] / 100, "cut": p["discount_percent"], "currency": p.get("currency")})
         return appid, sorted(out, key=lambda x: -x["cut"])
     with ThreadPoolExecutor(4) as pool:
         return {a: dlc for a, dlc in pool.map(one, appids) if dlc}

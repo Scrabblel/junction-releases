@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -465,6 +466,8 @@ class Api:
         with self._store_lock:
             if self._store is None:
                 self._store = config.read_cache("store.json")
+            if self._store is not None and self._store.get("country", "NL") != config.country():
+                self._store = None  # fetched for another country: those prices are in the wrong currency
             if self._store is None:
                 return self._build_store()
             age = config.cache_age("store.json")
@@ -527,11 +530,29 @@ class Api:
             traceback.print_exc()
             return None
 
+    def set_country(self, code):
+        """Where the Store's prices are for (the setup, and Preferences > Prices). Saying it also when it stays the
+        same marks it as chosen. The page fetches the Store again when the country changed."""
+        code = str(code or "").upper()
+        if not re.fullmatch("[A-Z]{2}", code):
+            return {"error": "Pick a country from the list."}
+        s = config.load_settings()
+        before = config.country(s)
+        s["country"] = code
+        config.save_settings(s)
+        if code != before:
+            with self._store_lock:
+                self._store = None
+            self._start(False)  # the sales on DLC, in that country's prices
+        return {"ok": True, "changed": code != before}
+
     # ---------- settings: the API keys, entered in the app ----------
 
     def get_settings(self):
         s = config.load_settings()
         return {**keys.overview(), "version": config.VERSION, "setupDone": bool(s.get("setupDone")),
+                "country": config.country(s), "countryChosen": bool(s.get("country")),
+                "windowsRegion": config.windows_region(), "money": config.windows_money_style(),
                 "closeToTray": s.get("closeToTray", True), "trayNotice": s.get("trayNotice", True),
                 "dealAlerts": s.get("dealAlerts", True),
                 "startWithWindows": startup.enabled(),

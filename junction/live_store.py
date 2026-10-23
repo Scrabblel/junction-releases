@@ -72,14 +72,16 @@ def build(games, accounts, settings=None, progress=None):
 
 def history(itad_id, settings=None):
     """One game's best price over the last year, [[unix time, price], ...]; None without a prices key."""
-    hit = _histories.get(itad_id)
+    settings = settings if settings is not None else config.load_settings()
+    at = (config.country(settings), itad_id)  # a price history is in one country's currency
+    hit = _histories.get(at)
     if hit and time.time() - hit[0] < HISTORY_TTL:
         return hit[1]
-    key = keys.prices_key(settings if settings is not None else config.load_settings())
+    key = keys.prices_key(settings)
     if not key:
         return None
-    line = stores.best_price_line(stores.Itad(key).history(itad_id))
-    _histories[itad_id] = (time.time(), line)
+    line = stores.best_price_line(stores.Itad(key, country=at[0]).history(itad_id))
+    _histories[at] = (time.time(), line)
     if len(_histories) > 500:
         _histories.pop(next(iter(_histories)))
     return line
@@ -93,11 +95,11 @@ def search(query, settings=None):
     key = keys.prices_key(settings)
     if not key or not query.strip():
         return []
-    q = " ".join(query.lower().split())
+    q = (config.country(settings), " ".join(query.lower().split()))  # prices are in one country's currency
     hit = _searches.get(q)
     if hit and time.time() - hit[0] < SEARCH_TTL:
         return hit[1]
-    itad = stores.Itad(key)
+    itad = stores.Itad(key, country=q[0])
     # Full games only, like the Store (no DLC, soundtracks or bundles), and no adult-only games.
     found = [g for g in itad.search(query.strip(), results=20) or [] if g.get("type") in (None, "game") and not g.get("mature")]
     out = _store_games(itad, found)

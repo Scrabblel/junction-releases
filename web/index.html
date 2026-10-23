@@ -679,7 +679,16 @@ kbd { font: 600 11px/1 var(--font-body); padding: 3px 5px; border: 1px solid var
 .pal-text span { font-size: 12.5px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pal-hint { font-size: 12px; color: var(--ink-faint); opacity: 0; }
 .pal-item[aria-selected="true"] .pal-hint { opacity: 1; }
-.pal-foot { display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-faint); }
+/* Choosing the country prices are for: a search box and the list under it */
+.country-search { display: flex; margin: 4px 0 8px; }
+.country-list { max-height: min(42vh, 360px); overflow-y: auto; display: grid; gap: 2px; padding: 2px; margin-bottom: 12px; }
+.country { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-radius: calc(6px * var(--round)); background: none; color: var(--ink-dim); text-align: left; font: inherit; }
+.country:hover, .country:focus-visible { background: var(--raised-2); color: var(--ink); }
+.country[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+.country span { flex: 1; }
+.country i { font-style: normal; font-size: 12px; color: var(--ink-faint); }
+.country svg { width: 16px; height: 16px; flex: none; color: var(--good); }
+.pal-foot {display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-faint); }
 .pal-empty { padding: 14px 16px; }
 
 /* game colour: tints the action bar and the PLAY glow */
@@ -2022,6 +2031,7 @@ const host = {
   async settings() {
     return this.inApp ? window.pywebview.api.get_settings() : null;
   },
+  async setCountry(code) { return this.inApp ? window.pywebview.api.set_country(code) : { error: 'Only the Junction app can change this.' }; },
   async setKey(kind, steamId, key) {
     if (!this.inApp) return { error: 'Only the Junction app can save keys.' };
     const api = window.pywebview.api;
@@ -3236,7 +3246,7 @@ function gamePanelHtml(t, b) {
           </div>
           ${dlc.length ? `<section class="gp-sec"><h2>DLC on sale on Steam</h2><div class="dlc-list">${dlc.map(d => `
             <a class="dlc" href="https://store.steampowered.com/app/${d.id}" target="_blank" rel="noopener">
-              <span class="n">${esc(d.name)}</span><span class="cut">-${d.cut}%</span><span class="was">${money(d.regular)}</span><b>${money(d.price)}</b></a>`).join('')}</div></section>` : ''}
+              <span class="n">${esc(d.name)}</span><span class="cut">-${d.cut}%</span><span class="was">${money(d.regular, d.currency)}</span><b>${money(d.price, d.currency)}</b></a>`).join('')}</div></section>` : ''}
           ${friendsOwning(t.steamAppId).length ? `<section class="gp-sec"><h2>Friends who own it</h2><div class="friend-list">${friendsOwning(t.steamAppId).map(f => `
             <span class="friend">${avatar(f)}<span><b>${esc(f.name)}</b><span>${esc(friendStatus(f))}</span></span></span>`).join('')}</div></section>` : ''}
           <section class="gp-sec"><h2>Your copies</h2>
@@ -3601,9 +3611,24 @@ function chooseOption(i) {
 }
 const runOption = o => isInstalled(o.copy) ? play(o.copy, o.steamId) : install(o.copy, o.steamId);
 
-// ---------- store: prices from every official store, in euros ----------
-const eur = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' });
-const money = v => v === 0 ? 'Free' : eur.format(v);
+// ---------- store: prices from every official store, in the currency of the country they're for ----------
+// The Store says its currency (store.currency); a DLC sale from Steam brings its own. Money is written the way
+// Windows writes it here (moneyStyle, from the app): its locale, with Windows' own decimal and thousands marks.
+let moneyStyle = { locale: 'nl-NL' };
+let moneyFormats = {};
+const money = (v, currency = store?.currency || 'EUR', whole = false) => {
+  if (v === 0) return 'Free';
+  const f = moneyFormats[`${currency} ${whole}`] ||= new Intl.NumberFormat(moneyStyle.locale,
+    { style: 'currency', currency, ...(whole && { minimumFractionDigits: 0, maximumFractionDigits: 0 }) });
+  return f.formatToParts(v).map(p => (p.type === 'decimal' && moneyStyle.decimal) || (p.type === 'group' && moneyStyle.group) || p.value).join('');
+};
+// Every country IsThereAnyDeal has prices for: Windows' list, without Kosovo, which it doesn't know.
+const COUNTRIES = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'.split(' ');
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+const countryName = code => { try { return regionNames.of(code) || code; } catch { return code; } };
+let countryNote = null;  // the country to mention once, the first time the Store shows (see the start-up)
+// "Prices for Netherlands", where the country is a button for choosing another one.
+const pricesNote = () => `Prices for <button class="link-btn" data-country>${esc(countryName(store.country || 'NL'))}</button> from the launchers' own stores`;
 function shopLine(name) {
   const n = (name || '').toLowerCase();
   if (n.includes('steam')) return 'steam';
@@ -3697,7 +3722,7 @@ function storeHead(active) {
     <div class="page-head">
       <div>
         <h1>Store</h1>
-        <div class="summary">Euro prices from the launchers' own stores · ${updatedLabel()}</div>
+        <div class="summary">${pricesNote()} · ${updatedLabel()}</div>
       </div>
       ${storeTabs(active)}
     </div>`;
@@ -3799,7 +3824,7 @@ function renderFront() {
             <input id="store-search" type="search" placeholder="Search every store" autocomplete="off" aria-label="Search every store for a game"></label>
           <button class="pill" data-store-tab="browse">Browse all</button>
           <label class="check"><input type="checkbox" id="show-owned" ${prefs.showOwned ? 'checked' : ''}> Show games I own</label>
-          <span class="note">Euro prices from the launchers' own stores · ${updatedLabel()}</span>
+          <span class="note">${pricesNote()} · ${updatedLabel()}</span>
         </div>
         ${rows.map(r => row(r.title, r.note, `<div class="tiles">${r.games.map(storeTile).join('')}${r.preset === 'wishlist'
           ? `<button class="tile all land" data-nav="wishlist" aria-label="Open your wishlist"><span class="art"><b>${r.count}</b>Wishlist</span></button>`
@@ -3940,10 +3965,26 @@ function browseResults() {
   return out;
 }
 
+// The Browse filter's "Under …" steps: 5, 10, 20 and 40 in euros or dollars, steps of about the same worth in
+// other currencies, rounded to tidy amounts. A currency not listed goes by what games cost in it.
+const PRICE_SCALE = { PLN: 4, BRL: 5, CNY: 5, TWD: 25, TRY: 40, INR: 50, PHP: 50, JPY: 200, ARS: 1000, KRW: 1000, IDR: 10000 };
+function priceSteps() {
+  if (['EUR', 'USD', 'GBP', 'CAD', 'AUD', 'NZD', 'CHF'].includes(store.currency)) return [5, 10, 20, 40];
+  let scale = PRICE_SCALE[store.currency];
+  if (!scale) {
+    const regular = catalogGames().map(sg => sg.deals[0]?.regular).filter(v => v > 0).sort((a, b) => a - b);
+    scale = regular.length ? regular[regular.length >> 1] / 20 : 1;  // a typical Store game costs about 20 euros
+  }
+  const tidy = v => {
+    const p = 10 ** Math.floor(Math.log10(v));
+    return [1, 2, 2.5, 5, 10].map(m => m * p).reduce((a, b) => (Math.abs(Math.log(b / v)) < Math.abs(Math.log(a / v)) ? b : a));
+  };
+  return [5, 10, 20, 40].map(v => tidy(v * scale));
+}
 function renderBrowse() {
   const b = state.browse;
   const results = browseResults();
-  const prices = [['', 'Any price'], ['0', 'Free'], ['5', 'Under € 5'], ['10', 'Under € 10'], ['20', 'Under € 20'], ['40', 'Under € 40']];
+  const prices = [['', 'Any price'], ['0', 'Free'], ...priceSteps().map(v => [String(v), `Under ${money(v, store.currency, true)}`])];
   const shopCounts = {};
   for (const sg of catalogGames()) for (const d of sg.deals) shopCounts[d.shop] = (shopCounts[d.shop] || 0) + 1;
   const topShops = Object.keys(shopCounts).sort((x, y) => shopCounts[y] - shopCounts[x]).slice(0, 10);
@@ -4245,6 +4286,9 @@ function setWished(id, on) {
 // The first check only takes note, so nobody gets a notice about every sale at once.
 function checkDeals() {
   if (!host.inApp || !store) return;
+  // Prices for another country now: what was already told about was in another currency. Start over, quietly.
+  if (prefs.dealCountry && prefs.dealCountry !== store.country) delete prefs.dealSeen;
+  prefs.dealCountry = store.country;
   const first = !prefs.dealSeen, seen = prefs.dealSeen ||= {}, found = [];
   for (const id of wishlistIds()) {
     const sg = store.games[id], d = sg.deals?.[0];  // every shop, not the Store's filter
@@ -4732,6 +4776,8 @@ async function profileMenu(page = 'main') {
           } })),
       ] : []),
       ...(info ? [
+        { label: 'Prices', heading: true },
+        { icon: ICON.tag, label: 'Country', value: countryName(info.country), run: () => (closeMenu(), countryDialog()) },
         { label: 'App', heading: true },
         info.tray && toggle('closeToTray', 'Keep in the tray when closed', info.closeToTray,
           ['Closing the window now quits Junction.', 'Closing the window now keeps Junction in the tray.']),
@@ -5060,19 +5106,23 @@ async function setupWizard() {
   const info = await host.settings();
   host.setOption('setupDone', true);
   // With a prices key built in, there's nothing to set up for the Store.
-  const steps = ['welcome', info.accounts.length && 'steam', !info.pricesBuiltIn && 'prices', 'ready'].filter(Boolean);
-  const extra = steps.length - 2;
+  const steps = ['welcome', 'country', info.accounts.length && 'steam', !info.pricesBuiltIn && 'prices', 'ready'].filter(Boolean);
+  const extra = steps.length - 3;  // the optional ones
   const found = Object.entries(lib.games.reduce((m, g) => ((m[g.launcher] = (m[g.launcher] || 0) + 1), m), {}))
     .sort((a, b) => b[1] - a[1]);
   const body = {
     welcome: () => `
       <div class="setup-logo">${$('.brand svg').outerHTML}</div>
       <h2>Welcome to Junction</h2>
-      <p class="hint">Every game from every launcher in one place, and the lowest price in euros across the official stores.
-        ${extra === 2 ? 'Two quick, optional steps and you’re ready.' : extra === 1 ? 'One quick, optional step and you’re ready.' : 'You’re almost ready.'}</p>
+      <p class="hint">Every game from every launcher in one place, and the lowest price across the official stores.
+        ${extra === 2 ? 'Where you buy your games, and two quick, optional steps.' : extra === 1 ? 'Where you buy your games, and one quick, optional step.' : 'Just tell Junction where you buy your games.'}</p>
       ${found.length ? `<div class="setup-found" aria-label="Found on this PC">
         ${found.map(([l, n]) => `<span class="setup-launcher" style="${lineVar(l)}"><i></i>${esc(lib.launchers[l] || l)} <b>${n} ${n === 1 ? 'game' : 'games'}</b></span>`).join('')}
       </div>` : '<p class="hint">Junction didn’t find any launchers yet. Install one, then choose Rescan launchers under your profile picture.</p>'}`,
+    country: () => `
+      <h2>Where do you buy your games?</h2>
+      <p class="hint">The Store shows the prices in this country, in its currency.</p>
+      ${countryPickerHtml()}`,
     steam: () => keySection('steam', info) + '<p class="hint">Optional: without a key, Junction shows your installed Steam games and the ones Steam remembers.</p>',
     prices: () => keySection('prices', info) + '<p class="hint">Optional: without it, the Store can’t show prices.</p>',
     ready: () => `
@@ -5101,6 +5151,13 @@ async function setupWizard() {
       </div>`;
     const dlg = $('#layer .dialog');
     wireKeys(dlg);
+    if (steps[i] === 'country') {
+      host.setCountry(info.country);  // the one shown first counts as chosen too
+      wireCountryPicker(dlg, () => info.country, info.windowsRegion, code => {
+        info.country = code;
+        host.setCountry(code).then(res => res?.changed && forgetPrices());
+      });
+    }
     dlg.addEventListener('change', async e => {
       const box = e.target.closest('[data-opt]');
       if (!box) return;
@@ -5115,6 +5172,86 @@ async function setupWizard() {
   setupWizard.back = () => (setupWizard.step > 0 ? show(setupWizard.step - 1) : closeLayer());
   setupWizard.redraw = async () => { Object.assign(info, await host.settings()); show(setupWizard.step); };
   show(0);
+}
+
+// ---------- where prices are for: a country, chosen in the setup or under Preferences > Prices ----------
+const countryPickerHtml = () => `
+      <label class="lsearch country-search">${ICON.search}<input id="country-q" type="search" placeholder="Type a country" autocomplete="off" aria-label="Search for a country"></label>
+      <div class="country-list" id="country-list" role="listbox" aria-label="Countries"></div>`;
+// The list under the search box. Without a search, the chosen country and Windows' region come first. Typing finds
+// a country by its English name, its name in Windows' language, or its two-letter code; names that start with it first.
+function wireCountryPicker(box, current, region, onPick) {
+  const local = (() => { try { return new Intl.DisplayNames([moneyStyle.locale], { type: 'region' }); } catch { return null; } })();
+  const fold = v => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const all = COUNTRIES.map(c => ({ c, name: countryName(c), find: fold(`${countryName(c)} ${local?.of(c) || ''}`) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const input = box.querySelector('#country-q'), list = box.querySelector('#country-list');
+  const draw = () => {
+    const q = fold(input.value.trim()), now = current();
+    let shown;
+    if (q) {
+      const hits = all.filter(x => x.find.includes(q) || x.c.toLowerCase() === q);
+      const early = x => x.c.toLowerCase() === q || x.find.split(/[\s,()-]+/).some(w => w.startsWith(q));
+      shown = [...hits.filter(early), ...hits.filter(x => !early(x))];
+    } else {
+      const top = [...new Set([now, region].filter(Boolean))].map(c => all.find(x => x.c === c)).filter(Boolean);
+      shown = [...top, ...all.filter(x => !top.includes(x))];
+    }
+    list.innerHTML = shown.map(x => `<button type="button" class="country" role="option" data-pick-country="${x.c}" aria-selected="${x.c === now}">
+        <span>${esc(x.name)}</span>${x.c === region ? '<i>Windows’ region</i>' : ''}${x.c === now ? PM.check : ''}</button>`).join('')
+      || `<p class="note">No country is called “${esc(input.value.trim())}”.</p>`;
+  };
+  input.addEventListener('input', draw);
+  input.addEventListener('keydown', e => {
+    const first = list.querySelector('[data-pick-country]');
+    if (e.key === 'ArrowDown' && first) { e.preventDefault(); first.focus(); }
+    if (e.key === 'Enter' && first) { e.preventDefault(); first.click(); }
+  });
+  list.addEventListener('keydown', e => {
+    const btns = [...list.querySelectorAll('[data-pick-country]')], i = btns.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' && i < btns.length - 1) { e.preventDefault(); btns[i + 1].focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); (i > 0 ? btns[i - 1] : input).focus(); }
+  });
+  list.addEventListener('click', e => {
+    const b = e.target.closest('[data-pick-country]');
+    if (!b) return;
+    onPick(b.dataset.pickCountry);
+    if (box.isConnected) {  // still open (the setup): show the new choice
+      draw();
+      list.querySelector(`[data-pick-country="${b.dataset.pickCountry}"]`)?.focus();
+    }
+  });
+  draw();
+}
+async function countryDialog() {
+  if (!host.inApp) return toast('In the Junction app, you choose here which country the Store’s prices are for.');
+  const info = await host.settings().catch(() => null);
+  if (!info) return;
+  closeMenu();
+  $('#layer').innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="dialog country-dlg" role="dialog" aria-modal="true" aria-labelledby="country-title">
+        <h2 id="country-title">Prices</h2>
+        <p class="hint">Which country do you buy your games in? The Store shows the prices there, in its currency.</p>
+        ${countryPickerHtml()}
+        <div class="row-btns"><button type="button" class="btn" id="country-cancel">Cancel</button></div>
+      </div>
+    </div>`;
+  closeOnScrim();
+  $('#country-cancel').onclick = () => closeLayer();
+  wireCountryPicker($('#layer .dialog'), () => info.country, info.windowsRegion, code => { closeLayer(); chooseCountry(code); });
+  $('#country-q').focus();
+}
+// The prices the page has are for another country now: the next look at the Store fetches them again.
+function forgetPrices() { store = null; storePromise = null; liveGames.clear(); state.browse.maxPrice = ''; }
+// Another country: the Store is fetched again for it, and the page that shows prices shows the wait.
+async function chooseCountry(code) {
+  const res = await host.setCountry(code);
+  if (!res?.ok) return toast(res?.error || 'Junction couldn’t change that.');
+  if (!res.changed) return toast(`The Store already shows prices for ${countryName(code)}.`);
+  forgetPrices();
+  toast(`Prices are for ${countryName(code)} now. Junction is fetching them.`);
+  if (['store', 'wishlist', 'home'].includes(sectionOf(state.view))) render(); else loadStoreQuiet();
 }
 
 // ---------- when something goes wrong: a report to send to whoever helps ----------
@@ -5467,6 +5604,10 @@ async function render() {
   // A game page opened from the Store or Wishlist still belongs to those tabs, but it's a game page.
   if ((section === 'store' || section === 'wishlist') && state.view.name !== 'game') {
     if (!(await ensureStore())) return;
+    if (countryNote) {
+      toast(`Prices are for ${countryName(countryNote)}. To choose another country, click its name at the top of the Store.`);
+      countryNote = null;
+    }
     if (state.view.name === 'price' && store.games[state.view.id]) return renderPrice(store.games[state.view.id]);
     if (state.view.name === 'price') state.view = { name: section };
     if (state.view.name === 'browse') return renderBrowse();
@@ -6145,6 +6286,7 @@ document.addEventListener('click', e => {
     state.view = { name: 'library' };
     return render();
   }
+  if ('country' in t.dataset) return countryDialog();
   if (t.dataset.nav === 'home') return goHome();
   if (t.dataset.nav) return go({ name: t.dataset.nav });
   if (t.dataset.price) {
@@ -6785,6 +6927,14 @@ $('#win-ctl').addEventListener('click', e => {
   pollDownloads();
   // The first time the app opens on a PC with no keys at all, a short welcome sets it up.
   if (host.inApp) host.settings().then(info => {
+    try {
+      if (info?.money?.locale) {
+        moneyStyle = { ...info.money, locale: new Intl.NumberFormat(info.money.locale).resolvedOptions().locale };
+        moneyFormats = {};
+      }
+    } catch { /* a locale the page doesn't know: keep the default */ }
+    // Junction used to show Dutch prices to everyone: once, it says which country the prices are for now.
+    if (info?.setupDone && !info.countryChosen) { countryNote = info.country; host.setCountry(info.country); }
     if (!info || info.setupDone) return;
     if (info.prices || info.accounts.some(a => a.key)) return host.setOption('setupDone', true);
     setTimeout(setupWizard, 1200);  // after the opening animation
