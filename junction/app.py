@@ -921,6 +921,7 @@ def _keep_on_page(window):
         def attach():
             control = window.native.browser.webview
             control.NavigationStarting += going
+            logging.getLogger("junction").info("The window stays on %s", origin[0])
         try:
             from System import Action
             window.native.Invoke(Action(attach))
