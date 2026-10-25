@@ -13,7 +13,7 @@ import re
 import sys
 import time
 
-from . import config, keys
+from . import config, keys, signins
 
 LOG_DIR = os.path.join(os.path.dirname(config.CACHE_DIR), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "junction.log")
@@ -135,6 +135,16 @@ def report(lib=None, extra=None):
             c[1] += bool(g.get("installed"))
         lines.append("Games:" + ("" if per else " none found"))
         lines += [f"  {names.get(k, k)}: {n} ({i} installed)" for k, (n, i) in sorted(per.items(), key=lambda x: -x[1][0])]
+        # Which launchers you're signed in to, and how many of their games got play time from them.
+        try:
+            ins = signins.overview()
+        except Exception:  # noqa: BLE001 - the report must always work
+            ins = {}
+        lines.append("Sign-ins: " + (", ".join(f"{names.get(k, k)}{' (run out)' if v['expired'] else ''}" for k, v in ins.items()) or "none"))
+        timed = {k: sum(1 for g in lib.get("games") or [] if g["launcher"] == k and g.get("playtimeFrom") == "launcher")
+                 for k in ("gog", "ubisoft", "epic", "ea") if k in per}
+        if timed:
+            lines.append("Play time from launchers: " + ", ".join(f"{names.get(k, k)} {n} of {per[k][0]} games" for k, n in timed.items()))
         if lib.get("errors"):
             lines.append("Launcher problems:")
             lines += [f"  {names.get(k, k)}: {v}" for k, v in lib["errors"].items()]

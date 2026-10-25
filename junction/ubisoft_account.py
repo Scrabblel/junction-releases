@@ -10,6 +10,7 @@ the password, and swaps it for a short-lived ticket when it needs one. This is h
 signs in. Ubisoft doesn't offer this as an official API, so it can stop working.
 """
 import json
+import logging
 import threading
 import time
 import urllib.error
@@ -31,6 +32,7 @@ READ_STORAGE = "JSON.stringify([localStorage.getItem('PRODloginData'), localStor
 # Ubisoft hands out a new "remember me" ticket each time one is used, and the old one stops working: so one use at a
 # time, and the new one is always kept.
 _lock = threading.Lock()
+log = logging.getLogger("junction")
 FORGET_STORAGE = ("['PRODloginData', 'PRODrememberMe', 'PRODlastProfile'].forEach(k => localStorage.removeItem(k));"
                   " sessionStorage.clear(); 1")
 
@@ -154,30 +156,46 @@ def _access():
 
 def playtime(product_ids):
     """{Ubisoft product id: (minutes played, last played unix time)} as Ubisoft counts it now, for these games;
-    {} when not signed in. A game's editions share one "space", and Ubisoft keeps its stats per space."""
+    {} when not signed in. A game's editions share one "space", and Ubisoft keeps its stats per space.
+    One game that can't be read doesn't lose the others; the log says what happened, for the problem report."""
     if not signins.get("ubisoft"):
         return {}
     wanted = {str(p) for p in product_ids}
-    spaces = {space: [p for p in pids if p in wanted]
-              for space, pids in owned_local.ubisoft_spaces().items()}
+    known = owned_local.ubisoft_spaces()
+    spaces = {space: [p for p in pids if p in wanted] for space, pids in known.items()}
     spaces = {space: pids for space, pids in spaces.items() if pids}
     if not spaces:
+        log.warning("Ubisoft play time: none of the %d Ubisoft games are in Ubisoft Connect's list on this PC "
+                    "(%s)", len(wanted), f"{len(known)} games in it" if known else "list not found")
         return {}
     ticket, session, user = _access()
     headers = {"Authorization": f"Ubi_v1 t={ticket}", "Ubi-SessionId": session or "",
                "Ubi-RequestedPlatformType": "uplay", "Ubi-LocaleCode": "en-GB"}
-    out = {}
+    out, none, failed = {}, 0, {}
     for space, pids in spaces.items():
         try:
             cards = _request("GET", STATS_URL.format(user, space), headers).get("Statscards") or []
         except urllib.error.HTTPError as e:
             if e.code in (404, 412):  # no stats for this game (never played, or it keeps none)
+                none += 1
                 continue
-            raise
+            failed[f"HTTP {e.code}"] = failed.get(f"HTTP {e.code}", 0) + 1
+            if e.code in (401, 403) and not out:
+                break  # the ticket isn't accepted: the other games won't be either
+            continue
+        except (OSError, ValueError, AttributeError) as e:  # a timeout, or an answer that isn't the usual JSON
+            failed[type(e).__name__] = failed.get(type(e).__name__, 0) + 1
+            continue
         got = owned_local.ubisoft_time(cards)
         if got:
             for pid in pids:
                 out[pid] = (round(got[0] / 60), got[1])
+        else:
+            none += 1
+    log.info("Ubisoft play time: %d of %d games%s%s", len(out), len(spaces), f", {none} without play time" if none else "",
+             f", failed: {', '.join(f'{k} ×{n}' for k, n in failed.items())}" if failed else "")
+    if failed and not out:
+        raise OSError(f"Ubisoft didn't give any play time ({', '.join(failed)})")
     return out
 
 

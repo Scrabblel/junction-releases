@@ -10,6 +10,7 @@ in tools/ shrinks and embeds them instead.
 """
 import base64
 import concurrent.futures
+import logging
 import mimetypes
 import os
 import re
@@ -20,6 +21,8 @@ import urllib.request
 from . import (art, config, ea_account, epic_account, extras, launchers, owned_local, steam_owned, steam_switch, stores,
                ubisoft_account)
 from .config import NET_ERRORS
+
+log = logging.getLogger("junction")
 
 
 def _log(progress, msg):
@@ -213,12 +216,17 @@ def add_sizes(lib, max_age=86400):
 
 
 def _ubisoft_times(games):
-    """Ubisoft's play time: what Ubisoft Connect last saved on this PC, and (signed in) what Ubisoft counts now."""
-    times = owned_local.ubisoft_playtime()
+    """Ubisoft's play time: what Ubisoft Connect last saved on this PC, and (signed in) what Ubisoft counts now.
+    Either one going wrong keeps the other."""
+    try:
+        times = owned_local.ubisoft_playtime()
+    except Exception as e:  # noqa: BLE001 - a changed file format
+        log.warning("Ubisoft play time on this PC couldn't be read: %s: %s", type(e).__name__, e)
+        times = {}
     try:
         times.update(ubisoft_account.playtime([g["id"].split(":", 1)[1] for g in games if g["launcher"] == "ubisoft"]))
-    except (ubisoft_account.SignInError, *NET_ERRORS):
-        pass  # what's on this PC is still something
+    except Exception as e:  # noqa: BLE001 - what's on this PC is still something
+        log.warning("Ubisoft play time from Ubisoft: %s: %s", type(e).__name__, e)
     return times
 
 
@@ -234,7 +242,8 @@ def add_launcher_playtime(games):
     for launcher, (read, key) in readers.items():
         try:
             times = read()
-        except Exception:  # noqa: BLE001 - a changed file format or an expired sign-in must not stop the rest
+        except Exception as e:  # noqa: BLE001 - a changed file format or an expired sign-in must not stop the rest
+            log.warning("Play time from %s: %s: %s", launcher, type(e).__name__, e)
             continue
         for g in games:
             hit = g["launcher"] == launcher and times.get(key(g))
