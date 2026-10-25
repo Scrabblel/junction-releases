@@ -11,6 +11,7 @@ signs in. Ubisoft doesn't offer this as an official API, so it can stop working.
 """
 import json
 import logging
+import re
 import threading
 import time
 import urllib.error
@@ -48,6 +49,30 @@ def _request(method, url, headers, body=None):
         "Origin": "https://connect.ubisoft.com", "Referer": "https://connect.ubisoft.com/", **headers})
     with urllib.request.urlopen(req, timeout=20) as r:
         return json.load(r)
+
+
+def _said(answer):
+    """Ubisoft's own words in an error answer ({"errorCode", "message"}, or GraphQL's {"errors": [{"message"}]})."""
+    if not isinstance(answer, dict):
+        return ""
+    errors = answer.get("errors")
+    if isinstance(errors, list) and errors and isinstance(errors[0], dict):
+        answer = errors[0]
+    parts = [str(answer[k]) for k in ("errorCode", "message") if answer.get(k) not in (None, "")]
+    return " ".join(parts)
+
+
+def _why(e):
+    """A short reason for the log: "HTTP 400: 1100 Invalid query" or "URLError: timed out". Never a ticket."""
+    if isinstance(e, urllib.error.HTTPError):
+        try:
+            said = _said(json.loads(e.read(4096) or b"null"))
+        except (OSError, ValueError):
+            said = ""
+        why = f"HTTP {e.code}" + (f": {said}" if said else "")
+    else:
+        why = f"{type(e).__name__}: {getattr(e, 'reason', None) or e}"
+    return re.sub(r"[\w\-.=+/]{40,}", "…", why)[:200]
 
 
 def _session(remember):
@@ -164,7 +189,9 @@ def _owned_spaces(headers):
     """[(name, space id, on PC)] for the games on the Ubisoft account."""
     data = _request("POST", GRAPHQL_URL, headers, {"operationName": "AllGames", "variables": {"owned": True},
                                                    "query": OWNED_QUERY})
-    nodes = ((((data or {}).get("data") or {}).get("viewer") or {}).get("ownedGames") or {}).get("nodes") or []
+    if isinstance(data, dict) and data.get("errors") and not data.get("data"):
+        raise ValueError(f"Ubisoft answered: {_said(data) or 'an error'}")  # GraphQL errors come with HTTP 200
+    nodes =((((data or {}).get("data") or {}).get("viewer") or {}).get("ownedGames") or {}).get("nodes") or []
     out = []
     for n in nodes:
         if not isinstance(n, dict) or not n.get("spaceId") or not n.get("name"):
@@ -215,7 +242,7 @@ def playtime(games):
             owned = _owned_spaces(headers)
         except (OSError, ValueError, AttributeError) as e:
             owned = None
-            log.warning("Ubisoft play time: your Ubisoft games couldn't be read from Ubisoft (%s)", type(e).__name__)
+            log.warning("Ubisoft play time: your Ubisoft games couldn't be read from Ubisoft (%s)", _why(e))
         found = _match_spaces(missing, owned or [])
         for space, pids in found.items():
             spaces.setdefault(space, []).extend(pids)
