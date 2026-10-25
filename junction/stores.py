@@ -35,6 +35,35 @@ SHOPS_PARAM = ",".join(map(str, FIRST_PARTY))
 EPIC_FREE = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country={0}&allowCountries={0}"
 
 
+# Which IsThereAnyDeal game a Steam game or a title is (and the other way round) hardly ever changes, so Junction
+# remembers it, also when IsThereAnyDeal doesn't know a game, and asks only about games it hasn't seen in a while.
+# That's most of the requests a price refresh would otherwise make again and again (one key is shared by everyone).
+LOOKUPS = "itad_lookups.json"
+LOOKUP_KEEP = 30 * 86400
+_lookups_lock = threading.Lock()
+
+
+def _remembered(kind, wanted, ask):
+    """{key: value} for the `wanted` keys IsThereAnyDeal knows: remembered ones from this PC, `ask(keys)` for the rest
+    (it answers {key: value} for the ones it knows)."""
+    wanted = list(dict.fromkeys(wanted))
+    now = time.time()
+    with _lookups_lock:
+        known = dict((config.read_cache(LOOKUPS, {}) or {}).get(kind) or {})
+    new = [k for k in wanted if str(k) not in known or now - known[str(k)][1] > LOOKUP_KEEP]
+    if new:
+        got = ask(new)  # may raise: nothing is remembered then
+        with _lookups_lock:
+            saved = config.read_cache(LOOKUPS, {}) or {}
+            mine = saved.setdefault(kind, {})
+            mine.update({str(k): [got.get(k), int(now)] for k in new})
+            for name, entries in saved.items():  # forget what's long gone (a game left the Store and the library)
+                saved[name] = {k: v for k, v in entries.items() if now - v[1] < 2 * LOOKUP_KEEP}
+            config.write_cache(LOOKUPS, saved)
+            known = dict(mine)
+    return {k: known[str(k)][0] for k in wanted if str(k) in known and known[str(k)][0] is not None}
+
+
 def _chunks(items, size):
     items = list(items)
     for i in range(0, len(items), size):
@@ -121,28 +150,34 @@ class Itad:
 
     def ids_for_steam(self, appids):
         """{steam appid: ITAD id}"""
-        out = {}
-        for chunk in _chunks([f"app/{a}" for a in appids], 200):
-            for shop_id, itad_id in self._request(f"/lookup/id/shop/{STEAM_SHOP}/v1", body=chunk).items():
-                if itad_id:
-                    out[int(shop_id.split("/")[1])] = itad_id
-        return out
+        def ask(appids):
+            out = {}
+            for chunk in _chunks([f"app/{a}" for a in appids], 200):
+                for shop_id, itad_id in self._request(f"/lookup/id/shop/{STEAM_SHOP}/v1", body=chunk).items():
+                    if itad_id:
+                        out[int(shop_id.split("/")[1])] = itad_id
+            return out
+        return _remembered("steam", appids, ask)
 
     def steam_for_ids(self, itad_ids):
         """{ITAD id: steam appid} for games sold on Steam."""
-        out = {}
-        for chunk in _chunks(itad_ids, 200):
-            for itad_id, shop_ids in self._request(f"/lookup/shop/{STEAM_SHOP}/id/v1", body=chunk).items():
-                apps = [s for s in shop_ids or [] if s.startswith("app/")]
-                if apps:
-                    out[itad_id] = int(apps[0].split("/")[1])
-        return out
+        def ask(itad_ids):
+            out = {}
+            for chunk in _chunks(itad_ids, 200):
+                for itad_id, shop_ids in self._request(f"/lookup/shop/{STEAM_SHOP}/id/v1", body=chunk).items():
+                    apps = [s for s in shop_ids or [] if s.startswith("app/")]
+                    if apps:
+                        out[itad_id] = int(apps[0].split("/")[1])
+            return out
+        return _remembered("steamOf", itad_ids, ask)
 
     def ids_for_titles(self, titles):
-        out = {}
-        for chunk in _chunks(titles, 200):
-            out.update({t: i for t, i in self._request("/lookup/id/title/v1", body=chunk).items() if i})
-        return out
+        def ask(titles):
+            out = {}
+            for chunk in _chunks(titles, 200):
+                out.update({t: i for t, i in self._request("/lookup/id/title/v1", body=chunk).items() if i})
+            return out
+        return _remembered("titles", titles, ask)
 
     def history(self, itad_id, days=365):
         """Price changes at the first-party stores over the last `days`, newest first."""

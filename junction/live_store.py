@@ -3,6 +3,8 @@
 IsThereAnyDeal throttles hard, so a full refresh takes half a minute or more; the app keeps the last one
 in its cache and refreshes it in the background when it's older than stale() seconds.
 """
+import random
+import threading
 import time
 
 from . import art, config, extras, keys, steam_owned, stores
@@ -10,19 +12,57 @@ from .config import NET_ERRORS
 
 STALE = 6 * 3600          # with your own key
 STALE_SHARED = 12 * 3600  # with the key Junction comes with, which everyone shares
+# Each Junction waits a little longer than that, by its own amount: so not everyone who started Junction at the same
+# moment (after an update, say) asks IsThereAnyDeal at the same moment again, twelve hours later.
+SPREAD = random.uniform(0, 2 * 3600)
 SEARCH_TTL = 3600
 _searches = {}
 # Price history is one IsThereAnyDeal call per game, so the build fetches it only for the games the Store
-# shows first; any other game's comes when its page is opened (history()).
+# shows first; any other game's comes when its page is opened (history()). A year of prices hardly changes in a few
+# days, and today's price is put at its end anyway, so each one is kept on this PC for a while.
 HISTORY_FRONT, HISTORY_CATALOG = 16, 8
-HISTORY_TTL = 6 * 3600
-_histories = {}
+HISTORIES = "price_history.json"
+HISTORY_KEEP = 3 * 86400
+HISTORY_MAX = 600          # games kept; the ones asked longest ago go first
+_histories_lock = threading.Lock()
 
 
 def stale(settings=None):
     """How old the Store's prices may get before Junction fetches them again."""
     s = settings if settings is not None else config.load_settings()
-    return STALE if (s.get("itadApiKey") or "").strip() else STALE_SHARED
+    return (STALE if (s.get("itadApiKey") or "").strip() else STALE_SHARED) + SPREAD
+
+
+def _history_line(itad, itad_id, saved, today=None):
+    """One game's best price over the last year, [[unix time, price], ...], running on to now and ending at `today`'s
+    price: from `saved` (the kept ones, {"<country> <id>": [when asked, line]}) while it's fresh, else asked anew and
+    put in `saved`. Returns (line, asked)."""
+    at, now = f"{itad.country} {itad_id}", int(time.time())
+    hit = saved.get(at)
+    asked = not (hit and now - hit[0] < HISTORY_KEEP)
+    if asked:
+        hit = saved[at] = [now, stores.best_price_line(itad.history(itad_id), now=now)]
+    line = [list(p) for p in hit[1]]
+    if line:
+        line[-1][0] = max(now, line[-1][0])  # the last price holds until now
+        if today is not None and line[-1][1] != today:
+            line.append([line[-1][0], today])
+    return line, asked
+
+
+def _kept_histories():
+    with _histories_lock:
+        return dict(config.read_cache(HISTORIES, {}) or {})
+
+
+def _keep_histories(fresh):
+    """Add the newly asked histories to the kept ones, and drop the oldest past HISTORY_MAX."""
+    with _histories_lock:
+        saved = config.read_cache(HISTORIES, {}) or {}
+        saved.update(fresh)
+        if len(saved) > HISTORY_MAX:
+            saved = dict(sorted(saved.items(), key=lambda kv: kv[1][0])[-HISTORY_MAX:])
+        config.write_cache(HISTORIES, saved)
 
 
 def build(games, accounts, settings=None, progress=None):
@@ -42,14 +82,19 @@ def build(games, accounts, settings=None, progress=None):
     # A year of prices for the games people look at most; any other game loads its history when opened.
     # Not the wishlists: they can hold hundreds of games, and IsThereAnyDeal throttles long before that.
     wanted = list(dict.fromkeys(data["frontDeals"][:HISTORY_FRONT] + data["catalog"][:HISTORY_CATALOG]))
+    saved, fresh = _kept_histories(), {}
     for itad_id in wanted:
         try:
             deals = data["games"][itad_id].get("deals") or []
-            line = stores.best_price_line(itad.history(itad_id), today=deals[0]["price"] if deals else None)
+            line, asked = _history_line(itad, itad_id, saved, today=deals[0]["price"] if deals else None)
         except (*NET_ERRORS, ValueError):
             continue
+        if asked:
+            fresh[f"{itad.country} {itad_id}"] = saved[f"{itad.country} {itad_id}"]
         if len(line) > 1:
             data["games"][itad_id]["history"] = line
+    if fresh:
+        _keep_histories(fresh)
 
     # Screenshots, straight from Steam, for the same games and the top sellers.
     shown = wanted + [w["id"] for w in data["wishlist"]] + data["topSellers"]
@@ -73,17 +118,14 @@ def build(games, accounts, settings=None, progress=None):
 def history(itad_id, settings=None):
     """One game's best price over the last year, [[unix time, price], ...]; None without a prices key."""
     settings = settings if settings is not None else config.load_settings()
-    at = (config.country(settings), itad_id)  # a price history is in one country's currency
-    hit = _histories.get(at)
-    if hit and time.time() - hit[0] < HISTORY_TTL:
-        return hit[1]
     key = keys.prices_key(settings)
     if not key:
         return None
-    line = stores.best_price_line(stores.Itad(key, country=at[0]).history(itad_id))
-    _histories[at] = (time.time(), line)
-    if len(_histories) > 500:
-        _histories.pop(next(iter(_histories)))
+    itad = stores.Itad(key, country=config.country(settings))  # a price history is in one country's currency
+    saved = _kept_histories()
+    line, asked = _history_line(itad, itad_id, saved)
+    if asked:
+        _keep_histories({f"{itad.country} {itad_id}": saved[f"{itad.country} {itad_id}"]})
     return line
 
 
