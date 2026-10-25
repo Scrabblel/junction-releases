@@ -478,6 +478,8 @@ class Api:
             if self._raw is None:
                 self._scan()
         data = live_store.build(self._raw, (self._lib or {}).get("steamAccounts") or [], progress=self._progress)
+        if data and data.get("country") != config.country():
+            return None  # started before the country changed: the prices for the new one are on their way
         if data:
             config.write_cache("store.json", data)
             self._store = data
@@ -485,8 +487,8 @@ class Api:
 
     def _refresh_store(self):
         try:
-            self._build_store()
-            self._push("store")
+            if self._build_store():
+                self._push("store")
         except Exception:  # noqa: BLE001
             traceback.print_exc()
         finally:

@@ -3654,8 +3654,9 @@ const runOption = o => isInstalled(o.copy) ? play(o.copy, o.steamId) : install(o
 // Windows writes it here (moneyStyle, from the app): its locale, with Windows' own decimal and thousands marks.
 let moneyStyle = { locale: 'nl-NL' };
 let moneyFormats = {};
-const money = (v, currency = store?.currency || 'EUR', whole = false) => {
+const money = (v, currency, whole = false) => {
   if (v === 0) return 'Free';
+  currency ||= store?.currency || 'EUR';  // a price that doesn't say its currency (Intl would throw on none)
   const f = moneyFormats[`${currency} ${whole}`] ||= new Intl.NumberFormat(moneyStyle.locale,
     { style: 'currency', currency, ...(whole && { minimumFractionDigits: 0, maximumFractionDigits: 0 }) });
   return f.formatToParts(v).map(p => (p.type === 'decimal' && moneyStyle.decimal) || (p.type === 'group' && moneyStyle.group) || p.value).join('');
@@ -4305,7 +4306,7 @@ function stepHistory(plot, dir) {
 document.addEventListener('focusin', e => { if (e.target.matches?.('.history .plot')) { delete e.target.dataset.i; stepHistory(e.target, 0); } });
 document.addEventListener('focusout', e => { if (e.target.matches?.('.history .plot')) e.target.classList.remove('hover'); });
 document.addEventListener('keydown', e => {
-  if (!['ArrowLeft', 'ArrowRight'].includes(e.key) || !e.target.matches?.('.history .plot')) return;
+  if (!['ArrowLeft', 'ArrowRight'].includes(e.key) || e.altKey || !e.target.matches?.('.history .plot')) return;  // Alt: back and forward
   e.preventDefault(); e.stopImmediatePropagation();
   stepHistory(e.target, e.key === 'ArrowLeft' ? -1 : 1);
 }, true);
