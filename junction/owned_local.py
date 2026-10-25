@@ -23,9 +23,10 @@ import shutil
 import sqlite3
 import struct
 import tempfile
+import winreg
 
 from .art import normalize
-from .launchers import HKLM, _game, _reg_values
+from .launchers import HKLM, UNINSTALL_KEYS, _game, _reg_values
 
 # Epic library entries that are tools or extras rather than games.
 EPIC_SKIP_NAME = re.compile(r"\b(editor|resource archiver|content|soundtrack|art ?book|wallpaper|map pack)\b|beta$", re.I)
@@ -159,15 +160,51 @@ def _protobuf(b):
     return out
 
 
+UBI_LIST = os.path.join("cache", "configuration", "configurations")
+
+
+def _ubisoft_dirs():
+    """Every folder Windows says Ubisoft Connect is in, most trusted first: its own setting, its uninstall entry,
+    the program that opens uplay:// links (games start through it, so it's always the current one), and the
+    usual place. They can disagree after Ubisoft Connect was moved or reinstalled somewhere else."""
+    found = [(_reg_values(HKLM, p) or {}).get("InstallDir")
+             for p in (r"SOFTWARE\WOW6432Node\Ubisoft\Launcher", r"SOFTWARE\Ubisoft\Launcher")]
+    for root, path in UNINSTALL_KEYS:
+        v = _reg_values(root, path + r"\Uplay") or {}
+        found += [v.get("InstallLocation"), os.path.dirname((v.get("DisplayIcon") or "").split(",")[0].strip('"'))]
+    command = (_reg_values(winreg.HKEY_CLASSES_ROOT, r"uplay\shell\open\command") or {}).get("") or ""
+    m = re.match(r'\s*"([^"]+)"|\s*(\S+)', command)
+    if m:
+        found.append(os.path.dirname(m.group(1) or m.group(2)))
+    found.append(r"C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher")
+    out = []
+    for d in found:
+        d = os.path.normpath(d) if isinstance(d, str) and d.strip() else None
+        if d and d.lower() not in (x.lower() for x in out) and os.path.isdir(d):
+            out.append(d)
+    return out
+
+
 def _ubisoft_dir():
-    path = (_reg_values(HKLM, r"SOFTWARE\WOW6432Node\Ubisoft\Launcher") or {}).get("InstallDir")
-    path = path or r"C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher"
-    return path if os.path.isdir(path) else None
+    """Ubisoft Connect's folder: the first one that has its game list in it, else the first that exists."""
+    dirs = _ubisoft_dirs()
+    return next((d for d in dirs if os.path.isfile(os.path.join(d, UBI_LIST))), dirs[0] if dirs else None)
+
+
+def ubisoft_where(empty="game list found"):
+    """For the log: whether Ubisoft Connect's folder and its game list were found (no full paths).
+    `empty`: what to say when the list is there (the caller knows it had no games in it)."""
+    dirs = _ubisoft_dirs()
+    if not dirs:
+        return "Ubisoft Connect's folder not found"
+    if not any(os.path.isfile(os.path.join(d, UBI_LIST)) for d in dirs):
+        return f"its folder was found ({len(dirs)}), but without the game list (cache\\configuration\\configurations)"
+    return empty
 
 
 def _ubisoft_names(base):
     """{product id: (display name, bought on another platform, cover url)} from the launcher's configuration cache."""
-    path = os.path.join(base, "cache", "configuration", "configurations")
+    path = os.path.join(base, UBI_LIST)
     if not os.path.isfile(path):
         return {}
     with open(path, "rb") as f:
@@ -287,7 +324,7 @@ UBI_TOTALS = ("timeplayed", "playtime", "totalplaytime", "totaltimeplayed")
 
 def _ubisoft_spaces(base):
     """{space id: [product ids]}: a game's editions share one space, and its stats are kept per space."""
-    path = os.path.join(base, "cache", "configuration", "configurations")
+    path = os.path.join(base, UBI_LIST)
     if not os.path.isfile(path):
         return {}
     with open(path, "rb") as f:

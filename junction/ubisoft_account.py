@@ -166,7 +166,7 @@ def playtime(product_ids):
     spaces = {space: pids for space, pids in spaces.items() if pids}
     if not spaces:
         log.warning("Ubisoft play time: none of the %d Ubisoft games are in Ubisoft Connect's list on this PC "
-                    "(%s)", len(wanted), f"{len(known)} games in it" if known else "list not found")
+                    "(%s)", len(wanted), f"{len(known)} games in it" if known else owned_local.ubisoft_where(empty="its game list has no games in it"))
         return {}
     ticket, session, user = _access()
     headers = {"Authorization": f"Ubi_v1 t={ticket}", "Ubi-SessionId": session or "",
