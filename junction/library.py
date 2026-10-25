@@ -224,7 +224,8 @@ def _ubisoft_times(games):
         log.warning("Ubisoft play time on this PC couldn't be read: %s: %s", type(e).__name__, e)
         times = {}
     try:
-        times.update(ubisoft_account.playtime([g["id"].split(":", 1)[1] for g in games if g["launcher"] == "ubisoft"]))
+        times.update(ubisoft_account.playtime({g["id"].split(":", 1)[1]: g["name"] for g in games
+                                               if g["launcher"] == "ubisoft"}))
     except Exception as e:  # noqa: BLE001 - what's on this PC is still something
         log.warning("Ubisoft play time from Ubisoft: %s: %s", type(e).__name__, e)
     return times

@@ -160,7 +160,7 @@ def _protobuf(b):
     return out
 
 
-UBI_LIST = os.path.join("cache", "configuration", "configurations")
+UBI_LIST = os.path.join("configuration", "configurations")   # in Ubisoft Connect's cache
 
 
 def _ubisoft_dirs():
@@ -185,27 +185,51 @@ def _ubisoft_dirs():
     return out
 
 
-def _ubisoft_dir():
-    """Ubisoft Connect's folder: the first one that has its game list in it, else the first that exists."""
-    dirs = _ubisoft_dirs()
-    return next((d for d in dirs if os.path.isfile(os.path.join(d, UBI_LIST))), dirs[0] if dirs else None)
+def _ubisoft_roots():
+    """Every place Ubisoft Connect keeps its cache. Newer versions keep it apart from the program: the game list
+    and what you own in AppData\\Local, the stats in ProgramData. The program's own folder can still hold a copy
+    from before that, which isn't kept up to date any more."""
+    found = [os.path.join(os.environ.get("LOCALAPPDATA", ""), "Ubisoft Game Launcher"),
+             os.path.join(os.environ.get("PROGRAMDATA", ""), "Ubisoft", "Ubisoft Game Launcher"), *_ubisoft_dirs()]
+    out = []
+    for d in found:
+        if os.path.isabs(d) and d.lower() not in (x.lower() for x in out) and os.path.isdir(os.path.join(d, "cache")):
+            out.append(d)
+    return out
+
+
+def _changed(path):
+    """When a cache file, or the newest file in a cache folder, was last written (0: not there)."""
+    try:
+        if os.path.isdir(path):
+            return max((e.stat().st_mtime for e in os.scandir(path) if e.is_file()), default=0)
+        return os.path.getmtime(path)
+    except OSError:
+        return 0
+
+
+def _ubisoft_cache(name):
+    """The newest of Ubisoft Connect's copies of cache\\<name> (a file or a folder), or None."""
+    paths = [os.path.join(d, "cache", name) for d in _ubisoft_roots()]
+    best = max(paths, key=_changed, default=None)
+    return best if best and _changed(best) else None
 
 
 def ubisoft_where(empty="game list found"):
-    """For the log: whether Ubisoft Connect's folder and its game list were found (no full paths).
+    """For the log: whether Ubisoft Connect's cache and its game list were found (no full paths).
     `empty`: what to say when the list is there (the caller knows it had no games in it)."""
-    dirs = _ubisoft_dirs()
-    if not dirs:
-        return "Ubisoft Connect's folder not found"
-    if not any(os.path.isfile(os.path.join(d, UBI_LIST)) for d in dirs):
-        return f"its folder was found ({len(dirs)}), but without the game list (cache\\configuration\\configurations)"
+    roots = _ubisoft_roots()
+    if not roots:
+        return "Ubisoft Connect's cache not found" + ("" if _ubisoft_dirs() else ", nor Ubisoft Connect")
+    if not _ubisoft_cache(UBI_LIST):
+        return f"its cache was found ({len(roots)}), but without the game list (configuration\\configurations)"
     return empty
 
 
-def _ubisoft_names(base):
+def _ubisoft_names():
     """{product id: (display name, bought on another platform, cover url)} from the launcher's configuration cache."""
-    path = os.path.join(base, UBI_LIST)
-    if not os.path.isfile(path):
+    path = _ubisoft_cache(UBI_LIST)
+    if not path:
         return {}
     with open(path, "rb") as f:
         records = _protobuf(f.read())
@@ -239,12 +263,12 @@ def _ubisoft_names(base):
 
 def ubisoft_owned():
     """[(product id, name, cover url)] for games (not add-ons) in Ubisoft Connect's ownership cache."""
-    base = _ubisoft_dir()
-    if not base:
+    owned = _ubisoft_cache("ownership")
+    if not owned:
         return []
-    names = _ubisoft_names(base)
+    names = _ubisoft_names()
     games, seen = [], set()
-    for path in glob.glob(os.path.join(base, "cache", "ownership", "*")):
+    for path in glob.glob(os.path.join(owned, "*")):
         with open(path, "rb") as f:
             data = f.read()
         # 4-byte version, 256-byte signature, 4-byte length, then the protobuf.
@@ -322,10 +346,10 @@ if __name__ == "__main__":
 UBI_TOTALS = ("timeplayed", "playtime", "totalplaytime", "totaltimeplayed")
 
 
-def _ubisoft_spaces(base):
+def _ubisoft_spaces():
     """{space id: [product ids]}: a game's editions share one space, and its stats are kept per space."""
-    path = os.path.join(base, UBI_LIST)
-    if not os.path.isfile(path):
+    path = _ubisoft_cache(UBI_LIST)
+    if not path:
         return {}
     with open(path, "rb") as f:
         records = _protobuf(f.read())
@@ -343,8 +367,7 @@ def _ubisoft_spaces(base):
 
 def ubisoft_spaces():
     """{space id: [product ids]} for the games Ubisoft Connect knows on this PC; {} without Ubisoft Connect."""
-    base = _ubisoft_dir()
-    return _ubisoft_spaces(base) if base else {}
+    return _ubisoft_spaces()
 
 
 def ubisoft_time(cards):
@@ -379,12 +402,12 @@ def ubisoft_playtime():
     Ubisoft Connect saves a game's stats when you look at them in the launcher, so not every game is
     there, and the numbers are as fresh as that last look. Only cache/game_stats is read (never ownership).
     """
-    base = _ubisoft_dir()
-    if not base:
+    stats = _ubisoft_cache("game_stats")
+    if not stats:
         return {}
     spaces = None
     out = {}
-    for path in glob.glob(os.path.join(base, "cache", "game_stats", "*")):
+    for path in glob.glob(os.path.join(stats, "*")):
         with open(path, "rb") as f:
             data = f.read()
         for _, wire, value in _protobuf(data):
@@ -398,7 +421,7 @@ def ubisoft_playtime():
                 continue
             if not got:
                 continue
-            spaces = spaces if spaces is not None else _ubisoft_spaces(base)
+            spaces = spaces if spaces is not None else _ubisoft_spaces()
             for pid in spaces.get(space, ()):
                 out[pid] = (round(got[0] / 60), got[1])
     return out

@@ -16,7 +16,7 @@ import time
 import urllib.error
 import urllib.request
 
-from . import owned_local, signins
+from . import art, owned_local, signins
 
 APP_ID = "b8fde481-327d-4031-85ce-7c10a202a700"     # Ubisoft Connect's website, as the GOG Galaxy plugin uses it
 GENOME_ID = "fbd6791c-a6c6-4206-a75e-77234080b87b"
@@ -154,23 +154,77 @@ def _access():
     return s["ticket"], s.get("sessionId"), s.get("userId") or saved["user"]
 
 
-def playtime(product_ids):
-    """{Ubisoft product id: (minutes played, last played unix time)} as Ubisoft counts it now, for these games;
-    {} when not signed in. A game's editions share one "space", and Ubisoft keeps its stats per space.
+GRAPHQL_URL = "https://public-ubiservices.ubi.com/v1/profiles/me/uplay/graphql"
+# The games on your Ubisoft account with their "space", as Ubisoft Connect's website asks for them.
+OWNED_QUERY = ("query AllGames { viewer { id ownedGames: games(filterBy: {isOwned: true}) { totalCount nodes {"
+               " id spaceId name viewer { meta { id ownedPlatformGroups { id name type } } } } } } }")
+
+
+def _owned_spaces(headers):
+    """[(name, space id, on PC)] for the games on the Ubisoft account."""
+    data = _request("POST", GRAPHQL_URL, headers, {"operationName": "AllGames", "variables": {"owned": True},
+                                                   "query": OWNED_QUERY})
+    nodes = ((((data or {}).get("data") or {}).get("viewer") or {}).get("ownedGames") or {}).get("nodes") or []
+    out = []
+    for n in nodes:
+        if not isinstance(n, dict) or not n.get("spaceId") or not n.get("name"):
+            continue
+        groups = (((n.get("viewer") or {}).get("meta") or {}).get("ownedPlatformGroups")) or []
+        # Each group is a platform, or (as the GOG Galaxy plugin reads it) a list of them.
+        kinds = [p.get("type") for g in groups for p in (g if isinstance(g, list) else [g]) if isinstance(p, dict)]
+        out.append((n["name"], n["spaceId"], "PC" in kinds))
+    return out
+
+
+def _match_spaces(names, owned):
+    """{space id: [product ids]} for the games in `names` ({product id: name}) found by name in `owned`:
+    the same name first, else the one owned game whose name contains it (or the other way around)."""
+    by_name = {}
+    for name, space, pc in sorted(owned, key=lambda o: not o[2]):  # the PC game first, if a name is there twice
+        by_name.setdefault(art.normalize(name), space)
+    spaces = {}
+    for pid, name in names.items():
+        n = art.normalize(name)
+        space = by_name.get(n)
+        if not space and n:
+            near = {s for o, s in by_name.items() if o and (n in o or o in n)}
+            space = near.pop() if len(near) == 1 else None
+        if space:
+            spaces.setdefault(space, []).append(pid)
+    return spaces
+
+
+def playtime(games):
+    """{Ubisoft product id: (minutes played, last played unix time)} as Ubisoft counts it now, for `games`
+    ({product id: name}); {} when not signed in. A game's editions share one "space", and Ubisoft keeps its stats
+    per space: Ubisoft Connect's list on this PC says which, else the games on the account are matched by name.
     One game that can't be read doesn't lose the others; the log says what happened, for the problem report."""
     if not signins.get("ubisoft"):
         return {}
-    wanted = {str(p) for p in product_ids}
+    wanted = {str(p): name for p, name in games.items()}
     known = owned_local.ubisoft_spaces()
     spaces = {space: [p for p in pids if p in wanted] for space, pids in known.items()}
     spaces = {space: pids for space, pids in spaces.items() if pids}
-    if not spaces:
-        log.warning("Ubisoft play time: none of the %d Ubisoft games are in Ubisoft Connect's list on this PC "
-                    "(%s)", len(wanted), f"{len(known)} games in it" if known else owned_local.ubisoft_where(empty="its game list has no games in it"))
-        return {}
     ticket, session, user = _access()
     headers = {"Authorization": f"Ubi_v1 t={ticket}", "Ubi-SessionId": session or "",
                "Ubi-RequestedPlatformType": "uplay", "Ubi-LocaleCode": "en-GB"}
+    listed = {p for pids in spaces.values() for p in pids}
+    missing = {p: name for p, name in wanted.items() if p not in listed}
+    if missing:
+        try:
+            owned = _owned_spaces(headers)
+        except (OSError, ValueError, AttributeError) as e:
+            owned = None
+            log.warning("Ubisoft play time: your Ubisoft games couldn't be read from Ubisoft (%s)", type(e).__name__)
+        found = _match_spaces(missing, owned or [])
+        for space, pids in found.items():
+            spaces.setdefault(space, []).extend(pids)
+        log.info("Ubisoft play time: %d of %d games not in Ubisoft Connect's list on this PC (%s); %d found on your"
+                 " Ubisoft account by name (%s games on it)", len(missing), len(wanted),
+                 f"{len(known)} games in it" if known else owned_local.ubisoft_where(empty="its game list has no games in it"),
+                 sum(map(len, found.values())), "?" if owned is None else len(owned))
+    if not spaces:
+        return {}
     out, none, failed = {}, 0, {}
     for space, pids in spaces.items():
         try:
