@@ -740,6 +740,10 @@ button.bar-row:hover { background: var(--raised); color: var(--ink); }
 .dl-name { font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dl-meta { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 .dl .bar i { background: var(--c); }
+.dl-more { display: inline-flex; align-items: center; gap: 4px; margin: 2px 0 0; padding: 6px 8px; background: none; border: 0; border-radius: calc(4px * var(--round)); font-size: 13px; font-weight: 600; color: var(--ink-dim); }
+.dl-more:hover, .dl-more:focus-visible { background: var(--raised); color: var(--ink); outline: none; }
+.dl-more svg { width: 13px; height: 13px; rotate: 90deg; transition: rotate .15s; }
+.dl-more[aria-expanded="true"] svg { rotate: -90deg; }
 
 /* page changes fade in; the store shows grey cards while it loads */
 @keyframes rise { from { opacity: 0; translate: 0 6px; } }
@@ -5612,6 +5616,8 @@ function countUp() {
 
 // ---------- downloads (the desktop app reports what the launchers are downloading) ----------
 let downloads = [];
+const DL_SHOWN = 3;
+let dlAll = false;  // Show all, until Junction closes
 const size = b => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`;
 function renderDownloads() {
   const box = $('#downloads');
@@ -5619,10 +5625,13 @@ function renderDownloads() {
   const before = box.hidden ? 0 : box.offsetHeight;
   queueMicrotask(() => { if (box.isConnected && (box.hidden ? 0 : box.offsetHeight) !== before && box.parentElement.classList.contains('home')) sizeIntro(); });
   box.hidden = !downloads.length;
-  // Drawn again every few seconds: a controller's selection on a download stays on it.
-  const had = box.contains(document.activeElement) && document.activeElement.dataset.open;
+  // Drawn again every few seconds: a controller's selection on a download (or on Show all) stays on it.
+  const had = box.contains(document.activeElement) && (document.activeElement.dataset.open || 'more');
+  // The first few, the ones downloading now before the ones waiting; Show all opens the rest.
+  const list = downloads.map((d, i) => [d, i]).sort(([a, i], [b, j]) => a.paused - b.paused || i - j).map(([d]) => d);
+  const extra = list.length - DL_SHOWN;
   box.innerHTML = !downloads.length ? '' : `<div class="list-label"><span>Downloads</span><span>${downloads.length}</span></div>` +
-    downloads.map(d => {
+    list.slice(0, dlAll || extra <= 0 ? list.length : DL_SHOWN).map(d => {
       const pct = d.total ? d.done / d.total * 100 : 0;
       return `
       <button class="dl" data-open="${esc(d.id)}" style="${lineVar(d.id.split(':')[0])}">
@@ -5630,8 +5639,15 @@ function renderDownloads() {
         <span class="dl-meta">${d.paused ? 'Waiting' : `${pct.toFixed(0)}%`} · ${size(d.done)} of ${size(d.total)}</span>
         <span class="bar"><i style="width:${pct.toFixed(1)}%"></i></span>
       </button>`;
-    }).join('');
-  if (had) box.querySelector(`[data-open="${CSS.escape(had)}"]`)?.focus({ preventScroll: true });
+    }).join('') +
+    (extra > 0 ? `<button class="dl-more" data-dl-more aria-expanded="${dlAll}">${dlAll ? 'Show fewer' : `Show all ${list.length}`}${ICON.chevron}</button>` : '');
+  box.onclick = e => {
+    if (!e.target.closest('[data-dl-more]')) return;
+    dlAll = !dlAll;
+    renderDownloads();
+    box.querySelector('[data-dl-more]')?.focus({ preventScroll: true });
+  };
+  if (had) box.querySelector(had === 'more' ? '[data-dl-more]' : `[data-open="${CSS.escape(had)}"]`)?.focus({ preventScroll: true });
 }
 async function pollDownloads() {
   if (!host.inApp) return;
