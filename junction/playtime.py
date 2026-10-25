@@ -41,11 +41,12 @@ def counts(game):
 def load():
     with _lock:
         try:
-            with open(FILE, encoding="utf-8") as f:
-                data = json.load(f)
+            data = config.read_held(lambda: config._read_json(FILE))
             return data if isinstance(data, dict) else {}
-        except OSError:
+        except FileNotFoundError:
             return {}
+        except OSError:  # held by another program: shows nothing for now, and saving waits (see _save)
+            return config.Unread()
         except ValueError:
             # A damaged file: keep it aside instead of saving over everyone's totals with just one game.
             try:
@@ -56,6 +57,7 @@ def load():
 
 
 def _save(data):
+    config.refuse_unread(data, "play time")
     os.makedirs(os.path.dirname(FILE), exist_ok=True)
     with open(FILE + ".tmp", "w", encoding="utf-8") as f:
         json.dump(data, f, indent=1)

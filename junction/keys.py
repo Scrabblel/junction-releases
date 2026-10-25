@@ -106,6 +106,15 @@ def _check_steam(key, steamid):
     return {"ok": True, "name": players[0].get("personaname") if players else None}
 
 
+
+def _save(s):
+    """Save the settings; {"error"} when Windows (or a file Junction couldn't read just now) stops it."""
+    try:
+        config.save_settings(s)
+    except OSError as e:
+        return {"error": f"Junction couldn't save that ({e.strerror}). Try again." if e.strerror else str(e)}
+    return None
+
 def set_steam_key(steamid, key):
     steamid, key = str(steamid).strip(), (key or "").strip()
     if not steamid.isdigit():
@@ -128,7 +137,9 @@ def set_steam_key(steamid, key):
         acc = {"name": name or persona or steamid, "steamId": steamid}
         accounts.append(acc)
     acc["apiKey"] = key
-    config.save_settings(s)
+    err = _save(s)
+    if err:
+        return err
     return {"ok": True, "name": acc.get("name")}
 
 
@@ -144,7 +155,9 @@ def remove_account(steamid):
     hidden = s.setdefault("hiddenSteamAccounts", [])
     if not any(str(h.get("steamId")) == steamid for h in hidden):
         hidden.append({"steamId": steamid, "name": name})
-    config.save_settings(s)
+    err = _save(s)
+    if err:
+        return err
     return {"ok": True, "name": name}
 
 
@@ -162,7 +175,9 @@ def restore_account(steamid):
     accounts = _accounts(s)
     if not any(str(a.get("steamId")).strip() == steamid for a in accounts):
         accounts.append({"name": entry.get("name") or steamid, "steamId": steamid, "apiKey": ""})
-    config.save_settings(s)
+    err = _save(s)
+    if err:
+        return err
     return {"ok": True, "name": entry.get("name")}
 
 
@@ -206,7 +221,9 @@ def _set_simple(field, key, check):
         s[field] = key
     else:
         s.pop(field, None)
-    config.save_settings(s)
+    err = _save(s)
+    if err:
+        return err
     return {"ok": True}
 
 

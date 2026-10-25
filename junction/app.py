@@ -295,7 +295,10 @@ class Api:
                 return False
             s = config.load_settings()
             s["allowedPrograms"] = (s.get("allowedPrograms") or []) + [key]
-            config.save_settings(s)
+            try:
+                config.save_settings(s)
+            except OSError:  # it starts now; Windows asks again next time
+                traceback.print_exc()
             return True
 
     def _run(self, game_id, steam_id, target):
@@ -571,7 +574,10 @@ class Api:
         s = config.load_settings()
         before = config.country(s)
         s["country"] = code
-        config.save_settings(s)
+        try:
+            config.save_settings(s)
+        except OSError as e:
+            return {"error": f"Junction couldn't save that ({e.strerror or e}). Try again."}
         if code != before:
             with self._store_lock:
                 self._store = None

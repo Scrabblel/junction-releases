@@ -49,13 +49,27 @@ def unprotect(data: bytes) -> bytes:
 
 
 def load():
-    """{store: {...}} for every saved sign-in; {} when there are none or the file can't be read."""
+    """{store: {...}} for every saved sign-in; {} when there are none. A file another program holds just now reads
+    as config.Unread (nothing, and put() won't save over it); one this Windows user can't decrypt (copied from
+    another PC, say) is kept aside as signins.dat.damaged and reads as none."""
     with _lock:
-        try:
+        def read():
             with open(FILE, "rb") as f:
-                data = json.loads(unprotect(f.read()))
+                return f.read()
+        try:
+            raw = config.read_held(read)
+        except FileNotFoundError:
+            return {}
+        except OSError:
+            return config.Unread()
+        try:
+            data = json.loads(unprotect(raw))
             return data if isinstance(data, dict) else {}
         except (OSError, ValueError):
+            try:
+                os.replace(FILE, FILE + ".damaged")
+            except OSError:
+                pass
             return {}
 
 
@@ -67,6 +81,7 @@ def put(store, data):
     """Save (or with data=None, forget) one store's sign-in."""
     with _lock:
         all_ = load()
+        config.refuse_unread(all_, "sign-ins")  # else the other stores' sign-ins (or the whole file) would go
         if data is None:
             all_.pop(store, None)
         else:

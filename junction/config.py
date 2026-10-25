@@ -67,14 +67,43 @@ def replace_file(tmp, path, tries=10):
             time.sleep(0.1)
 
 
+class Unread(dict):
+    """What a file reads as when it couldn't be read just now (another program held it, say): empty for whoever only
+    looks, but never saved over the file, which still holds everything (settings, sign-ins, play time)."""
+
+
+def read_held(read, tries=10):
+    """read(), trying again for a moment while another program holds the file, as replace_file does for saving.
+    A file that isn't there (FileNotFoundError) and other errors go to the caller."""
+    for i in range(tries):
+        try:
+            return read()
+        except PermissionError:  # Windows' "being used by another process"
+            if i == tries - 1:
+                raise
+            time.sleep(0.1)
+
+
+def refuse_unread(data, what):
+    """Saving what was read from a file that couldn't be read would put "nothing" over everything in it."""
+    if isinstance(data, Unread):
+        raise OSError(f"Junction couldn't read its {what} just now, so it didn't save over them. Try again.")
+
+
+def _read_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def _read_settings():
     path = settings_path()
     try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+        data = read_held(lambda: _read_json(path))
         return data if isinstance(data, dict) else {}
-    except OSError:
+    except FileNotFoundError:
         return {}
+    except OSError:
+        return Unread()
     except ValueError:
         # Damaged: keep it aside, so saving the next change doesn't quietly drop every key and account in it.
         try:
@@ -117,6 +146,7 @@ def load_settings():
 
 
 def save_settings(settings):
+    refuse_unread(settings, "settings")
     with _settings_lock:
         path = settings_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
