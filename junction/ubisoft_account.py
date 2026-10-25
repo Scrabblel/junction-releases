@@ -9,6 +9,7 @@ done, the page keeps a "remember me" ticket; Junction takes that and keeps it (e
 the password, and swaps it for a short-lived ticket when it needs one. This is how the GOG Galaxy Ubisoft plugin
 signs in. Ubisoft doesn't offer this as an official API, so it can stop working.
 """
+import datetime
 import json
 import logging
 import re
@@ -180,9 +181,15 @@ def _access():
 
 
 GRAPHQL_URL = "https://public-ubiservices.ubi.com/v1/profiles/me/uplay/graphql"
-# The games on your Ubisoft account with their "space", as Ubisoft Connect's website asks for them.
+# Ubisoft's games list only answers the app id the Ubisoft Connect app (and the GOG Galaxy plugin) use now: the
+# website's gets "clubgraphql is not currently available" since 2026. The sign-in stays the website's.
+GAMES_APP_ID = "f68a4bb5-608a-4ff2-8123-be8ef797e0a6"
+# The games on your Ubisoft account with their "space", as Ubisoft Connect asks for them.
 OWNED_QUERY = ("query AllGames { viewer { id ownedGames: games(filterBy: {isOwned: true}) { totalCount nodes {"
                " id spaceId name viewer { meta { id ownedPlatformGroups { id name type } } } } } } }")
+# Your play time (seconds) and when you last played, for these games, as the Ubisoft Connect app shows them.
+TIMES_QUERY = ("query GetOwnedGames($spaceIds: [String!]) { games(spaceIds: $spaceIds) { id spaceId"
+               " viewer { meta { id lastPlayedDate playTime } } } }")
 
 
 def _owned_spaces(headers):
@@ -200,6 +207,32 @@ def _owned_spaces(headers):
         # Each group is a platform, or (as the GOG Galaxy plugin reads it) a list of them.
         kinds = [p.get("type") for g in groups for p in (g if isinstance(g, list) else [g]) if isinstance(p, dict)]
         out.append((n["name"], n["spaceId"], "PC" in kinds))
+    return out
+
+
+def _unix(text):
+    """Ubisoft's "2024-05-05T17:27:58.4231478Z" as a unix time, or None."""
+    try:
+        return int(datetime.datetime.fromisoformat(str(text).replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
+
+
+def _list_times(headers, spaces):
+    """{space id: (seconds played or None, last played unix time or None)} from the games list, 50 games per ask.
+    It has the play time of games whose stats Ubisoft keeps no "stat card" for, and when each was last played."""
+    out = {}
+    for i in range(0, len(spaces), 50):
+        data = _request("POST", GRAPHQL_URL, headers, {"operationName": "GetOwnedGames",
+                                                       "variables": {"spaceIds": spaces[i:i + 50]}, "query": TIMES_QUERY})
+        if isinstance(data, dict) and data.get("errors") and not data.get("data"):
+            raise ValueError(f"Ubisoft answered: {_said(data) or 'an error'}")
+        for g in ((data or {}).get("data") or {}).get("games") or []:
+            meta = ((g or {}).get("viewer") or {}).get("meta") or {}
+            if g.get("spaceId"):
+                seconds = meta.get("playTime")
+                out[g["spaceId"]] = (seconds if isinstance(seconds, (int, float)) and seconds > 0 else None,
+                                     _unix(meta["lastPlayedDate"]) if meta.get("lastPlayedDate") else None)
     return out
 
 
@@ -222,9 +255,10 @@ def _match_spaces(names, owned):
 
 
 def playtime(games):
-    """{Ubisoft product id: (minutes played, last played unix time)} as Ubisoft counts it now, for `games`
+    """{Ubisoft product id: (minutes played or None, last played unix time)} as Ubisoft counts it now, for `games`
     ({product id: name}); {} when not signed in. A game's editions share one "space", and Ubisoft keeps its stats
     per space: Ubisoft Connect's list on this PC says which, else the games on the account are matched by name.
+    The games list gives most play time in one go; a game's stat cards are asked for only when it has none there.
     One game that can't be read doesn't lose the others; the log says what happened, for the problem report."""
     if not signins.get("ubisoft"):
         return {}
@@ -235,11 +269,12 @@ def playtime(games):
     ticket, session, user = _access()
     headers = {"Authorization": f"Ubi_v1 t={ticket}", "Ubi-SessionId": session or "",
                "Ubi-RequestedPlatformType": "uplay", "Ubi-LocaleCode": "en-GB"}
+    games_list = dict(headers, **{"Ubi-AppId": GAMES_APP_ID})
     listed = {p for pids in spaces.values() for p in pids}
     missing = {p: name for p, name in wanted.items() if p not in listed}
     if missing:
         try:
-            owned = _owned_spaces(headers)
+            owned = _owned_spaces(games_list)
         except (OSError, ValueError, AttributeError) as e:
             owned = None
             log.warning("Ubisoft play time: your Ubisoft games couldn't be read from Ubisoft (%s)", _why(e))
@@ -252,8 +287,22 @@ def playtime(games):
                  sum(map(len, found.values())), "?" if owned is None else len(owned))
     if not spaces:
         return {}
-    out, none, failed = {}, 0, {}
+    try:
+        listed_times = _list_times(games_list, list(spaces))
+    except (OSError, ValueError, AttributeError) as e:  # the stat cards below still give what they have
+        listed_times = {}
+        log.warning("Ubisoft play time: your Ubisoft games list couldn't be read (%s)", _why(e))
+    out, none, failed, from_list = {}, 0, {}, 0
     for space, pids in spaces.items():
+        seconds, last = listed_times.get(space, (None, None))
+        if seconds:
+            from_list += 1
+            for pid in pids:
+                out[pid] = (round(seconds / 60), last)
+            continue
+        if last:  # played, but without a time in the list: the stat cards may have it; if not, at least when
+            for pid in pids:
+                out[pid] = (None, last)
         try:
             cards = _request("GET", STATS_URL.format(user, space), headers).get("Statscards") or []
         except urllib.error.HTTPError as e:
@@ -270,12 +319,14 @@ def playtime(games):
         got = owned_local.ubisoft_time(cards)
         if got:
             for pid in pids:
-                out[pid] = (round(got[0] / 60), got[1])
+                out[pid] = (round(got[0] / 60), max(got[1] or 0, last or 0) or None)
         else:
             none += 1
-    log.info("Ubisoft play time: %d of %d games%s%s", len(out), len(spaces), f", {none} without play time" if none else "",
+    timed = len({s for s, pids in spaces.items() if any((out.get(p) or (None,))[0] for p in pids)})
+    log.info("Ubisoft play time: %d of %d games (%d from your games list)%s%s", timed, len(spaces), from_list,
+             f", {none} without play time" if none else "",
              f", failed: {', '.join(f'{k} ×{n}' for k, n in failed.items())}" if failed else "")
-    if failed and not out:
+    if failed and not timed:
         raise OSError(f"Ubisoft didn't give any play time ({', '.join(failed)})")
     return out
 
