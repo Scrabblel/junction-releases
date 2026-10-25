@@ -6711,7 +6711,7 @@ document.addEventListener('keydown', e => {
     const onControl = document.activeElement?.closest?.('button, a');
     if ((['PageDown', 'End'].includes(e.key) || (e.key === ' ' && !onControl)) && introPage()?.classList.contains('intro')) { e.preventDefault(); return expandIntro(); }
     if (['PageUp', 'Home'].includes(e.key) && introPage() && $('#main').scrollTop <= 0) { e.preventDefault(); return collapseIntro(); }
-    const dir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key];
+    const dir = !e.altKey && { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key];  // Alt+←/→: back and forward
     if (dir) { e.preventDefault(); return moveFocus(dir); }
     if (state.view.name === 'library' && /^[a-z]$/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) return jumpTo(e.key.toUpperCase());
   }
@@ -6721,17 +6721,45 @@ document.addEventListener('keydown', e => {
     const el = document.activeElement?.closest?.('[data-open]'), t = el && findGame(el.dataset.open);
     if (t) { e.preventDefault(); const r = el.getBoundingClientRect(); return contextMenu(t, r.left + 20, r.top + 20); }
   }
-  if (e.key === 'Escape') {
-    if ($('#ctx')) { if (!$('#ctx').subBack?.()) closeMenu(); return; }
-    if ($('#layer .setup')) return setupWizard.back();
-    if (state.pop) { closePops(); return; }
-    if ($('#layer .scrim')) closeLayer();
-    else if ($('#app').dataset.drawer === 'open') $('#app').dataset.drawer = '';
-    else if (state.view.name === 'game') goBack();
-    else if (state.view.name === 'price') leavePrice();
-    else if (state.view.name === 'browse') go({ name: 'store' }).then(() => { $('#main').scrollTop = state.scroll.store || 0; });
-  }
+  if (e.key === 'Escape') return stepBack();
+  // The keyboard's own Back and Forward keys, and Alt+← / Alt+→ as in a browser.
+  if (e.key === 'BrowserBack' || (e.altKey && e.key === 'ArrowLeft')) { e.preventDefault(); return stepBack(); }
+  if (e.key === 'BrowserForward' || (e.altKey && e.key === 'ArrowRight')) { e.preventDefault(); return stepForward(); }
 });
+// The mouse's side buttons go back and forward. (The page has no browser history, so they did nothing before.)
+addEventListener('mousedown', e => { if (e.button === 3 || e.button === 4) e.preventDefault(); });
+addEventListener('mouseup', e => {
+  if (e.button !== 3 && e.button !== 4) return;
+  e.preventDefault();
+  if (e.button === 3) stepBack(); else stepForward();
+});
+
+// Back, as Esc, B and the mouse's back button do it: an open menu, pop-up or dialog closes first, then the page
+// goes back. A page you go back from is remembered, so Forward can return to it.
+const forwardTo = [];
+function stepBack() {
+  if ($('#ctx')) { if (!$('#ctx').subBack?.()) closeMenu(); return; }
+  if ($('#layer .setup')) return setupWizard.back();
+  if (state.pop) { closePops(); return; }
+  if ($('#layer .scrim')) return closeLayer();
+  if ($('#app').dataset.drawer === 'open') { $('#app').dataset.drawer = ''; return; }
+  const left = { view: state.view, tab: state.gameTab };
+  if (state.view.name === 'game') goBack();
+  else if (state.view.name === 'price') leavePrice();
+  else if (state.view.name === 'browse') go({ name: 'store' }).then(() => { $('#main').scrollTop = state.scroll.store || 0; });
+  else return;
+  // Each way back sets a new state.view; going anywhere else replaces it, which ends the way forward.
+  forwardTo.push({ ...left, at: state.view });
+}
+function stepForward() {
+  const f = forwardTo.at(-1);
+  if (!f || f.at !== state.view || document.querySelector('#ctx, #layer .scrim, #layer .setup')) return;
+  forwardTo.pop();
+  if (state.view.name !== 'game' && state.view.name !== 'price') state.scroll[state.view.name] = scroller(state.view.name).scrollTop;
+  state.view = f.view;
+  state.gameTab = f.tab;
+  render().then(() => { $('#main').scrollTop = 0; });
+}
 
 function friendsPanel() {
   const fs = lib.friends || [];
