@@ -898,6 +898,13 @@ html[data-style="glass"] .pm-fly { background: rgb(20 26 36 / .8); border-color:
 .setup-launcher { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: var(--pill); background: var(--raised); font-size: 13.5px; color: var(--ink); }
 .setup-launcher i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
 .setup-launcher b { font-weight: 500; color: var(--ink-faint); }
+.setup-signins { display: grid; gap: 8px; }
+.setup-signin { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--raised); color: var(--ink); font: inherit; font-size: 15px; text-align: left; }
+.setup-signin:hover, .setup-signin:focus-visible { background: var(--raised-2); }
+.setup-signin .li { width: 22px; height: 22px; flex: none; color: var(--c, var(--ink-dim)); }
+.setup-signin span { flex: 1; }
+.setup-signin b { font-size: 13.5px; font-weight: 600; color: var(--signal); }
+.setup-signin.done b { color: var(--good); font-weight: 500; }
 .setup-opts { display: grid; gap: 10px; }
 .setup-opts .check { font-size: 14px; color: var(--ink); }
 .dialog.setup kbd.pad { font-size: 10px; padding: 3px 6px; }
@@ -2215,6 +2222,8 @@ function hours(min) {
   const h = min / 60;
   return `${h < 9.95 ? h.toFixed(1) : Math.round(h).toLocaleString('en-GB')} h`;
 }
+// "A", "A and B", "A, B and C".
+const listOf = items => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : (items[0] || '');
 // "today", "yesterday" or a date, for the middle of a sentence.
 const whenLower = ts => ts && (/^(Today|Yesterday)$/.test(when(ts)) ? when(ts).toLowerCase() : when(ts));
 function when(ts) {
@@ -5196,16 +5205,19 @@ async function setupWizard() {
   const info = await host.settings();
   host.setOption('setupDone', true);
   // With a prices key built in, there's nothing to set up for the Store.
-  const steps = ['welcome', 'country', info.accounts.length && 'steam', !info.pricesBuiltIn && 'prices', 'ready'].filter(Boolean);
-  const extra = steps.length - 3;  // the optional ones
   const found = Object.entries(lib.games.reduce((m, g) => ((m[g.launcher] = (m[g.launcher] || 0) + 1), m), {}))
     .sort((a, b) => b[1] - a[1]);
+  // The launchers you can sign in to for their play time and achievements: the ones on this PC, or with games here.
+  const signIns = Object.keys(SIGN_IN_NAMES).filter(k => (lib.clientsOnPc || []).includes(k) || found.some(([l]) => l === k));
+  const steps = ['welcome', 'country', info.accounts.length && 'steam', signIns.length && 'signins', !info.pricesBuiltIn && 'prices', 'ready'].filter(Boolean);
+  const extra = steps.length - 3;  // the optional ones
+  const optional = ['', 'one quick, optional step', 'two quick, optional steps', 'three quick, optional steps'][extra];
   const body = {
     welcome: () => `
       <div class="setup-logo">${$('.brand svg').outerHTML}</div>
       <h2>Welcome to Junction</h2>
       <p class="hint">Every game from every launcher in one place, and the lowest price across the official stores.
-        ${extra === 2 ? 'Where you buy your games, and two quick, optional steps.' : extra === 1 ? 'Where you buy your games, and one quick, optional step.' : 'Just tell Junction where you buy your games.'}</p>
+        ${optional ? `Where you buy your games, and ${optional}.` : 'Just tell Junction where you buy your games.'}</p>
       ${found.length ? `<div class="setup-found" aria-label="Found on this PC">
         ${found.map(([l, n]) => `<span class="setup-launcher" style="${lineVar(l)}"><i></i>${esc(lib.launchers[l] || l)} <b>${n} ${n === 1 ? 'game' : 'games'}</b></span>`).join('')}
       </div>` : '<p class="hint">Junction didn’t find any launchers yet. Install one, then choose Rescan launchers under your profile picture.</p>'}`,
@@ -5214,6 +5226,16 @@ async function setupWizard() {
       <p class="hint">The Store shows the prices in this country, in its currency.</p>
       ${countryPickerHtml()}`,
     steam: () => keySection('steam', info) + '<p class="hint">Optional: without a key, Junction shows your installed Steam games and the ones Steam remembers.</p>',
+    signins: () => `
+      <h2>Your other launchers</h2>
+      <p class="hint">Signed in, Junction shows the play time and achievements ${listOf(signIns.map(k => SIGN_IN_NAMES[k]))} count${signIns.length === 1 ? 's' : ''}.
+        You sign in on their own page; Junction never sees your password.</p>
+      <div class="setup-signins">${signIns.map(k => {
+        const s = info.signins?.[k], done = s && !s.expired;
+        return `<button type="button" class="setup-signin${done ? ' done' : ''}" data-setup-signin="${k}" style="${lineVar(k)}">
+          ${launcherIcon(k)}<span>${esc(SIGN_IN_NAMES[k])}</span><b>${done ? `Signed in as ${esc(s.name)}` : s?.expired ? 'Sign in again' : 'Sign in'}</b></button>`;
+      }).join('')}</div>
+      <p class="hint">Optional: without signing in, these games show the play time Junction counts itself.</p>`,
     prices: () => keySection('prices', info) + '<p class="hint">Optional: without it, the Store can’t show prices.</p>',
     ready: () => `
       <h2>You’re ready</h2>
@@ -5248,6 +5270,21 @@ async function setupWizard() {
         host.setCountry(code).then(res => res?.changed && forgetPrices());
       });
     }
+    dlg.querySelectorAll('[data-setup-signin]').forEach(b => b.addEventListener('click', async () => {
+      const k = b.dataset.setupSignin;
+      if (signInRow.busy || b.classList.contains('done')) return;  // its window is open, or it's done
+      b.querySelector('b').textContent = 'Signing in…';
+      signInRow.busy = true;
+      const res = await host.signIn(k).catch(() => null);
+      signInRow.busy = false;
+      if (res?.ok && lib.signins) { lib.signins = { ...lib.signins, [k]: { name: res.name, expired: false } }; checkSignIns(); }
+      if (res?.ok) info.signins = { ...info.signins, [k]: { name: res.name, expired: false } };
+      if (setupWizard.step === i && $('#layer .setup')) {  // still on this step (not moved on while signing in)
+        show(i);
+        $(`#layer [data-setup-signin="${k}"]`)?.focus();
+      }
+      if (!res?.ok) toast(res?.error || 'Junction couldn’t sign in. Try again.');  // after the redraw, which clears #layer
+    }));
     dlg.addEventListener('change', async e => {
       const box = e.target.closest('[data-opt]');
       if (!box) return;
