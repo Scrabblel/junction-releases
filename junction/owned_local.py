@@ -110,15 +110,17 @@ def epic_owned():
     with open(path, "rb") as f:
         items = json.loads(base64.b64decode(f.read()))
     games = []
-    for i in items:
-        if not any(c.get("path") == "games" for c in i.get("categories") or []):
+    for i in items if isinstance(items, list) else []:
+        if not isinstance(i, dict) or not i.get("namespace") or not i.get("id"):  # one odd entry skips that game only
+            continue
+        if not any(isinstance(c, dict) and c.get("path") == "games" for c in i.get("categories") or []):
             continue
         if (i.get("mainGameItem") or {}).get("id"):  # DLC
             continue
-        app = next((r.get("appId") for r in i.get("releaseInfo") or [] if r.get("appId")), None)
+        app = next((r.get("appId") for r in i.get("releaseInfo") or [] if isinstance(r, dict) and r.get("appId")), None)
         # The cache stores ™ and ® as "?" ("LEGO? Batman?"); a "?" straight after a word is one of those.
         title = re.sub(r"(?<=\w)\?(?=[\s:]|$)", "", i.get("title") or "")
-        cover = next((k.get("url") for k in i.get("keyImages") or [] if k.get("type") == "DieselGameBoxTall"), None)
+        cover = next((k.get("url") for k in i.get("keyImages") or [] if isinstance(k, dict) and k.get("type") == "DieselGameBoxTall"), None)
         if app and title and not EPIC_SKIP_NAME.search(title):
             games.append((app, i["namespace"], i["id"], title, cover))
     return games

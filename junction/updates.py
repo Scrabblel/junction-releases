@@ -88,7 +88,7 @@ class Updater:
         self.info = {"current": config.VERSION, "canInstall": bool(getattr(sys, "frozen", False)),
                      "checked": None, "available": None, "error": None}
         self._lock = threading.Lock()
-        self._downloading = False
+        self._installing = threading.Lock()  # held from the download until Junction closes for the installer
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True).start()
@@ -121,9 +121,8 @@ class Updater:
             return {"error": "There's no update to install."}
         if not self.info["canInstall"]:
             return {"error": "This copy runs from source; download the installer from GitHub instead.", "page": rel["page"]}
-        if self._downloading:
+        if not self._installing.acquire(blocking=False):  # a second click mustn't download over the first
             return {"error": "The update is already downloading."}
-        self._downloading = True
         try:
             path = self._download(rel, progress)
             progress({"stage": "installing"})
@@ -131,12 +130,11 @@ class Updater:
             subprocess.Popen([path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/relaunch=1"], close_fds=True)
             log.info("Installing update %s", rel["version"])
             threading.Timer(1.5, quit_app).start()
-            return {"ok": True}
+            return {"ok": True}  # still held: the installer is starting and Junction is about to close
         except Exception as e:  # noqa: BLE001
+            self._installing.release()
             log.exception("Update failed")
             return {"error": str(e) if isinstance(e, UpdateError) else "Junction couldn't download the update. Try again later."}
-        finally:
-            self._downloading = False
 
     def _download(self, rel, progress):
         if not (rel.get("url") or "").lower().startswith(DOWNLOAD_PREFIX):

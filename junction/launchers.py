@@ -57,6 +57,8 @@ BNET_CODES = {
 # ---------- small helpers ----------
 
 def _reg_values(root, path):
+    """A registry key's text values. Everything Junction reads there is a path or a name, so a value of another
+    kind (a number where a launcher usually writes text) is left out instead of breaking that launcher's games."""
     try:
         with winreg.OpenKey(root, path) as key:
             values, i = {}, 0
@@ -65,7 +67,8 @@ def _reg_values(root, path):
                     name, value, _ = winreg.EnumValue(key, i)
                 except OSError:
                     return values
-                values[name] = value
+                if isinstance(value, str):
+                    values[name] = value
                 i += 1
     except OSError:
         return None
@@ -293,6 +296,8 @@ def find_epic():
             m = json.loads(_read(item))
         except (OSError, ValueError):
             continue
+        if not isinstance(m, dict) or not isinstance(m.get("InstallLocation"), str):  # one odd file skips that game only
+            continue
         app = m.get("AppName")
         if m.get("bIsIncompleteInstall") or "games" not in (m.get("AppCategories") or []):
             continue
@@ -477,7 +482,11 @@ def find_xbox():
         root = f"{drive}:\\XboxGames"
         if not os.path.isdir(root):
             continue
-        for folder in os.listdir(root):
+        try:
+            folders = os.listdir(root)
+        except OSError:
+            continue
+        for folder in folders:
             content = os.path.join(root, folder, "Content")
             cfg = os.path.join(content, "MicrosoftGame.config")
             if not os.path.isfile(cfg):
@@ -493,6 +502,8 @@ def find_xbox():
             if exe is None or identity is None:  # expansions have no executable of their own
                 continue
             ident = identity.get("Name")
+            if not ident:
+                continue
             full = next((p for p in packages if p.startswith(ident + "_")), None)
             if not full:
                 continue
@@ -501,9 +512,11 @@ def find_xbox():
 
             app_id = exe.get("Id") or "Game"
             manifest = os.path.join(content, "appxmanifest.xml")
-            if os.path.isfile(manifest):
+            try:
                 m = re.search(r'<Application\s[^>]*\bId="([^"]+)"', _read(manifest))
                 app_id = m.group(1) if m else app_id
+            except OSError:  # no appxmanifest.xml: the config's Id
+                pass
 
             name = exe.get("OverrideDisplayName") or (visuals.get("DefaultDisplayName") if visuals is not None else None) or folder
             logo = None

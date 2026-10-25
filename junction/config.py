@@ -227,5 +227,8 @@ def windows_money_style():
 
 def country(settings=None):
     """The country the Store's prices are for: the one the person chose, else Windows' region."""
-    chosen = str((settings if settings is not None else load_settings()).get("country") or "")
+    if settings is None:
+        with _settings_lock:  # the file as it is: the country isn't encrypted, so no need to unlock every key for it
+            settings = _read_settings()
+    chosen = str(settings.get("country") or "")
     return chosen if re.fullmatch("[A-Z]{2}", chosen) else windows_region() or "US"
