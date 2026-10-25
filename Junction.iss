@@ -50,6 +50,7 @@ Type: filesandordirs; Name: "{app}\_internal"
 
 [Files]
 Source: "dist\Junction\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Junction"; Filename: "{app}\Junction.exe"
