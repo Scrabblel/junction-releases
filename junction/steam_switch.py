@@ -32,15 +32,24 @@ def remembered_accounts():
             for sid, u in users.items() if isinstance(u, dict)}
 
 
-def signed_in_steamid():
-    """SteamID of the account Steam is signed in to (or will sign in to next), or None."""
+def active_steamid():
+    """SteamID of the account the running Steam is signed in to now, or None: also while Steam shows its
+    "Who's playing?" account picker or is still signing in (Steam keeps ActiveUser at 0 until it's signed in)."""
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STEAM_KEY + r"\ActiveProcess") as key:
             active = winreg.QueryValueEx(key, "ActiveUser")[0]
         if active:
             return str(STEAMID64_BASE + int(active))
-    except OSError:
+    except (OSError, TypeError, ValueError):
         pass
+    return None
+
+
+def signed_in_steamid():
+    """SteamID of the account Steam is signed in to (or will sign in to next), or None."""
+    active = active_steamid()
+    if active:
+        return active
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STEAM_KEY) as key:
             auto = winreg.QueryValueEx(key, "AutoLoginUser")[0]
@@ -71,24 +80,84 @@ def _mark_auto_login(text, steamid):
     return re.sub(r'("(\d{17})"\s*\{)([^{}]*)(\})', fix, text)
 
 
-def switch_and_open(steamid, uri, timeout=30):
-    """Open `uri` (steam://rungameid/… or steam://install/…) as account `steamid`.
+def _signed_in_soon(wait):
+    """The account the running Steam is signed in to, waiting up to `wait` seconds while it's signed in to none: a
+    Steam that has just started takes a moment to sign in. Still none after that: it's at the account picker."""
+    deadline = time.time() + wait
+    while True:
+        active = active_steamid()
+        if active or time.time() >= deadline:
+            return active
+        time.sleep(0.5)
 
-    Returns True if Steam had to be restarted on another account, False if it was already on it.
-    Raises ValueError with a message for the user when switching isn't possible.
-    """
-    steamid = str(steamid)
-    if signed_in_steamid() == steamid:
-        os.startfile(uri)
+
+# Steam's own "show the account picker every time Steam starts". While it's on, Steam waits at "Who's playing?" for a
+# click, whatever account it's told to sign in to.
+PICKER = re.compile(rb'("AlwaysShowUserChooser"\s+")1(")', re.I)
+
+
+def _config(root):
+    return os.path.join(root, "config", "config.vdf")
+
+
+def picker_always_shown(root=None):
+    """Whether Steam is set to show its account picker every time it starts."""
+    root = root or _steam_root()
+    try:
+        with open(_config(root), "rb") as f:
+            return bool(PICKER.search(f.read()))
+    except (OSError, TypeError):
         return False
 
+
+def _stop_showing_picker(root):
+    """Turn Steam's always-show-the-picker off. Only while Steam is closed: it saves config.vdf as it closes."""
+    path = _config(root)
+    with open(path, "rb") as f:
+        text = f.read()
+    fixed = PICKER.sub(rb"\g<1>0\g<2>", text)
+    if fixed != text:
+        with open(path + ".junction", "wb") as f:
+            f.write(fixed)
+        os.replace(path + ".junction", path)
+
+
+def switch_and_open(steamid, uri, skip_picker=False, timeout=30, picker_wait=6):
+    """Open `uri` (steam://rungameid/… or steam://install/…) as account `steamid`.
+
+    Returns "same" when Steam was already on that account (or signs in to it by itself), "switched" when Junction
+    restarted it on that account, and "picker" when Steam waits at "Who's playing?" for the person to pick it.
+    Raises ValueError with a message for the user when switching isn't possible.
+
+    A Steam at its account picker is signed in to no one, so the game would wait there: Junction restarts it on this
+    account, as for a switch, and a Steam that isn't running is always told to sign in to this account by itself.
+    That can't get past Steam's own "show the account picker every time" unless the person let Junction turn it off
+    (skip_picker, the skipSteamPicker setting); otherwise Junction leaves it on and says to pick the account.
+    """
+    steamid = str(steamid)
     root = _steam_root()
+    running = steam_running()
+    waits = picker_always_shown(root) and not skip_picker  # Steam stops at its picker, whatever Junction does
+    if running:
+        # A Steam that has just started may still be signing in, unless it's set to wait at the picker anyway.
+        active = active_steamid() if waits else _signed_in_soon(picker_wait)
+        if active == steamid:
+            os.startfile(uri)
+            return "same"
+        if active is None and waits:  # at the picker: a restart would only bring it back there
+            os.startfile(uri)  # brings Steam's window up
+            return "picker"
+    was_next = not running and signed_in_steamid() == steamid
+
     account = remembered_accounts().get(steamid, {}).get("account")
     if not root or not account:
+        if was_next:  # Steam signs in to it by itself; nothing for Junction to set
+            os.startfile(uri)
+            return "picker" if waits else "same"
         raise ValueError("Steam doesn't remember this account. Sign in to it once in Steam "
                          "with \"Remember me\" ticked, then try again.")
 
-    if steam_running():
+    if running:
         subprocess.Popen([os.path.join(root, "steam.exe"), "-shutdown"], creationflags=NO_WINDOW)
         deadline = time.time() + timeout
         while steam_running():
@@ -96,13 +165,21 @@ def switch_and_open(steamid, uri, timeout=30):
                 raise ValueError("Steam didn't close in time. Close it yourself and press PLAY again.")
             time.sleep(0.5)
 
+    if skip_picker and picker_always_shown(root):
+        try:
+            _stop_showing_picker(root)
+        except OSError:
+            waits = True
+
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STEAM_KEY, 0, winreg.KEY_SET_VALUE) as key:
         winreg.SetValueEx(key, "AutoLoginUser", 0, winreg.REG_SZ, account)
         winreg.SetValueEx(key, "RememberPassword", 0, winreg.REG_DWORD, 1)
     path = _loginusers(root)
     text = _read(path)
-    with open(path, "w", encoding="utf-8", newline="") as f:
-        f.write(_mark_auto_login(text, steamid))
+    marked = _mark_auto_login(text, steamid)
+    if marked != text:
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(marked)
 
-    os.startfile(uri)  # starts Steam on the new account, then the game
-    return True
+    os.startfile(uri)  # starts Steam on this account, then the game
+    return "picker" if waits else "same" if was_next else "switched"

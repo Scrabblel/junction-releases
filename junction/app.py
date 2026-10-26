@@ -315,8 +315,9 @@ class Api:
             t = launch["target"]
             if launch["type"] == "uri":
                 if steam_id and t.startswith("steam://"):
-                    switched = steam_switch.switch_and_open(steam_id, t)
-                    return {"ok": True, "switched": switched}
+                    skip = config.load_settings().get("skipSteamPicker", False)  # may Junction turn Steam's picker off
+                    how = steam_switch.switch_and_open(steam_id, t, skip_picker=skip)
+                    return {"ok": True, "switched": how == "switched", "picker": how == "picker"}
                 os.startfile(t)
             elif launch["type"] == "exe":
                 subprocess.Popen([t], cwd=launch.get("cwd") or os.path.dirname(t))
@@ -592,17 +593,17 @@ class Api:
                 "country": config.country(s), "countryChosen": bool(s.get("country")),
                 "windowsRegion": config.windows_region(), "money": config.windows_money_style(),
                 "closeToTray": s.get("closeToTray", True), "trayNotice": s.get("trayNotice", True),
-                "dealAlerts": s.get("dealAlerts", True),
+                "dealAlerts": s.get("dealAlerts", True), "skipSteamPicker": s.get("skipSteamPicker", False),
                 "startWithWindows": startup.enabled(),
                 "tray": self._tray is not None, "signins": signins.overview()}
 
     def set_option(self, name, value):
-        """The on/off settings: setupDone, closeToTray, trayNotice, dealAlerts, startWithWindows."""
+        """The on/off settings: setupDone, closeToTray, trayNotice, dealAlerts, skipSteamPicker, startWithWindows."""
         value = bool(value)
         try:
             if name == "startWithWindows":
                 startup.set_enabled(value)
-            elif name in ("setupDone", "closeToTray", "trayNotice", "dealAlerts"):
+            elif name in ("setupDone", "closeToTray", "trayNotice", "dealAlerts", "skipSteamPicker"):
                 s = config.load_settings()
                 s[name] = value
                 config.save_settings(s)

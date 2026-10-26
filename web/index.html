@@ -857,7 +857,18 @@ button.avatar svg { width: 18px; height: 18px; }
 .ctx.profile [aria-checked="true"] .pm-switch { background: var(--signal); }
 .ctx.profile [aria-checked="true"] .pm-switch::after { translate: 14px 0; background: #1a1205; }
 .ctx.profile .pm-back { font-weight: 600; }
-.ctx.profile:has(.pm-fly) { overflow: visible; }
+.ctx.profile:has(.pm-fly, .pm-tip) { overflow: visible; }
+/* The (i) beside a row and its explanation, in a bubble beside the menu like a side menu. */
+.pm-label:has(+ .pm-info) { flex: 0 1 auto; }
+.pm-info { width: 16px; height: 16px; flex: none; margin: 0 auto 0 -4px; display: grid; place-items: center; color: var(--ink-faint); cursor: help; }
+.pm-info svg { width: 16px; height: 16px; }
+.pm-info:hover, .ctx.profile button:focus-visible .pm-info { color: var(--ink); }
+.pm-tip { position: absolute; right: calc(100% + 8px); width: 270px; padding: 12px 14px; box-sizing: border-box; display: grid; gap: 8px; pointer-events: none;
+  font-size: 13px; line-height: 1.45; color: var(--ink-dim); background: var(--raised); border: 1px solid var(--rule);
+  border-radius: calc(12px * var(--round)); box-shadow: 0 18px 40px -16px #000; }
+.pm-tip.right { right: auto; left: calc(100% + 8px); }
+.pm-tip p { margin: 0; }
+.pm-tip b { color: var(--ink); font-weight: 600; }
 .pm-fly { position: absolute; right: calc(100% + 8px); width: 250px; padding: 8px; display: grid; gap: 1px; box-sizing: border-box;
   background: var(--raised); border: 1px solid var(--rule); border-radius: calc(12px * var(--round)); box-shadow: 0 18px 40px -16px #000; }
 .pm-fly.right { right: auto; left: calc(100% + 8px); }
@@ -4864,9 +4875,14 @@ async function profileMenu(page = 'main') {
       { icon: PM.help, label: 'Help', go: 'help' },
     ] },
     keys: { title: 'Accounts and keys', items: [
-      { icon: ICON.person, label: 'Steam accounts', value: info ? `${nKeys} of ${info.accounts.length} with a key` : '', run: () => (closeMenu(), keysDialog('steam')) },
-      { icon: ICON.tag, label: 'Prices (IsThereAnyDeal)', value: !info ? '' : info.prices ? 'Your own key' : info.pricesBuiltIn ? 'Built in' : 'Not set', run: () => (closeMenu(), keysDialog('prices')) },
-      { icon: ICON.image, label: 'Cover art (SteamGridDB)', value: info ? keyVal(info.art) : '', run: () => (closeMenu(), keysDialog('art')) },
+      { icon: ICON.person, label: 'Steam accounts', value: info ? `${nKeys} of ${info.accounts.length} with a key` : '', run: () => (closeMenu(), keysDialog('steam')),
+        info: 'Each Steam account needs its own free Steam API key, so Junction can show all its games, play time and achievements. '
+          + 'Without one, you see your installed games and the ones Steam remembers.' },
+      { icon: ICON.tag, label: 'Prices (IsThereAnyDeal)', value: !info ? '' : info.prices ? 'Your own key' : info.pricesBuiltIn ? 'Built in' : 'Not set', run: () => (closeMenu(), keysDialog('prices')),
+        info: 'The Store’s prices come from IsThereAnyDeal. '
+          + (info?.pricesBuiltIn ? 'Junction comes with a key for it, so you don’t need your own.' : 'It needs a free key from them.') },
+      { icon: ICON.image, label: 'Cover art (SteamGridDB)', value: info ? keyVal(info.art) : '', run: () => (closeMenu(), keysDialog('art')),
+        info: 'With a free SteamGridDB key, Junction gets covers for games Steam doesn’t sell. It’s optional.' },
       ...(info ? [{ label: 'Play time from launchers', heading: true }, signInRow(info, 'epic', 'Epic Games'), signInRow(info, 'ea', 'EA app'), signInRow(info, 'ubisoft', 'Ubisoft Connect')] : []),
     ] },
     prefs: { title: 'Preferences', items: [
@@ -4877,7 +4893,16 @@ async function profileMenu(page = 'main') {
       ...(STYLES[style()].themes ? lookChoices('theme', 'Theme', themes) : []),
       ...(info ? [
         { label: 'Prices', heading: true },
-        { icon: ICON.tag, label: 'Country', value: countryName(info.country), run: () => (closeMenu(), countryDialog()) },
+        { icon: ICON.tag, label: 'Country', value: countryName(info.country), run: () => (closeMenu(), countryDialog()),
+          info: 'The Store shows prices for this country, in its currency. Until you pick one, it’s the country Windows is set to.' },
+        ...(info.accounts.length ? [
+          { label: 'Steam', heading: true },
+          { ...toggle('skipSteamPicker', 'Skip Steam’s account picker', info.skipSteamPicker,
+            ['Junction leaves Steam’s “Who’s playing?” screen as Steam is set.',
+             'Junction now turns off Steam’s “Who’s playing?” screen when it starts a game, so the game starts right away.']),
+            info: 'Steam can ask “Who’s playing?” every time it starts, so a game from Junction waits until you pick an account. '
+              + 'When this is on, Junction turns that question off in Steam, also for when you open Steam yourself.' },
+        ] : []),
         { label: 'App', heading: true },
         info.tray && toggle('closeToTray', 'Keep in the tray when closed', info.closeToTray,
           ['Closing the window now quits Junction.', 'Closing the window now keeps Junction in the tray.']),
@@ -4914,8 +4939,40 @@ async function profileMenu(page = 'main') {
     if (refocus) f.from.focus({ preventScroll: true });
     return true;
   };
+  // A row's (i): its explanation beside the menu while the mouse is on the (i), after a tap on it, or once a keyboard
+  // or controller rests on the row (a controller can't hover).
+  const hideTip = () => { clearTimeout(menu.tipWait); menu.tip?.remove(); menu.tip = null; };
+  const showTip = row => {
+    hideTip();
+    const it = row && items[Number(row.dataset.pm)];
+    if (!it?.info || menu.fly) return;
+    const el = document.createElement('div');
+    el.className = 'pm-tip';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = it.info.split('\n').map(p => `<p>${esc(p).replace(/^([^:.]{1,24}):/, '<b>$1:</b>')}</p>`).join('');
+    menu.append(el);
+    menu.tip = el;
+    const m = menu.getBoundingClientRect();
+    el.classList.toggle('right', m.left - el.offsetWidth - 8 < 8);
+    el.style.top = `${Math.max(-m.top + 8, Math.min(row.offsetTop - 8, innerHeight - m.top - el.offsetHeight - 8))}px`;
+  };
+  const byKeys = row => row.matches(':focus-visible') || document.documentElement.classList.contains('pad-input');
+  menu.addEventListener('mouseover', e => { if (e.target.closest('[data-pm-info]')) showTip(e.target.closest('[data-pm]')); });
+  menu.addEventListener('mouseout', e => {
+    const row = e.target.closest('[data-pm-info]')?.closest('[data-pm]');
+    if (row && !e.relatedTarget?.closest?.('[data-pm-info]') && !(row === document.activeElement && byKeys(row))) hideTip();
+  });
+  menu.addEventListener('focusin', e => {
+    const row = e.target.closest('[data-pm]');
+    hideTip();
+    // Moving through the list stays quiet: the explanation comes once the focus rests on the row for a moment.
+    if (row && byKeys(row) && items[Number(row.dataset.pm)]?.info) {
+      menu.tipWait = setTimeout(() => { if (document.activeElement === row) showTip(row); }, 500);
+    }
+  });
   const openFly = (row, key) => {
     closeFly(false);
+    hideTip();
     const [title, list] = LOOKS[key], now = lookNow(key);
     const el = document.createElement('div');
     el.className = 'pm-fly';
@@ -4945,6 +5002,7 @@ async function profileMenu(page = 'main') {
     const p = pages[name];
     items = p.items;
     menu.fly = null;
+    hideTip();
     menu.dataset.page = name;
     menu.innerHTML = (name === 'main'
       ? `<div class="pm-head">${me ? avatar({ name: me.name, avatar: me.avatar }) : ic(ICON.person, 'face')}
@@ -4952,8 +5010,10 @@ async function profileMenu(page = 'main') {
       : `<button class="pm-back" data-pm-back>${ic(ICON.back)}${esc(p.title)}</button><div class="pm-sep"></div>`) +
       items.map((it, i) => it.heading ? `<div class="ctx-label">${esc(it.label)}</div>`
         : `<button data-pm="${i}" ${it.cls ? `class="${it.cls}"` : ''} role="${it.on != null ? 'menuitemcheckbox' : 'menuitem'}"
-            ${it.on != null ? `aria-checked="${!!it.on}"` : ''} ${it.fly ? `data-fly-row="${it.fly}"` : ''} ${it.go || it.fly ? 'aria-haspopup="menu"' : ''} ${it.fly ? 'aria-expanded="false"' : ''}>
+            ${it.on != null ? `aria-checked="${!!it.on}"` : ''} ${it.fly ? `data-fly-row="${it.fly}"` : ''} ${it.go || it.fly ? 'aria-haspopup="menu"' : ''} ${it.fly ? 'aria-expanded="false"' : ''}
+            ${it.info ? `aria-description="${esc(it.info.replace(/\n/g, ' '))}"` : ''}>
             ${it.icon ? ic(it.icon) : ''}<span class="pm-label">${esc(it.label)}</span>
+            ${it.info ? `<span class="pm-info" data-pm-info aria-hidden="true">${PM.info}</span>` : ''}
             ${it.on != null ? '<span class="pm-switch" aria-hidden="true"></span>'
               : `<span class="pm-val">${esc(it.value || '')}${it.go || it.fly ? ICON.chevron : ''}</span>`}
           </button>`).join('') +
@@ -4966,6 +5026,8 @@ async function profileMenu(page = 'main') {
   // B, Escape and ← go back up from a submenu (the Escape handler asks this first).
   menu.subBack = () => closeFly() || (menu.dataset.page !== 'main' ? (show('main', menu.dataset.page), true) : false);
   menu.onclick = e => {
+    // A tap on the (i) shows the explanation; it doesn't switch the setting.
+    if (e.target.closest('[data-pm-info]')) { e.stopPropagation(); return showTip(e.target.closest('[data-pm]')); }
     const opt = e.target.closest('[data-fly]');
     if (opt) { e.stopPropagation(); return pickFly(opt.dataset.fly); }
     if (e.target.closest('.pm-fly')) return;
@@ -5003,6 +5065,7 @@ async function profileMenu(page = 'main') {
   menu.style.top = `${Math.max(8, r.bottom + 8)}px`;
 }
 const PM = {
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6h.01"/></svg>',
   full: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M17 6l2.5 2.5M15 8l2 2"/></svg>',
   sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>',
@@ -5113,7 +5176,9 @@ function wireKeys(dlg) {
 function signInRow(info, store, label) {
   const s = info.signins?.[store];
   const now = () => (!s ? 'Sign in' : s.expired ? 'Sign in again' : s.name);
-  return { icon: launcherIcon(store), label, value: now(), run: async b => {
+  return { icon: launcherIcon(store), label, value: now(),
+    info: `Signed in, Junction shows the play time and achievements ${label} counts for your games. The sign-in stays on this PC, encrypted.`,
+    run: async b => {
     const v = b.querySelector('.pm-val'), menu = b.closest('#ctx');
     if (signInRow.busy) return;  // its window is open: pressing again changes nothing
     // Signed in: press twice to sign out. Run out: press to sign in again, or twice quickly to just forget it.
@@ -6037,6 +6102,9 @@ function launchingFeedback(g) {
     setTimeout(() => el.classList.remove('launching'), 2400);
   });
 }
+// Steam is set to show "Who's playing?" every time it starts, and Junction may not turn that off (Preferences).
+const pickerSays = (steamId, button) => `Steam is asking who’s playing. Pick ${accountName(steamId)} there, then press ${button} again. `
+  + 'To skip this next time, turn on Skip Steam’s account picker in Preferences.';
 async function play(g, steamId) {
   launchingFeedback(g);
   play.waiting.add(g.id);
@@ -6048,6 +6116,7 @@ async function play(g, steamId) {
     ? `Preview only: the app restarts Steam on ${accountName(switchTo)} (about 15 seconds), then starts ${g.name}.`
     : `Preview only: the app starts ${g.name} through ${LAUNCH_VIA[g.launcher]}.`, g.launcher);
   else if (res && res.error) toast(res.error, g.launcher);
+  else if (res && res.picker) toast(pickerSays(steamId, 'Play'), g.launcher);
   else toast(`Starting ${g.name} through ${LAUNCH_VIA[g.launcher]}…`, g.launcher);
 }
 async function install(g, steamId) {
@@ -6057,6 +6126,7 @@ async function install(g, steamId) {
     ? `Preview only: the app restarts Steam on ${accountName(switchTo)}, then asks it to download ${g.name}.`
     : `Preview only: the app hands the install of ${g.name} to ${LAUNCH_VIA[g.launcher]}.`, g.launcher);
   else if (res && res.error) toast(res.error, g.launcher);
+  else if (res && res.picker) toast(pickerSays(steamId, 'Install'), g.launcher);
   else toast((INSTALL_VIA[g.launcher] || INSTALL_VIA.steam)[1](g.name), g.launcher);
 }
 
