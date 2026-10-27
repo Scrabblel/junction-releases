@@ -18,7 +18,7 @@ Junction is free and open source, under the GPL-3.0. The code is in this reposit
 - **One library for every launcher.** Steam, Epic Games, GOG Galaxy, Ubisoft Connect, EA app, Battle.net, Rockstar Games and Xbox, plus any game you add yourself. Junction finds them by itself.
 - **Play, install and uninstall** from one place. Junction does this through each game's own launcher, so your saves, updates and cloud sync keep working as before.
 - **Several Steam accounts?** Junction knows which account owns each game and switches Steam over for you when you press Play.
-- **Play time and achievements together:** play time from every launcher, and achievements from Steam, GOG, Epic and EA.
+- **Play time and achievements together:** play time from every launcher, and achievements from Steam, GOG, Epic, EA and Ubisoft.
 - **A store that compares prices** across the official stores for your country, in your currency. It shows a year of price history, the lowest price ever, the free games the launchers are giving away, and a wishlist that tells you when a game goes on sale.
 - **Stats** about what you play, **favourites** and your own **collections**.
 - **Three layouts:** Console (big covers, made for a controller), Classic (your games in a list on the left) and Big screen (full screen, for your TV). Plus a few styles, in light or dark.
@@ -46,7 +46,7 @@ That's it: your games are ready to play.
 - **Home** shows the games you played last, with their news and achievements (in Classic, also the best deals for you). **Library** has all your games, which you can filter, sort and search. **Store**, **Wishlist** and **Stats** are in the bar at the top.
 - **Open a game** for its page: Play or Install, play time, achievements, news, screenshots and details. When you own a game on more than one launcher, you choose which copy to start.
 - **Your profile picture (top right)** holds everything else:
-  - **Accounts and keys:** your Steam accounts and keys, and *Play time from launchers*. Sign in to Epic, EA or Ubisoft there to see the play time (and the Epic and EA achievements) those launchers keep.
+  - **Accounts and keys:** your Steam accounts and keys, and *Play time from launchers*. Sign in to Epic, EA or Ubisoft there to see the play time (and the achievements) those launchers keep.
   - **Preferences:** the look (layout, style and theme) and the country for prices.
   - **Rescan launchers**, after you install a new launcher or game.
   - **Help:** check for updates, and the problem report.

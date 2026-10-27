@@ -306,28 +306,33 @@ def epic_namespace(g):
     return m.group(1) if m else None
 
 
-def _signed_in_counts(games, launcher, key, read):
+def _signed_in_counts(games, launcher, key, read, unplayed=False):
     """game["achievements"] = {launcher: [unlocked, total]} for the played games of a launcher you sign in to.
     `key(game)` names a game the way `read(keys)` answers: {key: [unlocked, total], or None when the launcher didn't
-    answer for that game}, games without achievements left out, {} when not signed in."""
+    answer for that game}, games without achievements left out, {} when not signed in.
+    `unplayed`: games without play time are asked too, and counted when you unlocked something in them (like GOG's)."""
     mine = [g for g in games if g["launcher"] == launcher]
-    played = {g["id"]: k for g in mine if g.get("playtimeMinutes") and (k := key(g))}
-    if not played:
+    asked = {g["id"]: k for g in mine if (unplayed or g.get("playtimeMinutes")) and (k := key(g))}
+    if not asked:
         return
     try:
-        counts = read(sorted(set(played.values())))
+        counts = read(sorted(set(asked.values())))
     except Exception:  # noqa: BLE001 - the sign-in ran out or the launcher didn't answer: keep the counts there were
         return
     for g in mine:
-        n = counts.get(played.get(g["id"]), False)
-        if n is not None:
-            g["achievements"] = {launcher: n} if n else None
+        n = counts.get(asked.get(g["id"]), False)
+        if n is None:
+            continue
+        if n and not n[0] and not g.get("playtimeMinutes"):
+            n = False  # not played, nothing unlocked
+        g["achievements"] = {launcher: n} if n else None
 
 
 def add_achievement_counts(lib, settings=None):
     """game["achievements"] = {whose: [unlocked, total]}: per Steam account for played Steam games, "gog" for GOG
-    games you played or unlocked something in (from Galaxy, on this PC), and "epic" and "ea" for played Epic and EA
-    games (signed in)."""
+    games you played or unlocked something in (from Galaxy, on this PC), "epic" and "ea" for played Epic and EA games
+    (signed in), and "ubisoft" for Ubisoft games you played or unlocked something in (signed in: Ubisoft answers for
+    all of them in one go)."""
     settings = settings if settings is not None else config.load_settings()
     _, keys = accounts_and_keys(settings)
     try:
@@ -343,7 +348,10 @@ def add_achievement_counts(lib, settings=None):
             g["achievements"] = None
     _signed_in_counts(lib["games"], "epic", epic_namespace, epic_account.achievement_counts)
     _signed_in_counts(lib["games"], "ea", lambda g: art.normalize(g["name"]), ea_account.achievement_counts)
-    steam = [g for g in lib["games"] if g["launcher"] == "steam"]
+    ubisoft = {g["id"].split(":", 1)[1]: g["name"] for g in lib["games"] if g["launcher"] == "ubisoft"}
+    _signed_in_counts(lib["games"], "ubisoft", lambda g: g["id"].split(":", 1)[1],
+                      lambda ids: ubisoft_account.achievement_counts({p: ubisoft[p] for p in ids}), unplayed=True)
+    steam =[g for g in lib["games"] if g["launcher"] == "steam"]
     shim = [{"launcher": g["launcher"], "playtimeMinutes": g.get("playtimeMinutes"), "owners": g.get("owners") or [],
              "artAppId": g.get("steamAppId")} for g in steam]
     extras.achievements(shim, keys)

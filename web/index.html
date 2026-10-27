@@ -4598,7 +4598,7 @@ function achFor(t, sid) {
            locked: items.filter(a => !a.at).sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1)) };
 }
 // The choice above the list: Steam accounts by name, launchers by theirs.
-const ACH_LAUNCHERS = { gog: 'GOG Galaxy', epic: 'Epic Games', ea: 'EA app' };
+const ACH_LAUNCHERS = { gog: 'GOG Galaxy', epic: 'Epic Games', ea: 'EA app', ubisoft: 'Ubisoft Connect' };
 const achWhose = (w, all) => ACH_LAUNCHERS[w] || (all.some(o => ACH_LAUNCHERS[o]) ? `Steam: ${accountName(w)}` : accountName(w));
 function achIcon(a, size) {
   const title = esc(a.hidden && !a.at ? 'Hidden achievement' : a.name);

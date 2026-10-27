@@ -513,8 +513,8 @@ class Api:
     # ---------- game page details ----------
 
     def get_achievements(self, appid=None):
-        """Without an id: the empty shell the page starts from. With a Steam app id, or a GOG or Epic game's own id
-        ("gog:<product id>", "epic:<app name>", "ea:<id>"): that game's achievements."""
+        """Without an id: the empty shell the page starts from. With a Steam app id, or a GOG, Epic, EA or Ubisoft
+        game's own id ("gog:<product id>", "epic:<app name>", "ea:<id>", "ubisoft:<product id>"): its achievements."""
         if appid is None:
             return {"icon": 48, "cols": 40, "games": {}, "perGame": True}
         appid = str(appid)
@@ -524,13 +524,15 @@ class Api:
         try:
             if appid.startswith("gog:"):
                 data = library.gog_achievements_for(appid[4:])
-            elif appid.startswith(("epic:", "ea:")):
+            elif appid.startswith(("epic:", "ea:", "ubisoft:")):
                 g = next((g for g in (self._lib or {}).get("games", []) if g["id"] == appid), None)
                 if not g:
                     data = None
                 elif g["launcher"] == "epic":
                     ns = library.epic_namespace(g)
                     data = epic_account.achievement_list(ns) if ns else None
+                elif g["launcher"] == "ubisoft":
+                    data = ubisoft_account.achievement_list(appid.split(":", 1)[1], g["name"])
                 else:  # EA knows its games by name here, as for play time
                     data = ea_account.achievement_list(art.normalize(g["name"]))
             else:

@@ -1,4 +1,4 @@
-"""Signing in to Ubisoft, so Junction can show the play time Ubisoft counts, up to date.
+"""Signing in to Ubisoft, so Junction can show the play time Ubisoft counts, up to date, and your achievements.
 
 Ubisoft Connect keeps a copy of each game's stats on the PC, but it only refreshes that copy when you open the
 game's stats in Ubisoft Connect, so it can be a year old. Signed in, Junction asks Ubisoft for the same
@@ -76,10 +76,12 @@ def _why(e):
     return re.sub(r"[\w\-.=+/]{40,}", "…", why)[:200]
 
 
-def _session(remember):
-    """A fresh ticket from the "remember me" ticket: {ticket, sessionId, userId, rememberMeTicket?, ...}."""
+def _session(remember, app_id=APP_ID):
+    """A fresh ticket from the "remember me" ticket: {ticket, sessionId, userId, rememberMeTicket?, ...}. `app_id`:
+    which Ubisoft app the ticket is for (one "remember me" ticket works for both the website and the Connect app)."""
     try:
-        return _request("POST", SESSIONS_URL, {"Authorization": f"rm_v1 t={remember}"}, {"rememberMe": True})
+        return _request("POST", SESSIONS_URL, {"Authorization": f"rm_v1 t={remember}", "Ubi-AppId": app_id},
+                        {"rememberMe": True})
     except urllib.error.HTTPError as e:
         # Only 400/401 means Ubisoft refused the sign-in. Anything else (a rate limit, a proxy, a timeout, a bad
         # moment on their side) is "try again later" and must never make someone sign in again.
@@ -163,14 +165,14 @@ def sign_in(open_window):
                 pass
 
 
-def _access():
+def _access(app_id=APP_ID):
     """(ticket, session id, user id) from the saved sign-in. Raises SignInError (and marks it) when it has run out."""
     with _lock:
         saved = signins.get("ubisoft")
         if not saved or saved.get("expired"):
             raise SignInError("Not signed in to Ubisoft.")
         try:
-            s = _session(saved["refresh"])
+            s = _session(saved["refresh"], app_id)
         except SignInError:
             signins.put_if_same("ubisoft", saved["refresh"], dict(saved, expired=True))
             raise
@@ -254,6 +256,36 @@ def _match_spaces(names, owned):
     return spaces
 
 
+def _headers(ticket, session):
+    return {"Authorization": f"Ubi_v1 t={ticket}", "Ubi-SessionId": session or "",
+            "Ubi-RequestedPlatformType": "uplay", "Ubi-LocaleCode": "en-GB"}
+
+
+def _spaces_for(wanted, games_list, what):
+    """{space id: [product ids]} for `wanted` ({product id: name}): Ubisoft Connect's list on this PC says which space
+    a game is, else the games on the account (asked with `games_list`, headers the games list answers) are matched by
+    name. `what` starts the log line."""
+    known = owned_local.ubisoft_spaces()
+    spaces = {space: [p for p in pids if p in wanted] for space, pids in known.items()}
+    spaces = {space: pids for space, pids in spaces.items() if pids}
+    listed = {p for pids in spaces.values() for p in pids}
+    missing = {p: name for p, name in wanted.items() if p not in listed}
+    if missing:
+        try:
+            owned = _owned_spaces(games_list)
+        except (OSError, ValueError, AttributeError) as e:
+            owned = None
+            log.warning("%s: your Ubisoft games couldn't be read from Ubisoft (%s)", what, _why(e))
+        found = _match_spaces(missing, owned or [])
+        for space, pids in found.items():
+            spaces.setdefault(space, []).extend(pids)
+        log.info("%s: %d of %d games not in Ubisoft Connect's list on this PC (%s); %d found on your Ubisoft account"
+                 " by name (%s games on it)", what, len(missing), len(wanted),
+                 f"{len(known)} games in it" if known else owned_local.ubisoft_where(empty="its game list has no games in it"),
+                 sum(map(len, found.values())), "?" if owned is None else len(owned))
+    return spaces
+
+
 def playtime(games):
     """{Ubisoft product id: (minutes played or None, last played unix time)} as Ubisoft counts it now, for `games`
     ({product id: name}); {} when not signed in. A game's editions share one "space", and Ubisoft keeps its stats
@@ -263,28 +295,10 @@ def playtime(games):
     if not signins.get("ubisoft"):
         return {}
     wanted = {str(p): name for p, name in games.items()}
-    known = owned_local.ubisoft_spaces()
-    spaces = {space: [p for p in pids if p in wanted] for space, pids in known.items()}
-    spaces = {space: pids for space, pids in spaces.items() if pids}
     ticket, session, user = _access()
-    headers = {"Authorization": f"Ubi_v1 t={ticket}", "Ubi-SessionId": session or "",
-               "Ubi-RequestedPlatformType": "uplay", "Ubi-LocaleCode": "en-GB"}
+    headers = _headers(ticket, session)
     games_list = dict(headers, **{"Ubi-AppId": GAMES_APP_ID})
-    listed = {p for pids in spaces.values() for p in pids}
-    missing = {p: name for p, name in wanted.items() if p not in listed}
-    if missing:
-        try:
-            owned = _owned_spaces(games_list)
-        except (OSError, ValueError, AttributeError) as e:
-            owned = None
-            log.warning("Ubisoft play time: your Ubisoft games couldn't be read from Ubisoft (%s)", _why(e))
-        found = _match_spaces(missing, owned or [])
-        for space, pids in found.items():
-            spaces.setdefault(space, []).extend(pids)
-        log.info("Ubisoft play time: %d of %d games not in Ubisoft Connect's list on this PC (%s); %d found on your"
-                 " Ubisoft account by name (%s games on it)", len(missing), len(wanted),
-                 f"{len(known)} games in it" if known else owned_local.ubisoft_where(empty="its game list has no games in it"),
-                 sum(map(len, found.values())), "?" if owned is None else len(owned))
+    spaces = _spaces_for(wanted, games_list, "Ubisoft play time")
     if not spaces:
         return {}
     try:
@@ -329,6 +343,66 @@ def playtime(games):
     if failed and not timed:
         raise OSError(f"Ubisoft didn't give any play time ({', '.join(failed)})")
     return out
+
+
+# ---------- achievements ----------
+# Ubisoft only shows them to a ticket for the Ubisoft Connect app: a website ticket gets "401 Unauthorized from
+# entitlement.api". The same "remember me" ticket makes either. Ubisoft gives no rarity and no hidden ones.
+
+ACHIEVEMENTS_QUERY = ("query GetAchievements($spaceIds: [String!]) { games(spaceIds: $spaceIds) { spaceId achievements {"
+                      " totalCount nodes { id title description icon viewer { meta { isCompleted completionDate } } } } } }")
+
+
+def _achievements(games):
+    """{product id: [(name, description, icon, unlock unix time or 0)], or None when Ubisoft didn't answer for it}
+    for `games` ({product id: name}); games without achievements are left out. {} when not signed in."""
+    if not signins.get("ubisoft"):
+        return {}
+    wanted = {str(p): name for p, name in games.items()}
+    headers = dict(_headers(*_access(GAMES_APP_ID)[:2]), **{"Ubi-AppId": GAMES_APP_ID})
+    spaces = _spaces_for(wanted, headers, "Ubisoft achievements")
+    out, order = {}, list(spaces)
+    for i in range(0, len(order), 50):
+        part = order[i:i + 50]
+        try:
+            data = _request("POST", GRAPHQL_URL, headers, {"operationName": "GetAchievements",
+                                                           "variables": {"spaceIds": part}, "query": ACHIEVEMENTS_QUERY})
+            if isinstance(data, dict) and data.get("errors") and not data.get("data"):
+                raise ValueError(f"Ubisoft answered: {_said(data) or 'an error'}")
+        except (OSError, ValueError, AttributeError) as e:
+            log.warning("Ubisoft achievements: %d games couldn't be read (%s)", len(part), _why(e))
+            for space in part:
+                for pid in spaces[space]:
+                    out[pid] = None
+            continue
+        for g in ((data or {}).get("data") or {}).get("games") or []:
+            nodes = (((g or {}).get("achievements") or {}).get("nodes")) or []
+            items = []
+            for n in nodes:
+                if not isinstance(n, dict) or not n.get("title"):
+                    continue
+                meta = (n.get("viewer") or {}).get("meta") or {}
+                at = 0
+                if meta.get("isCompleted"):
+                    at = (_unix(meta["completionDate"]) if meta.get("completionDate") else None) or 1  # 1: date unknown
+                items.append((n["title"], n.get("description") or "", n.get("icon") or None, at))
+            for pid in spaces.get((g or {}).get("spaceId"), ()) if items else ():
+                out[pid] = items
+    return out
+
+
+def achievement_counts(games):
+    """{product id: [unlocked, total], or None when Ubisoft didn't answer for that game}, like _achievements."""
+    return {p: v and [sum(1 for *_, at in v if at), len(v)] for p, v in _achievements(games).items()}
+
+
+def achievement_list(product, name):
+    """One game's achievements in the page's format, under "ubisoft" as whose they are; None without any."""
+    v = _achievements({product: name}).get(str(product))
+    if not v:
+        return None
+    # [name, description, hidden, % of players, sheet, slot, icon, grey icon]: Ubisoft has no rarity or grey icons.
+    return {"list": [[n, d, 0, None, -1, -1, icon, None] for n, d, icon, _ in v], "who": {"ubisoft": [at for *_, at in v]}}
 
 
 def sign_out():
