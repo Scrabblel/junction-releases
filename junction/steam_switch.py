@@ -45,6 +45,17 @@ def active_steamid():
     return None
 
 
+def running_appid():
+    """The Steam game running now, by app id (Steam keeps it in RunningAppID), or None. Also for games started
+    outside Junction."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STEAM_KEY) as key:
+            appid = winreg.QueryValueEx(key, "RunningAppID")[0]
+        return int(appid) or None
+    except (OSError, TypeError, ValueError):
+        return None
+
+
 def signed_in_steamid():
     """SteamID of the account Steam is signed in to (or will sign in to next), or None."""
     active = active_steamid()

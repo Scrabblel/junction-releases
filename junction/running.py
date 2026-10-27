@@ -91,10 +91,11 @@ def windows(pids):
 
 class Games:
     """The games Junction started: "starting" until a program of theirs runs, then "playing" until it's gone.
-    on_change() runs on every change."""
+    on_change() runs on every change, and on_closed(game id) once a game that was playing has closed."""
 
-    def __init__(self, on_change=lambda: None):
+    def __init__(self, on_change=lambda: None, on_closed=lambda game_id: None):
         self.on_change = on_change
+        self.on_closed = on_closed
         self._lock = threading.Lock()
         self._games = {}  # game id -> {"state", "since", "folder", "exe"}
 
@@ -127,6 +128,7 @@ class Games:
 
     def _watch(self, game_id, entry):
         folder, exe = entry["folder"], entry["exe"]
+        played = False
         try:
             while not processes(folder, exe):
                 if time.time() - entry["since"] > START_WAIT or not self._current(game_id, entry):
@@ -136,6 +138,7 @@ class Games:
                 if self._games.get(game_id) is not entry:
                     return
                 entry.update(state="playing", since=time.time())
+            played = True
             self.on_change()
             missing = 0
             while missing < GONE_AFTER and self._current(game_id, entry):
@@ -145,6 +148,8 @@ class Games:
             traceback.print_exc()
         finally:
             self._end(game_id, entry)
+            if played:
+                self.on_closed(game_id)
 
     def _end(self, game_id, entry):
         """This watch is over: the game goes back to Play (unless a newer watch took its place)."""

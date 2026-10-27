@@ -28,6 +28,10 @@ from . import (art, config, ea_account, epic_account, keys, launchers, library, 
 
 LIB_VERSION = 1          # bump when the cached library's shape changes
 ACH_TTL = 10 * 60        # seconds a game's achievements stay cached
+# After a game closes its launcher counts the session a little later: its hours and achievements are read again this
+# many seconds after it closed, the second time only when the first didn't show new hours yet.
+REREAD_AFTER = (60, 300)
+STEAM_LOOK_EVERY = 5     # seconds between looks at which Steam game runs (also ones started outside Junction)
 WATCH_EVERY = 5          # seconds between checks for games installed or removed while the app is open
 STORE_CHECK = 30 * 60    # seconds between checks whether the Store's prices are due again (also while in the tray)
 ENRICHED = ("friends", "friendOwners", "dlcSales", "news")
@@ -117,8 +121,11 @@ class Api:
         self._tray = None
         self._quitting = False
         self._own_frame = False  # True once Junction draws its own title bar
-        self._tracker = playtime.Tracker(self._played)
-        self._running = running.Games(lambda: self._js(f"window.junctionRunning && junctionRunning({json.dumps(self._running.view())})"))
+        self._tracker = playtime.Tracker(self._played, self._closed)
+        self._running = running.Games(lambda: self._js(f"window.junctionRunning && junctionRunning({json.dumps(self._running.view())})"),
+                                      self._closed)
+        self._after_play = {}  # game id -> the latest close's reread (a newer close of the same game replaces it)
+        self._after_play_lock = threading.Lock()
         self._sign_in_lock = threading.Lock()
         self._programs_lock = threading.Lock()  # one "Start this program?" at a time
         self._updates = updates.Updater(lambda info: self._js(f"window.junctionUpdate && junctionUpdate({json.dumps(info)})"))
@@ -253,6 +260,73 @@ class Api:
         """A game Junction started began or stopped: update Continue playing and the tray."""
         self._update_tray()
         self._push("library")
+
+    # ---------- after a game closes: its hours and achievements read again ----------
+
+    def _closed(self, game_id):
+        """A game closed (started from Junction or not). Its launcher's hours and achievements are read again, so the
+        page doesn't show the old ones until the next refresh. Games only Junction times are up to date already."""
+        launcher = str(game_id).split(":", 1)[0]
+        if launcher not in library.REREAD or (launcher in ("epic", "ea") and not signins.get(launcher)):
+            return
+        me = object()
+        with self._after_play_lock:
+            self._after_play[game_id] = me  # the same game closing twice (watched twice, or played again): one reread
+        threading.Thread(target=self._reread_after_play, args=(game_id, me), daemon=True).start()
+
+    def _reread_after_play(self, game_id, me):
+        g = self._game(game_id)
+        before = g.get("playtimeMinutes") if g else None
+        waited = 0
+        try:
+            for at in REREAD_AFTER:
+                time.sleep(at - waited)
+                waited = at
+                with self._after_play_lock:
+                    if self._after_play.get(game_id) is not me or self._quitting:
+                        return
+                fresh = self._reread(game_id)
+                if fresh is None or (fresh.get("playtimeMinutes") or 0) != (before or 0):
+                    return  # gone from the library, or the launcher has counted the session
+        except Exception as e:  # noqa: BLE001 - a launcher not answering waits for the next refresh
+            logging.getLogger("junction").warning("Reading %s again after playing: %s: %s", game_id, type(e).__name__, e)
+        finally:
+            with self._after_play_lock:
+                if self._after_play.get(game_id) is me:
+                    self._after_play.pop(game_id)
+
+    def _reread(self, game_id):
+        """Read one game's hours and achievements again and show them. Returns what it read, None when the game
+        isn't in the library."""
+        g = self._game(game_id)
+        if not g:
+            return None
+        fresh = library.reread(g)
+        changed = {k: v for k, v in fresh.items() if g.get(k) != v}
+        if changed:
+            with self._swap:  # a published library is never changed in place: a new one, sharing the other games
+                lib = self._lib
+                self._lib = dict(lib, games=[dict(x, **changed) if x["id"] == game_id else x for x in lib["games"]])
+                current = self._lib
+            config.write_cache("library.json", current)
+            # The game page loads its achievement list once: this one has to load again.
+            ach = str(g["steamAppId"]) if g["launcher"] == "steam" else game_id
+            self._ach.pop(ach, None)
+            log_changed = {k: v for k, v in changed.items() if k != "achievements"}
+            logging.getLogger("junction").info("Read %s again after playing: %s", game_id, log_changed or "achievements")
+            self._push("library", {"played": [ach]})
+        return fresh
+
+    def _watch_steam_games(self):
+        """Steam games started outside Junction (from Steam itself, a shortcut): Steam names the running one in the
+        registry. When it stops being that game, that game closed."""
+        last = None
+        while not self._quitting:
+            time.sleep(STEAM_LOOK_EVERY)
+            now = steam_switch.running_appid()
+            if last and now != last:
+                self._closed(f"steam:{last}")
+            last = now
 
     def get_library(self):
         with self._lib_lock:
@@ -1169,6 +1243,7 @@ def main():
     threading.Thread(target=api._tidy, daemon=True).start()
     threading.Thread(target=api._keep_prices_fresh, daemon=True).start()
     api._tracker.look_around(lambda: (api._lib or {}).get("games"))  # games started outside Junction
+    threading.Thread(target=api._watch_steam_games, daemon=True).start()
     api._updates.start()
     threading.Thread(target=_listen_for_second_start, args=(api,), daemon=True).start()
     threading.Thread(target=_listen_for_quit, args=(api,), daemon=True).start()

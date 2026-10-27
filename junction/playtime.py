@@ -202,10 +202,11 @@ def _folders(games):
 
 
 class Tracker:
-    """Times one session per game. on_change() runs when a session starts or ends."""
+    """Times one session per game. on_change() runs when a session starts or ends, on_closed(game id) after it ends."""
 
-    def __init__(self, on_change=lambda: None):
+    def __init__(self, on_change=lambda: None, on_closed=lambda game_id: None):
         self.on_change = on_change
+        self.on_closed = on_closed
         self.playing = {}  # game id -> start time
         self._watching = {}  # game id -> the folder (or program) it's timed by
         self._open = {}  # game id -> [time saved up to, time last seen running]
@@ -306,6 +307,7 @@ class Tracker:
             print(f"Played {game_id} for {round((o[1] - start - asleep) / 60)} min", flush=True)
             self.playing.pop(game_id, None)
             self.on_change()
+            self.on_closed(game_id)
         except Exception:  # noqa: BLE001 - never take the app down over a timer
             import traceback
             traceback.print_exc()

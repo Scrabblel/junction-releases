@@ -6974,6 +6974,8 @@ window.junctionRefresh = async (what, info) => {
     const say = (list, verb) => list && list.length && toast(`${list.length > 2 ? `${list.length} games` : list.join(' and ')} ${list.length > 1 ? 'are' : 'is'} ${verb}.`);
     say(info?.installed, 'installed and ready to play');
     say(info?.removed, 'no longer installed');
+    // A game that closed was read again: its achievement list loads again too.
+    for (const id of info?.played || []) { if (achData) delete achData.games[id]; delete achWaits[id]; }
     const y = $('#main').scrollTop;
     buildTitles(); stampScan();
     // Don't pull the page out from under someone typing or reading a menu.

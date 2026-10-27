@@ -14,7 +14,7 @@ from . import config
 from .art import get_json, steam_items
 from .config import NET_ERRORS
 from .launchers import (STEAM_SKIP_IDS, STEAM_SKIP_NAME, STEAM_TOOL_IDS, _ci, _game, _read,
-                        _steam_root, parse_vdf)
+                        _steam_root, _steam_stats, parse_vdf)
 
 # Store item types worth listing: 0 = game, 14 = separately launched parts such as
 # "Call of Duty: Black Ops II - Multiplayer". Skipped: 1 demo, 6 software, 12 beta.
@@ -128,3 +128,40 @@ def add_accounts(games, settings=None):
         g["lastPlayed"] = max(g["lastPlayed"] or 0, last) or None
     games.sort(key=lambda g: g["name"].lower())
     return summaries
+
+
+def played(appid, owners, settings=None):
+    """(minutes, last played) of one Steam game, as add_accounts() and the scan count it: the accounts that own it
+    added up (asked from Steam with a key, else read from this PC), or what this PC's Steam saved, whichever is more.
+    For reading one game again after it closed, without scanning everything."""
+    appid, owners = int(appid), {str(o) for o in owners or []}
+    accounts = steam_accounts(settings)
+    spare_key = next((k for k in ((a.get("apiKey") or "").strip() for a in accounts) if k), "")
+    minutes = last = 0
+    for acc in accounts:
+        steamid = str(acc["steamId"]).strip()
+        if steamid not in owners:
+            continue
+        key, rows = (acc.get("apiKey") or "").strip() or spare_key, None
+        if key:
+            url = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?" + urllib.parse.urlencode({
+                "key": key, "steamid": steamid, "include_played_free_games": 1, "appids_filter[0]": appid,
+                "format": "json"})
+            try:
+                rows = get_json(url, timeout=20).get("response", {}).get("games")
+            except NET_ERRORS:
+                rows = None
+        if rows is None:  # no key, or Steam didn't answer: what this PC remembers
+            try:
+                rows = remembered_games(steamid, look_up=False)
+            except OSError:
+                rows = []
+        for o in rows:
+            if o.get("appid") == appid:  # (Steam may ignore the filter and list them all)
+                minutes += o.get("playtime_forever") or 0
+                last = max(last, o.get("rtime_last_played") or 0)
+    root = _steam_root()
+    here = _steam_stats(root).get(str(appid)) if root else None
+    if here:
+        minutes, last = max(minutes, here["playtime"]), max(last, here["last_played"])
+    return minutes or None, last or None

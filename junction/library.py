@@ -240,7 +240,10 @@ def add_launcher_playtime(games):
                "epic": (epic_account.playtime, by_id), "ea": (ea_account.playtime, by_name),
                "battlenet": (lambda: {k: (None, t) for k, t in owned_local.battlenet_last_played().items()},
                              lambda g: launchers.bnet_product(by_id(g)))}
+    present = {g["launcher"] for g in games}
     for launcher, (read, key) in readers.items():
+        if launcher not in present:  # no games of it: nothing to ask it
+            continue
         try:
             times = read()
         except Exception as e:  # noqa: BLE001 - a changed file format or an expired sign-in must not stop the rest
@@ -309,6 +312,8 @@ def _signed_in_counts(games, launcher, key, read):
     answer for that game}, games without achievements left out, {} when not signed in."""
     mine = [g for g in games if g["launcher"] == launcher]
     played = {g["id"]: k for g in mine if g.get("playtimeMinutes") and (k := key(g))}
+    if not played:
+        return
     try:
         counts = read(sorted(set(played.values())))
     except Exception:  # noqa: BLE001 - the sign-in ran out or the launcher didn't answer: keep the counts there were
@@ -326,7 +331,7 @@ def add_achievement_counts(lib, settings=None):
     settings = settings if settings is not None else config.load_settings()
     _, keys = accounts_and_keys(settings)
     try:
-        gog = owned_local.gog_achievements()
+        gog = owned_local.gog_achievements() if any(g["launcher"] == "gog" for g in lib["games"]) else None
     except Exception:  # noqa: BLE001 - a changed database keeps the counts it had
         gog = None
     for g in lib["games"]:
@@ -348,6 +353,27 @@ def add_achievement_counts(lib, settings=None):
         kept = {sid: v for sid, v in (g.get("achievements") or {}).items() if keys.get(sid)}
         kept.update(s.get("achievements") or {})
         g["achievements"] = kept or None
+
+
+# Launchers whose own play time Junction reads (Steam, and add_launcher_playtime's). The others' games are timed by
+# Junction itself, which counts a session the moment it ends.
+REREAD = ("steam", "gog", "ubisoft", "epic", "ea", "battlenet")
+
+
+def reread(game, settings=None):
+    """One game's play time, last played and achievement count read again from its launcher, for after it closed.
+    Returns those fields as they are now (the same values as before when the launcher didn't answer)."""
+    settings = settings if settings is not None else config.load_settings()
+    g = {k: (list(v) if isinstance(v, list) else dict(v) if isinstance(v, dict) else v) for k, v in game.items()}
+    if g["launcher"] == "steam":
+        minutes, last = steam_owned.played(g["steamAppId"], g.get("owners"), settings)
+        if minutes:
+            g["playtimeMinutes"] = minutes
+        g["lastPlayed"] = max(g.get("lastPlayed") or 0, last or 0) or None
+    else:
+        add_launcher_playtime([g])
+    add_achievement_counts({"games": [g]}, settings)
+    return {k: g.get(k) for k in ("playtimeMinutes", "playtimeFrom", "lastPlayed", "achievements")}
 
 
 def enrich(lib, settings=None, store_appids=(), progress=None):
