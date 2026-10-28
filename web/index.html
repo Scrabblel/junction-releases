@@ -1175,6 +1175,12 @@ a.pill { text-decoration: none; }
 .tile .art .line { display: none; }
 .sale { position: absolute; left: 7px; bottom: 8px; padding: 4px 8px; border-radius: var(--pill); font: 800 11px/1 var(--font-body); background: var(--good); color: #062b14; box-shadow: 0 4px 12px -4px #000; }
 .lrow .sale { position: static; margin-left: 8px; vertical-align: middle; }
+.upd-flag { position: absolute; right: 7px; bottom: 8px; padding: 4px 8px; border-radius: var(--pill); font: 800 11px/1 var(--font-body); background: var(--ink); color: var(--ground); box-shadow: 0 4px 12px -4px #000; }
+.lrow .upd-flag { position: static; margin-left: 8px; vertical-align: middle; }
+.upd-note:empty { display: none; }
+.note-chip.upd { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.note-chip.upd:hover { background: color-mix(in srgb, var(--ink) 20%, transparent); }
+.note-chip.upd svg { width: 15px; height: 15px; }
 .focus .meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ach-strip .lbl.count { font: 700 13px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; margin-right: 6px; }
 .focus .trend { width: 180px; height: 26px; }
@@ -2085,6 +2091,7 @@ const host = {
   // On/off settings (tray, start with Windows, setup done), and the problem report.
   async removeAccount(steamId) { return this.inApp ? window.pywebview.api.remove_steam_account(steamId) : null; },
   async uninstall(game) { return this.inApp ? window.pywebview.api.uninstall(game.id) : { prototype: true }; },
+  async updateGame(game, steamId) { return this.inApp ? window.pywebview.api.update_game(game.id, steamId || null) : { prototype: true }; },
   async setEarlierPlaytime(id, hours) { return this.inApp ? window.pywebview.api.set_earlier_playtime(id, hours) : null; },
   // Launcher sign-ins (Epic, EA, Ubisoft) for their play time: the sign-in happens on the store's own page, in a window of its own.
   async signIn(store) { return this.inApp ? window.pywebview.api.sign_in(store) : { error: 'Only the Junction app can sign in.' }; },
@@ -2870,6 +2877,7 @@ function renderLibrary() {
   if (f) setFocus(f);
   if (state.query.trim()) fillStoreMatches(state.query.trim().toLowerCase());
   paintSaleBadges();
+  paintUpdates();
   if (!store) loadStoreQuiet().then(paintSaleBadges);
 }
 function jumpTo(letter) {
@@ -3279,6 +3287,7 @@ const gameButtonsHtml = (t, b) => `
           <button class="pill round" data-menu="${esc(t.id)}" aria-label="More for ${esc(t.name)}">···</button>
           ${b.choice}`;
 const gameNotesHtml = (t, b) => `
+        <span class="upd-note" id="upd-note" data-game="${esc(t.id)}" data-was="${esc(updateNoteHtml(updateOf(t)))}">${updateNoteHtml(updateOf(t))}</span>
         ${friendsLine(t.steamAppId)}
         ${b.dlc.length ? `<button class="note-chip" data-game-tab="details">${b.dlc.length} DLC on sale on Steam · up to -${b.dlc[0].cut}%</button>` : ''}
         ${b.series.length ? `<button class="note-chip" data-price="${esc(b.series[0].id)}" data-from="library">${esc(b.series[0].title)} is on sale · -${bestDeal(b.series[0]).cut}%</button>` : ''}
@@ -5739,7 +5748,7 @@ function renderDownloads() {
       return `
       <button class="dl" data-open="${esc(d.id)}" style="${lineVar(d.id.split(':')[0])}">
         <span class="dl-name">${esc(d.name)}</span>
-        <span class="dl-meta">${d.paused ? 'Waiting' : `${pct.toFixed(0)}%`} · ${size(d.done)} of ${size(d.total)}</span>
+        <span class="dl-meta">${!d.total ? 'Update waiting' : `${d.paused ? (d.update ? 'Update waiting' : 'Waiting') : `${pct.toFixed(0)}%`} · ${size(d.done)} of ${size(d.total)}`}</span>
         <span class="bar"><i style="width:${pct.toFixed(1)}%"></i></span>
       </button>`;
     }).join('') +
@@ -5756,7 +5765,53 @@ async function pollDownloads() {
   if (!host.inApp) return;
   try { downloads = (await host.downloads()) || []; } catch { downloads = []; }
   renderDownloads();
+  paintUpdates();
   setTimeout(pollDownloads, downloads.length ? 2000 : 8000);
+}
+
+// ---------- updates: a launcher's update for an installed game, waiting or under way ----------
+const updateOf = t => t.copies.map(c => downloads.find(d => d.update && d.id === c.id)).find(Boolean) || null;
+// The game page's line about it, and an "Update" badge on Library covers; drawn again with every look at downloads.
+function paintUpdates() {
+  const box = $('#upd-note'), t = box && findGame(box.dataset.game);
+  if (box && t) {
+    const d = updateOf(t), html = updateNoteHtml(d);
+    if (box.dataset.was !== html) {
+      const had = box.contains(document.activeElement);
+      box.innerHTML = html;
+      box.dataset.was = html;
+      if (had) box.querySelector('button')?.focus({ preventScroll: true });
+    }
+  }
+  if (state.view.name !== 'library') return;
+  for (const el of document.querySelectorAll('#main .lgrid .tile[data-focus], #main .lrow[data-focus]')) {
+    const t = findGame(el.dataset.focus), d = t && updateOf(t), had = el.querySelector('.upd-flag');
+    if (!d === !had) continue;
+    if (had) { had.remove(); continue; }
+    (el.querySelector('.art') || el.querySelector('.n')).insertAdjacentHTML('beforeend',
+      `<span class="upd-flag" title="${esc(!d.paused ? 'Updating' : d.total ? `Update waiting · ${size(d.total - d.done)}` : 'Update waiting')}">${d.paused ? 'Update' : 'Updating'}</span>`);
+  }
+}
+// Steam says how big an update is; Epic doesn't, and updates a game when it starts (so its button plays it too).
+const updateNoteHtml = d => !d ? ''
+  : d.paused ? `<button class="note-chip upd" data-update="${esc(d.id)}">${ICON.download}Update available · ${d.total ? esc(size(d.total - d.done)) : 'Update and play'}</button>`
+  : `<button class="note-chip upd" data-update="${esc(d.id)}">Updating · ${(d.total ? d.done / d.total * 100 : 0).toFixed(0)}% of ${esc(size(d.total))}</button>`;
+// Steam has no link that starts one game's update: Junction opens its Downloads page, on the account that owns the
+// game, where the waiting update is one click. The Epic Games Launcher updates a game before it starts it.
+async function updateGame(copyId) {
+  const t = findGame(copyId), g = t?.copies.find(c => c.id === copyId);
+  if (!g) return;
+  if (g.launcher !== 'steam') return play(g, null);
+  const opts = playOptions(t).filter(o => o.copy.id === copyId);
+  const steamId = (opts.find(o => o.steamId && o.steamId === lib.steamSignedIn) || opts[0])?.steamId || null;
+  const res = await host.updateGame(g, steamId);
+  const switchTo = switchNeeded(steamId);
+  if (res && res.prototype) toast(switchTo ? `Preview only: the app restarts Steam on ${accountName(switchTo)}, then opens its Downloads page.`
+    : 'Preview only: the app opens Steam’s Downloads page.', g.launcher);
+  else if (res && res.error) toast(res.error, g.launcher);
+  else if (res && res.picker) toast(pickerSays(steamId, 'Update'), g.launcher);
+  else toast(updateOf(t)?.paused === false ? `Steam’s Downloads page is open: ${g.name} is updating there.`
+    : `Steam’s Downloads page is open: press Update next to ${g.name} there.`, g.launcher);
 }
 
 // ---------- render + routing ----------
@@ -6537,6 +6592,7 @@ document.addEventListener('click', e => {
     return document.querySelector(`[data-game-tab="${state.gameTab}"][role="tab"]`)?.focus({ preventScroll: true });
   }
   if ('miniPlay' in t.dataset && shownGame()) return startGame(shownGame());
+  if (t.dataset.update) return updateGame(t.dataset.update);
   if (t.dataset.achFilter) { state.achFilter = t.dataset.achFilter; state.achAll = false; return fillAchievements(shownGame()); }
   if ('achMore' in t.dataset) { state.achAll = true; return fillAchievements(shownGame()); }
   if (t.dataset.clPick) return classicPick(t.dataset.clPick);
@@ -6933,7 +6989,7 @@ function focusKey(el) {
   if (!el || el === document.body || !$('#app').contains(el)) return null;
   let sel = null;
   if (el.id) sel = `#${CSS.escape(el.id)}`;
-  else for (const a of ['data-focus', 'data-sfocus', 'data-open', 'data-price', 'data-menu', 'data-quick', 'data-cl-pick', 'data-cl-filter', 'data-swish', 'data-nav', 'data-game-tab', 'data-see', 'data-browse', 'data-scope', 'data-pop', 'data-line', 'data-line-clear', 'data-density', 'data-shop', 'data-genre', 'data-unlib', 'data-unfilter']) {
+  else for (const a of ['data-focus', 'data-sfocus', 'data-open', 'data-price', 'data-menu', 'data-quick', 'data-cl-pick', 'data-cl-filter', 'data-swish', 'data-nav', 'data-game-tab', 'data-update', 'data-see', 'data-browse', 'data-scope', 'data-pop', 'data-line', 'data-line-clear', 'data-density', 'data-shop', 'data-genre', 'data-unlib', 'data-unfilter']) {
     const v = el.getAttribute(a);
     if (v != null) { sel = `${el.closest('#focus') ? '#focus ' : ''}${el.tagName.toLowerCase()}[${a}="${CSS.escape(v)}"]`; break; }
   }

@@ -8,6 +8,7 @@ public client id they all use. Epic doesn't offer this as an official API, so it
 import base64
 import datetime
 import json
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -23,6 +24,7 @@ CODE_URL = f"https://www.epicgames.com/id/api/redirect?clientId={CLIENT[0]}&resp
 LOGIN_URL = "https://www.epicgames.com/id/login?redirectUrl=" + urllib.parse.quote(CODE_URL, safe="")
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EpicGamesLauncher"
 SIGN_IN_WAIT = 15 * 60   # seconds the sign-in window stays open
+_lock = threading.Lock()
 
 
 class SignInError(Exception):
@@ -105,18 +107,20 @@ def sign_in(open_window):
 
 def _access():
     """(access token, account id), refreshing the saved sign-in. Epic hands out a new refresh token each time,
-    so it's saved again. Raises SignInError when the sign-in has run out; it's then marked so the page can say so."""
-    saved = signins.get("epic")
-    if not saved or saved.get("expired"):
-        raise SignInError("Not signed in to Epic.")
-    try:
-        tok = _post_token({"grant_type": "refresh_token", "refresh_token": saved["refresh"]})
-    except SignInError:
-        signins.put_if_same("epic", saved["refresh"], dict(saved, expired=True))
-        raise
-    tok.setdefault("displayName", saved.get("name"))
-    # Only if you didn't sign out (or in again) while this was under way.
-    signins.put_if_same("epic", saved["refresh"], _signin_of(tok))
+    so it's saved again, one refresh at a time (play time, achievements and the update check can ask together).
+    Raises SignInError when the sign-in has run out; it's then marked so the page can say so."""
+    with _lock:
+        saved = signins.get("epic")
+        if not saved or saved.get("expired"):
+            raise SignInError("Not signed in to Epic.")
+        try:
+            tok = _post_token({"grant_type": "refresh_token", "refresh_token": saved["refresh"]})
+        except SignInError:
+            signins.put_if_same("epic", saved["refresh"], dict(saved, expired=True))
+            raise
+        tok.setdefault("displayName", saved.get("name"))
+        # Only if you didn't sign out (or in again) while this was under way.
+        signins.put_if_same("epic", saved["refresh"], _signin_of(tok))
     return tok["access_token"], tok["account_id"]
 
 
@@ -134,6 +138,22 @@ def playtime():
         if it.get("artifactId") and seconds > 0:
             out[it["artifactId"]] = (round(seconds / 60), None)
     return out
+
+
+ASSETS_URL = "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/public/assets/Windows?label=Live"
+
+
+def latest_versions():
+    """{Epic app name: its newest version} for the games on your account, as the Epic Games Launcher asks before it
+    updates one (Legendary and Heroic compare the same two versions); {} when not signed in."""
+    if not signins.get("epic"):
+        return {}
+    token, _ = _access()
+    req = urllib.request.Request(ASSETS_URL, headers={"Authorization": f"bearer {token}", "User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        items = json.load(r)
+    return {it["appName"]: it["buildVersion"] for it in (items if isinstance(items, list) else []) if isinstance(it, dict)
+            and isinstance(it.get("appName"), str) and isinstance(it.get("buildVersion"), str) and it["buildVersion"]}
 
 
 def sign_out():

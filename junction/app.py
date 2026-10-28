@@ -32,6 +32,7 @@ ACH_TTL = 10 * 60        # seconds a game's achievements stay cached
 # many seconds after it closed, the second time only when the first didn't show new hours yet.
 REREAD_AFTER = (60, 300)
 STEAM_LOOK_EVERY = 5     # seconds between looks at which Steam game runs (also ones started outside Junction)
+EPIC_UPDATES_FIRST, EPIC_UPDATES_EVERY = 60, 30 * 60  # seconds before Epic's newest versions are asked, and between
 WATCH_EVERY = 5          # seconds between checks for games installed or removed while the app is open
 STORE_CHECK = 30 * 60    # seconds between checks whether the Store's prices are due again (also while in the tray)
 ENRICHED = ("friends", "friendOwners", "dlcSales", "news")
@@ -126,6 +127,7 @@ class Api:
                                       self._closed)
         self._after_play = {}  # game id -> the latest close's reread (a newer close of the same game replaces it)
         self._after_play_lock = threading.Lock()
+        self._epic_latest = {}  # Epic app name -> its newest version (signed in to Epic), for its updates
         self._sign_in_lock = threading.Lock()
         self._programs_lock = threading.Lock()  # one "Start this program?" at a time
         self._updates = updates.Updater(lambda info: self._js(f"window.junctionUpdate && junctionUpdate({json.dumps(info)})"))
@@ -317,6 +319,33 @@ class Api:
             self._push("library", {"played": [ach]})
         return fresh
 
+    def _watch_epic_updates(self):
+        """Signed in to Epic: which version of each game is the newest, now and then. An Epic game whose installed
+        version differs has an update waiting (get_downloads)."""
+        time.sleep(EPIC_UPDATES_FIRST)
+        while not self._quitting:
+            if signins.get("epic") and not (signins.get("epic") or {}).get("expired"):
+                try:
+                    self._epic_latest = epic_account.latest_versions()
+                except Exception as e:  # noqa: BLE001 - offline, or the sign-in ran out: the next look tries again
+                    logging.getLogger("junction").warning("Epic updates couldn't be checked: %s", type(e).__name__)
+            else:
+                self._epic_latest = {}
+            time.sleep(EPIC_UPDATES_EVERY)
+
+    def _epic_updates(self):
+        """[{id, name, done, total, paused, update}] for Epic games with a newer version than the one installed. Epic
+        doesn't say how big the update is (total 0); the Epic Games Launcher downloads it when the game starts."""
+        latest = self._epic_latest
+        if not latest:
+            return []
+        out = []
+        for app, have in launchers.epic_versions().items():
+            g = self._game(f"epic:{app}")
+            if g and latest.get(app) and latest[app] != have:
+                out.append({"id": g["id"], "name": g["name"], "done": 0, "total": 0, "paused": True, "update": True})
+        return out
+
     def _watch_steam_games(self):
         """Steam games started outside Junction (from Steam itself, a shortcut): Steam names the running one in the
         registry. When it stops being that game, that game closed."""
@@ -432,6 +461,28 @@ class Api:
     def install(self, game_id, steam_id=None, target=None):
         return self._run(game_id, steam_id, target)
 
+    def update_game(self, game_id, steam_id=None):
+        """Show a game's waiting update in its launcher, on the Steam account that owns it (another account's Steam
+        doesn't update it)."""
+        game = self._game(str(game_id or ""))
+        if not game or not game.get("installed"):
+            return {"error": "Junction can't find this game anymore. Press Rescan at the top right."}
+        uri = launchers.update_uri(game)
+        if not uri:
+            name = launchers.LAUNCHERS.get(game.get("launcher"), "its launcher")
+            return {"error": f"Junction can't update this game. Start it, or update it in {name}."}
+        try:
+            if steam_id and uri.startswith("steam://"):
+                skip = config.load_settings().get("skipSteamPicker", False)
+                how = steam_switch.switch_and_open(steam_id, uri, skip_picker=skip)
+                return {"ok": True, "switched": how == "switched", "picker": how == "picker"}
+            os.startfile(uri)
+        except ValueError as e:
+            return {"error": str(e)}
+        except OSError as e:
+            return {"error": f"Windows couldn't open {launchers.LAUNCHERS.get(game.get('launcher'), 'the launcher')} ({e.strerror or e})."}
+        return {"ok": True}
+
     def uninstall(self, game_id):
         """Hand the uninstall to the game's own launcher (or uninstaller). Junction never deletes game files itself;
         the install watcher notices when the game is gone."""
@@ -505,10 +556,13 @@ class Api:
         return {"ok": True}
 
     def get_downloads(self):
-        try:
-            return launchers.steam_downloads()
-        except Exception:  # noqa: BLE001
-            return []
+        out = []
+        for read in (launchers.steam_downloads, self._epic_updates):
+            try:
+                out += read()
+            except Exception:  # noqa: BLE001 - one launcher's odd file doesn't hide the other's
+                pass
+        return out
 
     # ---------- game page details ----------
 
@@ -984,6 +1038,8 @@ class Api:
         module, _ = SIGN_INS.get(store, (None, None))
         if module:
             module.sign_out()
+            if store == "epic":
+                self._epic_latest = {}  # its updates can't be known any more
             self._forget_web_sign_ins()
             threading.Thread(target=self._background, args=(True,), daemon=True).start()
         return {"ok": True, "signins": signins.overview()}
@@ -1246,6 +1302,7 @@ def main():
     threading.Thread(target=api._keep_prices_fresh, daemon=True).start()
     api._tracker.look_around(lambda: (api._lib or {}).get("games"))  # games started outside Junction
     threading.Thread(target=api._watch_steam_games, daemon=True).start()
+    threading.Thread(target=api._watch_epic_updates, daemon=True).start()
     api._updates.start()
     threading.Thread(target=_listen_for_second_start, args=(api,), daemon=True).start()
     threading.Thread(target=_listen_for_quit, args=(api,), daemon=True).start()

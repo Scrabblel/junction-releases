@@ -258,7 +258,8 @@ def find_steam():
 
 
 def steam_downloads():
-    """Games Steam is downloading or updating right now: [{id, name, done, total}] in bytes.
+    """Games Steam is downloading or updating right now, or that wait for an update: [{id, name, done, total, paused,
+    update}] in bytes. `update`: the game is installed and this is an update, not its first download.
 
     Steam writes progress into each game's appmanifest while it downloads (BytesDownloaded of
     BytesToDownload), so this is as fresh as Steam's last write, usually a few seconds.
@@ -280,17 +281,30 @@ def steam_downloads():
             total, done = int(state.get("BytesToDownload") or 0), int(state.get("BytesDownloaded") or 0)
             flags = int(state.get("StateFlags") or 0)
             if total and done < total and flags & (2 | 1024):  # 2 = update required, 1024 = update running
+                try:
+                    built = int(state.get("buildid") or 0)  # a first download has no build yet
+                except ValueError:
+                    built = 0
                 out.append({"id": f"steam:{state.get('appid')}", "name": _clean_name(state.get("name")),
-                            "done": done, "total": total, "paused": not flags & 1024})
+                            "done": done, "total": total, "paused": not flags & 1024,
+                            "update": bool(flags & 4 or built)})  # 4 = fully installed
     return out
+
+
+def update_uri(game):
+    """Where a game's waiting update is started, or None when its launcher has no such place. Steam has no link that
+    starts one game's update, but its Downloads page lists waiting updates with an Update button."""
+    if game.get("launcher") == "steam":
+        return "steam://open/downloads"
+    return None
 
 
 # ---------- Epic Games ----------
 
-def find_epic():
+def _epic_manifests():
+    """The Epic Games Launcher's file for each installed game (not DLC, not half-installed ones)."""
     base = (_reg_values(HKLM, r"SOFTWARE\WOW6432Node\Epic Games\EpicGamesLauncher") or {}).get("AppDataPath")
     base = base or r"C:\ProgramData\Epic\EpicGamesLauncher\Data"
-    games = []
     for item in glob.glob(os.path.join(base, "Manifests", "*.item")):
         try:
             m = json.loads(_read(item))
@@ -303,9 +317,22 @@ def find_epic():
             continue
         if m.get("MainGameAppName") and m["MainGameAppName"] != app:  # DLC
             continue
-        loc = m.get("InstallLocation")
-        if not loc or not os.path.isdir(loc):
+        if not m["InstallLocation"] or not os.path.isdir(m["InstallLocation"]):
             continue
+        yield m
+
+
+def epic_versions():
+    """{Epic app name: the version installed}, as the Epic Games Launcher wrote it when it last installed or updated
+    the game."""
+    return {m["AppName"]: m["AppVersionString"] for m in _epic_manifests()
+            if isinstance(m.get("AppName"), str) and isinstance(m.get("AppVersionString"), str) and m["AppVersionString"]}
+
+
+def find_epic():
+    games = []
+    for m in _epic_manifests():
+        app, loc = m.get("AppName"), m["InstallLocation"]
         target = (f"com.epicgames.launcher://apps/{m.get('CatalogNamespace')}%3A"
                   f"{m.get('CatalogItemId')}%3A{app}?action=launch&silent=true")
         games.append(_game("epic", app, m.get("DisplayName") or app,
