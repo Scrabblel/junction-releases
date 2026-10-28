@@ -16,7 +16,7 @@ Junction is free and open source, under the GPL-3.0. The code is in this reposit
 ## What it does
 
 - **One library for every launcher.** Steam, Epic Games, GOG Galaxy, Ubisoft Connect, EA app, Battle.net, Rockstar Games and Xbox, plus any game you add yourself. Junction finds them by itself.
-- **Play, install and uninstall** from one place. Junction does this through each game's own launcher, so your saves, updates and cloud sync keep working as before.
+- **Play, install and uninstall** from one place. Junction does this through each game's own launcher, so your saves, updates and cloud sync keep working as before. Steam and Epic games with an update waiting get an **Update** badge.
 - **Several Steam accounts?** Junction knows which account owns each game and switches Steam over for you when you press Play.
 - **Play time and achievements together:** play time from every launcher, and achievements from Steam, GOG, Epic, EA and Ubisoft.
 - **A store that compares prices** across the official stores for your country, in your currency. It shows a year of price history, the lowest price ever, the free games the launchers are giving away, and a wishlist that tells you when a game goes on sale.
