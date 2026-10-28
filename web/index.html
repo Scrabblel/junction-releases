@@ -5751,7 +5751,7 @@ function renderDownloads() {
       return `
       <button class="dl" data-open="${esc(d.id)}" style="${lineVar(d.id.split(':')[0])}">
         <span class="dl-name">${esc(d.name)}</span>
-        <span class="dl-meta">${!d.total ? 'Update waiting' : `${d.paused ? (d.update ? 'Update waiting' : 'Waiting') : `${pct.toFixed(0)}%`} · ${size(d.done)} of ${size(d.total)}`}</span>
+        <span class="dl-meta">${!d.total ? 'Update waiting' : `${d.paused ? (d.update ? 'Update waiting' : 'Waiting') : `${pct.toFixed(0)}%`} · ${d.done ? `${size(d.done)} of ` : ''}${size(d.total)}`}</span>
         <span class="bar"><i style="width:${pct.toFixed(1)}%"></i></span>
       </button>`;
     }).join('') +
