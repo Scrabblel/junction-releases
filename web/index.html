@@ -3716,8 +3716,10 @@ function dealsFor(sg) {
 }
 const bestDeal = sg => dealsFor(sg)[0] || null;
 const isLow = (sg, d) => !!(d && sg.historyLow && d.price <= sg.historyLow.price + 0.005);
+// A game you own is off the wishlist: bought on any launcher, it leaves on its own (Steam's wishlist keeps a game
+// bought elsewhere, and Junction's stars stay on this PC, so Junction hides it rather than changing either).
 function isWished(id) {
-  if (prefs.unwished.includes(id)) return false;
+  if (prefs.unwished.includes(id) || (store?.games[id] && ownsOf(store.games[id]).length)) return false;
   return prefs.wishlist.includes(id) || (store && store.wishlist.some(w => w.id === id));
 }
 function storeImg(sg) {
@@ -3970,8 +3972,9 @@ function holdStorePanel() {
   probe.remove();
   page.style.setProperty('--focus-h', `${Math.ceil(tall)}px`);
 }
-// A labelled star button: "Add to wishlist", or "On your wishlist" once it's on.
+// A labelled star button: "Add to wishlist", or "On your wishlist" once it's on. None for a game you own.
 function wishBtn(id, attr) {
+  if (store?.games[id] && ownsOf(store.games[id]).length) return '';
   const on = isWished(id);
   return `<button class="pill wish-btn" ${attr} aria-pressed="${on}"${on ? ' title="Remove from wishlist"' : ''}>${on ? ICON.star : ICON.starLine}<span>${on ? 'On your wishlist' : 'Add to wishlist'}</span></button>`;
 }
@@ -4354,7 +4357,7 @@ function sparkline(h) {
 
 function wishlistIds() {
   const ids = store.wishlist.map(w => w.id).concat(prefs.wishlist);
-  return [...new Set(ids)].filter(id => store.games[id] && !prefs.unwished.includes(id));
+  return [...new Set(ids)].filter(id => store.games[id] && !prefs.unwished.includes(id) && !ownsOf(store.games[id]).length);
 }
 function setWished(id, on) {
   const fromSteam = store.wishlist.some(w => w.id === id);
@@ -4438,7 +4441,7 @@ function renderWishlist() {
 }
 
 // Where the wishlist lives, said once on its page: starring in Junction never changes Steam.
-const wishNote = () => `Games you star in Junction are kept on this PC; they don’t go on your Steam wishlist. Your Steam wishlist shows here too, when it’s public.${host.inApp ? ' Junction tells you when a game here goes on sale or gets cheaper. Turn that off under your picture → Preferences.' : ''}`;
+const wishNote = () => `Games you star in Junction are kept on this PC; they don’t go on your Steam wishlist. Your Steam wishlist shows here too, when it’s public. A game leaves the wishlist once it’s in your library.${host.inApp ? ' Junction tells you when a game here goes on sale or gets cheaper. Turn that off under your picture → Preferences.' : ''}`;
 
 // ---------- custom covers (kept in this browser) ----------
 const COVERS_KEY = 'junction.covers.v1';
