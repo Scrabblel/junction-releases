@@ -4923,7 +4923,11 @@ async function profileMenu(page = 'main') {
         info.tray && toggle('trayNotice', 'Say it’s still running when closed', info.trayNotice,
           ['Junction won’t mention it’s in the tray anymore.', 'Junction now tells you it’s still running when you close the window.']),
         toggle('startWithWindows', 'Start with Windows', info.startWithWindows,
-          ['Junction won’t start with Windows anymore.', 'Junction now starts in the tray when you sign in to Windows.']),
+          ['Junction won’t start with Windows anymore.', 'Junction now starts when you sign in to Windows.']),
+        info.tray && { ...toggle('startInTray', 'Start in the tray', info.startInTray,
+          ['Junction now opens its window when it starts with Windows.', 'Junction now stays in the tray when it starts with Windows.']),
+          info: 'When Junction starts with Windows, it opens its window. With this on, it waits in the tray instead, '
+            + 'by the clock, until you open it.' },
       ] : []),
     ].filter(Boolean) },
     help: { title: 'Help', items: [

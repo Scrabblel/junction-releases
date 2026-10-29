@@ -724,16 +724,17 @@ class Api:
                 "windowsRegion": config.windows_region(), "money": config.windows_money_style(),
                 "closeToTray": s.get("closeToTray", True), "trayNotice": s.get("trayNotice", True),
                 "dealAlerts": s.get("dealAlerts", True), "skipSteamPicker": s.get("skipSteamPicker", False),
-                "startWithWindows": startup.enabled(),
+                "startWithWindows": startup.enabled(), "startInTray": s.get("startInTray", False),
                 "tray": self._tray is not None, "signins": signins.overview()}
 
     def set_option(self, name, value):
-        """The on/off settings: setupDone, closeToTray, trayNotice, dealAlerts, skipSteamPicker, startWithWindows."""
+        """The on/off settings: setupDone, closeToTray, trayNotice, dealAlerts, skipSteamPicker, startWithWindows,
+        startInTray."""
         value = bool(value)
         try:
             if name == "startWithWindows":
                 startup.set_enabled(value)
-            elif name in ("setupDone", "closeToTray", "trayNotice", "dealAlerts", "skipSteamPicker"):
+            elif name in ("setupDone", "closeToTray", "trayNotice", "dealAlerts", "skipSteamPicker", "startInTray"):
                 s = config.load_settings()
                 s[name] = value
                 config.save_settings(s)
@@ -1268,8 +1269,8 @@ def _pad_sender(api):
 def main():
     if "--quit" in sys.argv:
         return _ask_to_quit()
-    in_tray = "--tray" in sys.argv  # started with Windows: stay in the tray
-    if not _first_instance(quiet=in_tray):
+    with_windows = "--tray" in sys.argv  # started with Windows (the flag's old name, so existing Run entries still work)
+    if not _first_instance(quiet=with_windows):
         return
     logs.setup()
     try:
@@ -1277,6 +1278,7 @@ def main():
     except Exception:  # noqa: BLE001 - the keys still work as they are
         traceback.print_exc()
     api = Api()
+    in_tray = with_windows and config.load_settings().get("startInTray", False)  # else the window opens in front
     icon = config.resource("web", "icon.ico")
     own_frame = titlebar.prepare()
     window = webview.create_window(

@@ -1,6 +1,7 @@
 r"""Starting Junction with Windows: a value under HKEY_CURRENT_USER\...\Run, for this Windows user only.
 
-It starts Junction in the tray (--tray), so no window pops up at sign-in.
+It starts Junction with --tray, which says it was started with Windows: the window then opens as usual, or stays in
+the tray when "Start in the tray" is on.
 """
 import os
 import sys

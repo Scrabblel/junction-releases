@@ -51,7 +51,7 @@ That's it: your games are ready to play.
   - **Rescan launchers**, after you install a new launcher or game.
   - **Help:** check for updates, and the problem report.
 - **Add a game by hand** (in the Library) for anything Junction doesn't find, like a game you installed without a launcher: click **Browse…** and pick the game's program (.exe). Windows asks once, before it first starts, whether that program may run.
-- **Closing the window** can keep Junction in the tray (you choose in the setup). That way it can count play time for launchers that don't keep it themselves.
+- **Closing the window** can keep Junction in the tray (you choose in the setup). That way it can count play time for launchers that don't keep it themselves. **Start with Windows** (in Preferences) opens Junction when you sign in; turn on **Start in the tray** to keep it out of the way until you need it.
 
 ### Shortcuts
 
