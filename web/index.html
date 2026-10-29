@@ -3350,6 +3350,7 @@ function afterGame(t, b, soft) {
   if (state.achGame !== t.id) { state.achGame = t.id; state.achFilter = 'all'; state.achAll = false; }
   if (state.gameTab === 'ach') fillAchievements(t);
   if (state.gameTab === 'media') fillMedia(t);
+  askAchievements(t);
 }
 
 // The game page looks like Home: the game's art behind it, its name, Play, and a few tabs underneath.
@@ -4578,11 +4579,14 @@ function stepLightbox(d) {
   state.lb.i = (state.lb.i + d + state.lb.shots.length) % state.lb.shots.length;
   showLightbox();
 }
+const ACH_FROM = ['steam', 'gog', 'epic', 'ea', 'ubisoft'];  // the launchers Junction shows achievements from
+const achAsked = new Map();  // see askAchievements
 // [whose, [unlocked, total], copy] for each Steam account and launcher with achievements in this game, furthest along
-// first. Whose: a SteamID, or a launcher (ACH_LAUNCHERS).
-function achievementsOf(t) {
+// first. Whose: a SteamID, or a launcher (ACH_LAUNCHERS). Counted: only the library's counts, not the ones a game's
+// page asked for (askAchievements).
+function achievementsOf(t, counted = false) {
   const out = [];
-  for (const c of t.copies) for (const [who, n] of Object.entries(c.achievements || {})) if (!out.some(o => o[0] === who)) out.push([who, n, c]);
+  for (const c of t.copies) for (const [who, n] of Object.entries(c.achievements || (!counted && achAsked.get(c.id)) || {})) if (!out.some(o => o[0] === who)) out.push([who, n, c]);
   return out.sort((a, b) => b[1][0] / b[1][1] - a[1][0] / a[1][1]);
 }
 // Where a copy's achievements load from: Steam's by app id, the other launchers' by the copy's own id.
@@ -4591,12 +4595,26 @@ const achSources = t => [...new Set(achievementsOf(t).map(([, , c]) => achSource
 // Every achievement, loaded the first time a game shows them: names, rarity and who unlocked what.
 let achData = null, achLoading = null;
 const achWaits = {};
-async function loadAchievements(t) {
+async function loadAchievements(t, ids = achSources(t)) {
   if (!achData) await (achLoading ||= host.achievements().then(d => (achData = d || { games: {} })).catch(() => (achData = { games: {} })));
   // The app hands out one game at a time; the artifact's file has them all.
-  if (achData.perGame) await Promise.all(achSources(t).filter(id => !(id in achData.games)).map(id =>
+  if (achData.perGame) await Promise.all(ids.filter(id => !(id in achData.games)).map(id =>
     achWaits[id] ||= host.achievements(id).then(g => { achData.games[id] = g || null; }).catch(() => { achData.games[id] = null; })));
   return achData;
+}
+// The library only counts the achievements of games you played (or it would ask the launchers about every game you
+// own), so a game you haven't played yet asks for its own when its page opens: {copy id: {whose: [unlocked, total]}},
+// null while asking or when it has none. Once they're in, the count and the Achievements tab show.
+async function askAchievements(t) {
+  const copies = t.copies.filter(c => ACH_FROM.includes(c.launcher) && achSource(c) && !achAsked.has(c.id));
+  if (achievementsOf(t).length || !copies.length) return;
+  for (const c of copies) achAsked.set(c.id, null);
+  await loadAchievements(t, [...new Set(copies.map(achSource))]);
+  for (const c of copies) {
+    const g = achData.games[achSource(c)], who = Object.entries(g?.who || {});
+    if (g?.list?.length && who.length) achAsked.set(c.id, Object.fromEntries(who.map(([w, at]) => [w, [at.filter(Boolean).length, g.list.length]])));
+  }
+  if (achievementsOf(t).length && shownGame()?.id === t.id) redrawHoldingPlace();
 }
 // The achievements of one game for one Steam account or launcher (the one furthest along, unless you picked another).
 function achFor(t, sid) {
@@ -5663,7 +5681,7 @@ function renderStats() {
   const all = titles.filter(t => !isHidden(t));
   const onSteam = all.filter(t => t.copies.some(c => c.launcher === 'steam'));
   const minutes = all.reduce((s, t) => s + (t.playtimeMinutes || 0), 0);
-  const best = all.map(t => achievementsOf(t)[0]?.[1]).filter(Boolean);
+  const best = all.map(t => achievementsOf(t, true)[0]?.[1]).filter(Boolean);  // the games you played, not the ones you looked at
   const perfect = best.filter(([d, n]) => d === n).length;
   const perLauncher = {};
   for (const t of all) for (const l of new Set(t.copies.map(c => c.launcher))) perLauncher[l] = (perLauncher[l] || 0) + 1;
