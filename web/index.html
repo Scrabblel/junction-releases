@@ -1252,6 +1252,11 @@ a.pill { text-decoration: none; }
 .dlc-list { display: grid; gap: 6px; }
 .dlc { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; padding: 10px 14px; border-radius: calc(12px * var(--round)); background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--ink); text-decoration: none; font-size: 14px; }
 .dlc:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.dlc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+button.dlc { border: 0; width: 100%; text-align: left; font-family: inherit; cursor: pointer; }
+.dlc .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlc .cut:empty, .dlc .was:empty { visibility: hidden; }  /* not on sale: keeps the prices lined up */
+.dlc-wish[aria-pressed="true"] { color: var(--signal); }
 .dlc .cut { color: var(--good); font-weight: 700; }
 .dlc .was { color: var(--ink-faint); text-decoration: line-through; font-size: 12.5px; }
 .manage .pill { font-size: 13.5px; padding: 9px 16px; }
@@ -2068,6 +2073,11 @@ const host = {
     if (this.inApp) return window.pywebview.api.search_prices(query);
     return null;
   },
+  // A Steam game's DLC with prices at every store, as Store games. The artifact has none.
+  async dlcFor(appid) {
+    if (this.inApp) return window.pywebview.api.get_dlc(appid);
+    return null;
+  },
   // Today's prices for Store games outside the snapshot: {itadId: {deals, historyLow}}.
   async prices(ids) {
     if (this.inApp) return window.pywebview.api.get_prices(ids);
@@ -2430,6 +2440,56 @@ const sizeOf = t => Math.max(0, ...t.copies.map(c => c.sizeBytes || 0)) || null;
 const friendsOwning = appid => (appid && (lib.friendOwners || {})[appid] || []).map(i => lib.friends[i]).filter(Boolean);
 const friendsIn = appid => (lib.friends || []).filter(f => f.playing && String(f.playing.appid) === String(appid));
 const dlcSalesOf = t => (t.steamAppId && (lib.dlcSales || {})[t.steamAppId]) || [];
+// A Steam game's DLC as Store games, with prices at every store, asked for the first time one of its pages opens
+// (Steam says which DLC a game has, so other games have none): Steam app id -> ids, null while asking.
+const dlcLists = new Map();
+const dlcListOf = appid => (appid && dlcLists.get(String(appid))?.map(id => store?.games[id] || liveGames.get(id)).filter(Boolean)) || null;
+async function askDlc(appid, then) {
+  if (!host.inApp || !appid || dlcLists.has(String(appid))) return;
+  dlcLists.set(String(appid), null);
+  const found = await host.dlcFor(appid).catch(() => null);
+  if (!found) return dlcLists.delete(String(appid));  // asked again the next time
+  for (const g of found) {
+    if (!liveGames.has(g.id)) liveGames.set(g.id, g);
+    if (store && !store.games[g.id]) store.games[g.id] = g;
+  }
+  // On sale first, then what's for sale, cheapest first; what no store sells goes last.
+  const sorted = found.map(g => store?.games[g.id] || g).sort((a, b) => {
+    const x = bestDeal(a), y = bestDeal(b);
+    return !x - !y || (y?.cut > 0) - (x?.cut > 0) || (x?.price ?? 0) - (y?.price ?? 0);
+  });
+  dlcLists.set(String(appid), sorted.map(g => g.id));
+  if (found.length) then();
+}
+// The star next to a DLC (the wishlist lives with the Store's prices, which may not have loaded yet on a game page).
+async function wishDlc(btn) {
+  const id = btn.dataset.wishDlc;
+  if (!store && !(await loadStoreQuiet())) return toast('Junction couldn’t load prices right now. Try again in a minute.');
+  const sg = store.games[id] || liveGames.get(id);
+  if (!sg) return;
+  store.games[id] ||= sg;
+  setWished(id, !isWished(id));
+  const on = isWished(id);
+  btn.setAttribute('aria-pressed', on);
+  btn.setAttribute('aria-label', `${on ? 'Remove from wishlist' : 'Add to wishlist'}: ${sg.title}`);
+  btn.title = on ? 'On your wishlist' : 'Add to wishlist';
+  btn.innerHTML = on ? ICON.star : ICON.starLine;
+  if (on) popStar(btn);
+  toast(on ? `Added ${sg.title} to your wishlist.` : `Removed ${sg.title} from your wishlist.`);
+}
+// A game's DLC: each opens its store page, and the star puts it on the wishlist.
+function dlcRowsHtml(list) {
+  return `
+    <h2>DLC · ${list.length}</h2>
+    <div class="dlc-list">${list.map(sg => {
+      const d = bestDeal(sg), on = isWished(sg.id);
+      return `
+      <div class="dlc-row">
+        <button class="dlc" data-price="${esc(sg.id)}"><span class="n">${esc(sg.title)}</span>${d?.cut > 0 ? `<span class="cut">-${d.cut}%</span><span class="was">${money(d.regular)}</span>` : '<span class="cut"></span><span class="was"></span>'}<b>${d ? money(d.price) : 'Not for sale'}</b></button>
+        <button class="pill round dlc-wish" data-wish-dlc="${esc(sg.id)}" aria-pressed="${on}" aria-label="${on ? 'Remove from wishlist' : 'Add to wishlist'}: ${esc(sg.title)}" title="${on ? 'On your wishlist' : 'Add to wishlist'}">${on ? ICON.star : ICON.starLine}</button>
+      </div>`;
+    }).join('')}</div>`;
+}
 // The developer's latest Steam announcements; patch notes count as an update.
 const newsOf = t => (t && t.steamAppId && (lib.news || {})[t.steamAppId]) || [];
 const NEWS_DAYS = 21, UPDATED_DAYS = 7;  // the game's own panel; Home's "Recently updated" row
@@ -3271,7 +3331,8 @@ function gameBits(t) {
   const space = sizeOf(t);
   const idle = on && space >= 1e9 && (!t.lastPlayed || Date.now() / 1000 - t.lastPlayed > 60 * 864e2);
   const ach = achievementsOf(t).length > 0, media = !!mediaOf(t);
-  const tabs = [ach && ['ach', 'Achievements'], newsOf(t).length && ['news', 'News'], (media || t.steamAppId) && ['media', 'Screenshots'], ['details', 'Details']].filter(Boolean);
+  const hasDlc = dlc.length || dlcListOf(t.steamAppId)?.length;
+  const tabs = [ach && ['ach', 'Achievements'], newsOf(t).length && ['news', 'News'], hasDlc && ['dlc', 'DLC'], (media || t.steamAppId) && ['media', 'Screenshots'], ['details', 'Details']].filter(Boolean);
   if (!tabs.some(([k]) => k === state.gameTab)) state.gameTab = tabs[0][0];
   const facts = [
     t.released && releasedLabel(t.released),
@@ -3289,7 +3350,7 @@ const gameButtonsHtml = (t, b) => `
 const gameNotesHtml = (t, b) => `
         <span class="upd-note" id="upd-note" data-game="${esc(t.id)}" data-was="${esc(updateNoteHtml(updateOf(t)))}">${updateNoteHtml(updateOf(t))}</span>
         ${friendsLine(t.steamAppId)}
-        ${b.dlc.length ? `<button class="note-chip" data-game-tab="details">${b.dlc.length} DLC on sale on Steam · up to -${b.dlc[0].cut}%</button>` : ''}
+        ${b.dlc.length ? `<button class="note-chip" data-game-tab="dlc">${b.dlc.length} DLC on sale on Steam · up to -${b.dlc[0].cut}%</button>` : ''}
         ${b.series.length ? `<button class="note-chip" data-price="${esc(b.series[0].id)}" data-from="library">${esc(b.series[0].title)} is on sale · -${bestDeal(b.series[0]).cut}%</button>` : ''}
         ${b.idle ? `<p class="note">Takes ${esc(size(b.space))} and you haven't played it in a while${t.lastPlayed ? ` (${esc(when(t.lastPlayed))})` : ''}.${uninstallable(t).length ? ` <button class="link-btn" id="uninstall">Uninstall</button>` : ''}</p>` : ''}`;
 const gameTabsHtml = (t, b) => `
@@ -3297,12 +3358,16 @@ const gameTabsHtml = (t, b) => `
           ${b.tabs.map(([k, label]) => `<button role="tab" data-game-tab="${k}" aria-selected="${state.gameTab === k}">${label}</button>`).join('')}
         </nav>`;
 function gamePanelHtml(t, b) {
-  const { dlc, facts, installedCopies } = b;
+  const { dlc, facts, installedCopies } = b;  // dlc: Steam's sales, until every store's prices are in
   return `
       <div class="gp-panel">
         ${state.gameTab === 'ach' ? achievementsHtml(t) : ''}
         ${state.gameTab === 'news' ? newsHtml(t) : ''}
         ${state.gameTab === 'media' ? mediaHtml(t) : ''}
+        ${state.gameTab === 'dlc' ? `<section class="gp-sec">${dlcListOf(t.steamAppId)?.length ? dlcRowsHtml(dlcListOf(t.steamAppId))
+          : `<h2>DLC on sale on Steam</h2><div class="dlc-list">${dlc.map(d => `
+            <a class="dlc" href="https://store.steampowered.com/app/${d.id}" target="_blank" rel="noopener">
+              <span class="n">${esc(d.name)}</span><span class="cut">-${d.cut}%</span><span class="was">${money(d.regular, d.currency)}</span><b>${money(d.price, d.currency)}</b></a>`).join('')}</div>`}</section>` : ''}
         ${state.gameTab === 'details' ? `
           ${facts.length ? `<p class="facts">${esc(facts.join(' · '))}</p>` : ''}
           ${t.tags.length ? `<div class="filters">${t.tags.map(tag => `<button class="line-chip genre" data-lib-genre="${esc(tag)}" title="Show your ${esc(tag)} games"><i></i>${esc(tag)}</button>`).join('')}</div>` : ''}
@@ -3311,9 +3376,6 @@ function gamePanelHtml(t, b) {
             ${prefs.collections.map(c => `<button class="line-chip coll" data-in-collection="${esc(c.name)}" aria-pressed="${inCollection(t, c)}"><i></i>${esc(c.name)}</button>`).join('')}
             <button class="line-chip coll add" id="new-collection">+ Collection</button>
           </div>
-          ${dlc.length ? `<section class="gp-sec"><h2>DLC on sale on Steam</h2><div class="dlc-list">${dlc.map(d => `
-            <a class="dlc" href="https://store.steampowered.com/app/${d.id}" target="_blank" rel="noopener">
-              <span class="n">${esc(d.name)}</span><span class="cut">-${d.cut}%</span><span class="was">${money(d.regular, d.currency)}</span><b>${money(d.price, d.currency)}</b></a>`).join('')}</div></section>` : ''}
           ${friendsOwning(t.steamAppId).length ? `<section class="gp-sec"><h2>Friends who own it</h2><div class="friend-list">${friendsOwning(t.steamAppId).map(f => `
             <span class="friend">${avatar(f)}<span><b>${esc(f.name)}</b><span>${esc(friendStatus(f))}</span></span></span>`).join('')}</div></section>` : ''}
           <section class="gp-sec"><h2>Your copies</h2>
@@ -3351,6 +3413,8 @@ function afterGame(t, b, soft) {
   if (state.gameTab === 'ach') fillAchievements(t);
   if (state.gameTab === 'media') fillMedia(t);
   askAchievements(t);
+  // Steam's DLC sales already gave it a DLC tab: only that tab needs drawing again.
+  askDlc(t.steamAppId, () => { if (shownGame()?.id === t.id && (state.gameTab === 'dlc' || !dlcSalesOf(t).length)) redrawHoldingPlace(); });
 }
 
 // The game page looks like Home: the game's art behind it, its name, Play, and a few tabs underneath.
@@ -3738,7 +3802,7 @@ function dealCard(sg) {
       <div class="img">${storeImg(sg)}</div>
       <div class="body">
         <span class="t">${esc(sg.title)}</span>
-        <div class="flags">${isLow(sg, d) ? '<span class="flag low">Lowest ever</span>' : ''}${ownsOf(sg).length ? '<span class="flag owned">Owned</span>' : ''}${isWished(sg.id) ? '<span class="flag wish">Wishlist</span>' : ''}</div>
+        <div class="flags">${sg.dlc ? '<span class="flag">DLC</span>' : ''}${isLow(sg, d) ? '<span class="flag low">Lowest ever</span>' : ''}${ownsOf(sg).length ? '<span class="flag owned">Owned</span>' : ''}${isWished(sg.id) ? '<span class="flag wish">Wishlist</span>' : ''}</div>
         <div class="price-row"><span class="shop"><i></i>${esc(name)}</span>${priceBlock(d)}</div>
       </div>
     </button>`;
@@ -4054,7 +4118,8 @@ function browseResults() {
     cut: (x, y) => bestDeal(y).cut - bestDeal(x).cut,
     score: (x, y) => ((y.scoreCount || 0) >= 500 ? y.score || 0 : 0) - ((x.scoreCount || 0) >= 500 ? x.score || 0 : 0),
   };
-  const out = list.sort((x, y) => by[b.sort](x, y) || by.rank(x, y));
+  // A search also finds DLC: in the usual order, after the games.
+  const out = list.sort((x, y) => (b.sort === 'rank' && !!x.dlc - !!y.dlc) || by[b.sort](x, y) || by.rank(x, y));
   out.ownedHidden = b.q.trim() ? ownedHidden : 0;
   return out;
 }
@@ -4120,7 +4185,7 @@ function renderBrowse() {
         <section class="section results">
           <div class="results-bar">
           <div class="section-head">
-            <h2>${results.length} games</h2>${liveNote() ? `<span class="note live-note" aria-live="polite">${esc(liveNote())}</span>` : ''}
+            <h2>${results.length} ${results.some(sg => sg.dlc) ? (results.length === 1 ? 'result' : 'results') : 'games'}</h2>${liveNote() ? `<span class="note live-note" aria-live="polite">${esc(liveNote())}</span>` : ''}
             <label class="sort">Sort by
               <select id="browse-sort">
                 <option value="rank">Popular</option>
@@ -4160,8 +4225,8 @@ const EDITION_WORDS = /\b(standard|deluxe|ultimate|gold edition|premium|complete
 const editionBase = title => String(title).toLowerCase().replace(/[™®©’']/g, '').replace(/[^a-z0-9]+/g, ' ').replace(EDITION_WORDS, ' ').replace(/\s+/g, ' ').trim();
 function editionsOf(sg) {
   const b = editionBase(sg.title);
-  if (b.length < 3) return [];
-  return Object.values(store.games).filter(x => x.id !== sg.id && editionBase(x.title) === b && bestDeal(x));
+  if (b.length < 3 || sg.dlc) return [];  // a DLC isn't an edition of its game ("Pack" is an edition word)
+  return Object.values(store.games).filter(x => x.id !== sg.id && !x.dlc && editionBase(x.title) === b && bestDeal(x));
 }
 function editionsHtml(sg) {
   const mine = bestDeal(sg), others = editionsOf(sg).sort((a, b) => bestDeal(a).price - bestDeal(b).price);
@@ -4185,11 +4250,13 @@ function editionsHtml(sg) {
 function renderPrice(sg) {
   const deals = sg.deals, best = deals[0];
   const backTo = state.view.from === 'library' ? (findGame(state.view.back)?.name || 'Library')
+    : state.view.from === 'price' ? (store.games[state.view.up?.id]?.title || 'Store')
     : { wishlist: 'Wishlist', browse: 'Browse all', home: 'Home' }[state.view.from] || 'Store';
   const shots = sg.screenshots || [];
   const mine = ownsOf(sg).length ? libraryTitleFor(sg) : null;
   const fetchHistory = host.inApp && !sg.history;
   const facts = [
+    sg.dlc && 'DLC',
     sg.released && releasedLabel(sg.released),
     sg.score != null && sg.scoreCount > 0 && `${sg.score}% positive on Steam${sg.scoreCount ? ` (${sg.scoreCount.toLocaleString('en-GB')} reviews)` : ''}`,
     sg.earlyAccess && 'Early access',
@@ -4245,6 +4312,7 @@ function renderPrice(sg) {
           <tbody>${rows}</tbody></table></div>` : (sg.gone ? emptyState(ICON.tag, 'Not in today’s price list', 'Junction checks prices for the most popular games and games on sale. It stays on your wishlist, and its prices show again when it’s back in the list.')
         : emptyState(ICON.tag, 'No store sells this right now', 'Star it and it stays on your wishlist, so you see it when a store has it.'))}
       </section>
+      <section class="section" id="price-dlc"${dlcListOf(sg.steamAppId)?.length ? '' : ' hidden'}>${dlcListOf(sg.steamAppId)?.length ? dlcRowsHtml(dlcListOf(sg.steamAppId)) : ''}</section>
       <section class="section">
         <h2>Best price this year</h2>
         <div id="price-history">${fetchHistory ? '<p class="note">Loading price history…</p>' : historyChart(sg)}</div>
@@ -4253,6 +4321,12 @@ function renderPrice(sg) {
     </div>`;
   $('#main').scrollTop = 0;
   tintFrom(shots[0] || sg.image, `price:${sg.id}`);
+  if (!sg.dlc) askDlc(sg.steamAppId, () => {
+    const box = $('#price-dlc'), list = dlcListOf(sg.steamAppId);
+    if (!box || state.view.name !== 'price' || state.view.id !== sg.id || !list?.length) return;
+    box.innerHTML = dlcRowsHtml(list);
+    box.hidden = false;
+  });
   if (fetchHistory) {
     // One request per game; opening the page again while it runs waits for the same one. A failed one is tried
     // again the next time the page opens.
@@ -4368,7 +4442,7 @@ function setWished(id, on) {
     prefs.wishAdded[id] = Date.now();
     const sg = store.games[id];
     if (prefs.dealSeen && sg?.deals?.[0]?.cut > 0) prefs.dealSeen[id] = sg.deals[0].price;  // you've seen this sale
-    if (sg && !sg.gone) (prefs.wishInfo ||= {})[id] ={ title: sg.title, image: sg.image || null, steamAppId: sg.steamAppId || null, tags: (sg.tags || []).slice(0, 6) };
+    if (sg && !sg.gone) (prefs.wishInfo ||= {})[id] = wishInfoOf(sg);
   } else {
     prefs.wishlist = prefs.wishlist.filter(x => x !== id);
     if (fromSteam) toggle('unwished', id, true);
@@ -5554,6 +5628,8 @@ async function pricesForGone() {
 // Prices come for the ~850 games in the Store's list. A game you put on your wishlist that has since left that
 // list (the sale ended, it dropped out of the top) stays on your Wishlist from what was saved when you added it.
 // Also leaves out giveaways that have already ended (an older saved Store can still have them).
+const wishInfoOf = sg => ({ title: sg.title, image: sg.image || null, steamAppId: sg.steamAppId || null, tags: (sg.tags || []).slice(0, 6),
+                            ...(sg.dlc ? { dlc: true } : {}) });
 function withWishStubs(s) {
   if (!s || !s.games) return s;
   for (const [id, sg] of liveGames) if (!s.games[id]) s.games[id] = sg;
@@ -5561,13 +5637,13 @@ function withWishStubs(s) {
   for (const id of prefs.wishlist) {
     const sg = s.games[id];
     if (sg && !prefs.wishInfo?.[id]) {
-      (prefs.wishInfo ||= {})[id] = { title: sg.title, image: sg.image || null, steamAppId: sg.steamAppId || null, tags: (sg.tags || []).slice(0, 6) };
+      (prefs.wishInfo ||= {})[id] = wishInfoOf(sg);
       saved = true;
     }
     const w = prefs.wishInfo?.[id];
     if (sg || !w) continue;
     s.games[id] = { id, title: w.title, image: w.image || null, steamAppId: w.steamAppId || null, tags: w.tags || [],
-                    deals: [], owned: [], historyLow: null, gone: true };
+                    deals: [], owned: [], historyLow: null, gone: true, ...(w.dlc ? { dlc: true } : {}) };
   }
   if (saved) savePrefs();
   const now = Date.now() / 1000;
@@ -5628,7 +5704,7 @@ function paletteResults() {
     if (!store) items.push({ group: 'Store', label: 'Loading the store…', sub: '', run: () => {} });
     for (const sg of storeHits(q, 5)) {
       const d = bestDeal(sg);
-      items.push({ group: 'Store', sg, label: sg.title, sub: `${money(d.price)} at ${shopName(d.shop)}${d.cut > 0 ? ` · −${d.cut}%` : ''}`,
+      items.push({ group: 'Store', sg, label: sg.title, sub: `${sg.dlc ? 'DLC · ' : ''}${money(d.price)} at ${shopName(d.shop)}${d.cut > 0 ? ` · −${d.cut}%` : ''}`,
                    run: () => go({ name: 'price', id: sg.id, from: 'store' }) });
     }
   }
@@ -5843,6 +5919,7 @@ async function updateGame(copyId) {
 function sectionOf(view) {
   // A game page belongs to the tab you opened it from.
   if (view.name === 'game' && view.from) return view.from;
+  if (view.name === 'price' && view.from === 'price' && view.up) return sectionOf(view.up);  // a DLC opened from its game's page
   if (view.name === 'stats') return 'stats';
   if (view.name === 'home' || (view.name === 'price' && view.from === 'home')) return 'home';
   if (view.name === 'store' || view.name === 'browse' || (view.name === 'price' && view.from !== 'wishlist')) return 'store';
@@ -5980,6 +6057,7 @@ function open(id, from, tab, backTo) {
   render();
 }
 function leavePrice() {
+  if (state.view.from === 'price' && state.view.up) { state.view = state.view.up; return render(); }  // a DLC, back to its game
   if (state.view.from === 'library') return state.view.back ? open(state.view.back, state.view.gameFrom, undefined, state.view.gameBack) : go({ name: 'library' });
   if (state.view.from === 'home') return backHome(`[data-price="${CSS.escape(state.view.id)}"]`);  // a suggestion on Classic's Home
   const to = ['wishlist', 'browse'].includes(state.view.from) ? state.view.from : 'store';
@@ -6589,6 +6667,9 @@ document.addEventListener('click', e => {
   if ('country' in t.dataset) return countryDialog();
   if (t.dataset.nav === 'home') return goHome();
   if (t.dataset.nav) return go({ name: t.dataset.nav });
+  if (t.dataset.wishDlc) return wishDlc(t);
+  // A DLC on a store page opens its own, and Back returns to the game's.
+  if (t.dataset.price && state.view.name === 'price' && t.closest('.dlc-list')) return go({ name: 'price', id: t.dataset.price, from: 'price', up: { ...state.view } });
   if (t.dataset.price) {
     if (state.view.name === 'store') state.scroll.store = $('#main').scrollTop;
     if (state.view.name === 'home') state.scroll.home = scroller('home').scrollTop;

@@ -142,12 +142,39 @@ def search(query, settings=None):
     if hit and time.time() - hit[0] < SEARCH_TTL:
         return hit[1]
     itad = stores.Itad(key, country=q[0])
-    # Full games only, like the Store (no DLC, soundtracks or bundles), and no adult-only games.
-    found = [g for g in itad.search(query.strip(), results=20) or [] if g.get("type") in (None, "game") and not g.get("mature")]
+    # Games and their DLC (no soundtracks or bundles), and no adult-only games.
+    found = [g for g in itad.search(query.strip(), results=20) or [] if g.get("type") in (None, "game", "dlc") and not g.get("mature")]
     out = _store_games(itad, found)
     _searches[q] = (time.time(), out)
     if len(_searches) > 200:
         _searches.pop(next(iter(_searches)))
+    return out
+
+
+DLC_MAX = 100  # some games have hundreds (train and truck add-ons); the first ones Steam lists are enough
+_dlc = {}
+
+
+def dlc_for(appid, settings=None):
+    """A Steam game's DLC that IsThereAnyDeal knows, shaped like the Store's own games (with "dlc": True), so each
+    one has a price page and can go on the wishlist. Steam says which DLC a game has, so games not on Steam have none.
+    Raises when Steam or IsThereAnyDeal can't be reached; [] without a prices key."""
+    settings = settings if settings is not None else config.load_settings()
+    key = keys.prices_key(settings)
+    if not key or not appid:
+        return []
+    q = (config.country(settings), int(appid))
+    hit = _dlc.get(q)
+    if hit and time.time() - hit[0] < SEARCH_TTL:
+        return hit[1]
+    d = art.get_json(f"https://store.steampowered.com/api/dlcforapp/?appid={q[1]}&cc={q[0].lower()}&l=english", timeout=20)
+    names = {x["id"]: x.get("name") or "" for x in (d.get("dlc") or [])[:DLC_MAX] if x.get("id")}
+    itad = stores.Itad(key, country=q[0])
+    ids = itad.ids_for_steam(list(names)) if names else {}
+    out = _store_games(itad, [{"id": ids[a], "title": names[a], "type": "dlc"} for a in names if a in ids])
+    _dlc[q] = (time.time(), out)
+    if len(_dlc) > 200:
+        _dlc.pop(next(iter(_dlc)))
     return out
 
 
@@ -175,7 +202,8 @@ def _store_games(itad, found):
                     "image": assets.get("banner400") or assets.get("banner300"), "steamAppId": appid,
                     "tags": det.get("tags", []), "released": det.get("released"), "score": det.get("score"),
                     "scoreCount": det.get("scoreCount"), "earlyAccess": det.get("earlyAccess", False),
-                    "deals": deals, "historyLow": low, "owned": [], "live": True})
+                    "deals": deals, "historyLow": low, "owned": [], "live": True,
+                    **({"dlc": True} if g.get("type") == "dlc" else {})})
     no_image = {g["steamAppId"]: g for g in out if not g["image"] and g["steamAppId"]}
     try:
         for appid, urls in art.steam_art(list(no_image)).items():

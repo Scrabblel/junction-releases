@@ -688,6 +688,14 @@ class Api:
             traceback.print_exc()
             return None
 
+    def get_dlc(self, appid):
+        """A Steam game's DLC with prices at every store, for its pages. None when it didn't work."""
+        try:
+            return live_store.dlc_for(appid)
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+            return None
+
     def get_prices(self, ids):
         """Today's prices for Store games outside the Store's list (a wishlist game that left it)."""
         try:
