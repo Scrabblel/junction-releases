@@ -13,6 +13,7 @@ import logging
 import os
 import queue
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -35,6 +36,8 @@ STEAM_LOOK_EVERY = 5     # seconds between looks at which Steam game runs (also 
 EPIC_UPDATES_FIRST, EPIC_UPDATES_EVERY = 60, 30 * 60  # seconds before Epic's newest versions are asked, and between
 WATCH_EVERY = 5          # seconds between checks for games installed or removed while the app is open
 STORE_CHECK = 30 * 60    # seconds between checks whether the Store's prices are due again (also while in the tray)
+HUNG_RELOAD_AFTER = 15   # seconds after WebView2 says the page stopped responding before Junction looks again
+PAGE_RELOADS = 3         # automatic page reloads per 10 minutes at most: more, and something keeps breaking it
 ENRICHED = ("friends", "friendOwners", "dlcSales", "news")
 # Pages the settings dialogs may open in the browser (where people make their keys).
 KEY_SITES = {"steamcommunity.com", "isthereanydeal.com", "www.steamgriddb.com"}
@@ -1132,6 +1135,109 @@ def _keep_on_page(window):
     window.events.loaded += loaded
 
 
+def _recover_page(window):
+    """WebView2 says when the page's process crashes or stops responding. Junction's window buttons are part of the
+    page, so a broken page leaves a window you can't close: the log says what happened (for the problem report) and
+    the page is reloaded. A crashed page is reloaded at once; a stuck one is ended and reloaded once it has been
+    stuck for a while.
+    Hooked once the page has loaded, on the window's own thread."""
+    log = logging.getLogger("junction")
+    reloads, hang = [], {}  # times of the automatic reloads; when the current hang began
+
+    def on_ui(fn):
+        from System import Action
+        out = []
+        window.native.Invoke(Action(lambda: out.append(fn())))
+        return out[0]
+
+    def end_page_process(core):
+        """End the process that runs Junction's page; WebView2 then reports it as exited and the page is reloaded.
+        A reload alone can't help a stuck page: it would wait for that same process."""
+        task, here = on_ui(lambda: (core.Environment.GetProcessExtendedInfosAsync(), str(core.Source)))
+        if not task.Wait(5000):
+            return False
+        origin = "{0.scheme}://{0.netloc}/".format(urllib.parse.urlparse(here))
+
+        def page_process():  # WebView2's answers can only be read on the window's own thread
+            for info in task.Result:
+                if str(info.ProcessInfo.Kind) == "Renderer" and any(
+                        str(f.FrameKind) == "MainFrame" and str(f.Source).startswith(origin) for f in info.AssociatedFrameInfos):
+                    return info.ProcessInfo.ProcessId
+        pid = on_ui(page_process)
+        if pid:
+            os.kill(int(pid), signal.SIGTERM)  # on Windows: TerminateProcess
+        return bool(pid)
+
+    def check_hang(core):
+        """A while after the page stopped responding: if it still can't run the smallest script, start it again."""
+        try:
+            time.sleep(HUNG_RELOAD_AFTER)
+            if on_ui(lambda: core.ExecuteScriptAsync("0")).Wait(5000):
+                log.info("The page responds again after %d s", time.time() - hang["since"])
+                return
+            stuck = f"stuck for {time.time() - hang['since']:.0f} s"
+            log.warning("The page is still %s: ending its process so it can start again", stuck)
+            if not end_page_process(core):
+                on_ui(lambda: reload(core, stuck))
+        except Exception:  # noqa: BLE001 - the window is closing, or the page crashed meanwhile (that reloads it)
+            if not window.native.IsDisposed:
+                log.exception("Couldn't check whether the page responds")
+        finally:
+            hang.clear()
+
+    def reload(core, why):
+        now = time.time()
+        reloads[:] = [t for t in reloads if now - t < 600]
+        if len(reloads) >= PAGE_RELOADS:
+            log.error("Not reloading the page again (%s): it already broke %d times in 10 minutes", why, len(reloads))
+            return
+        reloads.append(now)
+        log.info("Reloading the page (%s)", why)
+        core.Reload()
+
+    def failed(core, args):
+        kind = str(args.ProcessFailedKind)
+        reason, code = getattr(args, "Reason", None), getattr(args, "ExitCode", None)  # older WebView2s don't say
+        detail = ", ".join(str(x) for x in (reason, f"exit code {code}" if code is not None else None) if x is not None)
+        if kind == "RenderProcessUnresponsive":
+            # Raised once the page hasn't reacted to the mouse or keyboard for a while (not again while it stays so).
+            if not hang:
+                hang["since"] = time.time()
+                log.warning("The page stopped responding")
+                threading.Thread(target=check_hang, args=(core,), daemon=True).start()
+            return
+        if kind == "RenderProcessExited":
+            log.error("The page crashed (%s)", detail or "no reason given")
+            reload(core, "after a crash")
+        elif kind == "BrowserProcessExited":
+            log.error("WebView2 stopped (%s): the window stays empty until Junction is started again", detail or "no reason given")
+        else:  # the graphics process, a frame or a helper: WebView2 starts it again by itself
+            log.warning("WebView2: %s (%s)", kind, detail or "no reason given")
+
+    def on_failed(sender, args):
+        try:
+            failed(sender, args)
+        except Exception:  # noqa: BLE001 - never let this take the window down too
+            log.exception("Couldn't handle a WebView2 failure")
+
+    hooked = []
+
+    def loaded():
+        if hooked:
+            return
+        hooked.append(True)
+
+        def attach():
+            window.native.browser.webview.CoreWebView2.ProcessFailed += on_failed
+        try:
+            from System import Action
+            window.native.Invoke(Action(attach))
+        except Exception:  # noqa: BLE001 - an old WebView2: the page just isn't watched
+            log.exception("Couldn't watch the page for crashes")
+
+    window.events.loaded += loaded
+
+
 def _ask_windows(text):
     """Yes or no in a Windows message box: an answer the page can't give for the person."""
     MB_YESNO, MB_ICONQUESTION, MB_SETFOREGROUND, MB_TOPMOST, IDYES = 0x4, 0x20, 0x10000, 0x40000, 6
@@ -1294,6 +1400,7 @@ def main():
         width=1440, height=900, min_size=(900, 600), background_color="#0B0E13", text_select=False)
     api._window = window
     _keep_on_page(window)
+    _recover_page(window)
     try:
         from . import tray
         api._tray = tray.Tray(icon, on_open=api.show_window, on_play=api._tray_play, on_quit=api._quit)
