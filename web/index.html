@@ -1928,6 +1928,37 @@ html.pad-input .palette:not(.moved) .pal-item[aria-selected="true"]:not(:hover) 
    moves doesn't light up or take the selection. Moving the mouse brings it back. */
 html.pad-input { cursor: none; }
 html.pad-input body, html.pad-input body * { pointer-events: none !important; }
+/* Filter buttons that pick one thing (genre, sort, price...): the same button and list as Launchers, with a round
+   mark for "one of these". Long lists scroll inside. */
+.pop-panel.pick { max-height: min(60vh, 440px); overflow-y: auto; overscroll-behavior: contain; }
+.pop-opt.one i { border-radius: 50%; }
+.pop-label { padding: 8px 10px 2px; font-size: 12px; color: var(--ink-faint); }
+.fsel.toggle[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+.row-sort { display: inline-block; margin-left: 4px; padding: 0; border: 0; background: none; font: 500 13px var(--font-body); letter-spacing: 0; }
+.ach-head .pop + .seg { margin-left: 12px; }
+.ach-head .pop { margin-left: auto; }
+/* Store → Browse all: the Library's title row and filter bar, and cards like its covers (no boxes). */
+.browse-page { display: grid; gap: 18px; align-content: start; }
+.browse-page .lhead .note { margin: 0 0 0 auto; }
+.browse-page .fbar { margin-top: -6px; }
+.app[data-view="browse"] .fbar { background: transparent; backdrop-filter: none; border-bottom-color: transparent; transition: background-color .2s ease, border-color .2s ease; }
+.app.fbar-stuck[data-view="browse"] .fbar { background: color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter: blur(14px); border-bottom-color: var(--rule); }
+.browse-page .results { display: grid; gap: 20px; }
+.browse-page .deal-grid { gap: 26px 18px; }
+.deal { background: none; border: 0; border-radius: 0; overflow: visible; transition: none; }
+.deal .img { border-radius: calc(12px * var(--round)); transition: transform .16s ease, box-shadow .16s ease; }
+.deal:hover, .deal:focus-visible { translate: none; box-shadow: none; outline: none; }
+.deal:hover .img, .deal:focus-visible .img { transform: scale(1.03); box-shadow: 0 0 0 3px var(--ink), 0 14px 30px -12px #000; }
+.deal .body { padding: 10px 2px 2px; gap: 6px; }
+.deal:hover .t, .deal:focus-visible .t { color: var(--ink); }
+.flag { font: 600 11.5px/1 var(--font-body); letter-spacing: 0; text-transform: none; }
+/* Stats: the big numbers sit in the cards' columns, two above each card. */
+.statspage .stats-grid > .kpis { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; row-gap: 18px; margin-bottom: 10px; }
+.statspage .kpis > div { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-inline: 18px; }
+.bars.plain .bar-row { grid-template-columns: minmax(0, 1fr) auto; }
+.bars.plain .bv { color: var(--ink-faint); }
+/* A game's achievements use the page's width: three columns on a wide window instead of two and empty space. */
+.gp-panel .ach-full { max-width: 1480px; }
 </style>
 
 <div class="app" id="app">
@@ -2843,6 +2874,34 @@ function placeMarkers() {
 
 // ---------- Library: every game, with filters, letters and an A–Z rail ----------
 const SORTS = { name: 'Name', recent: 'Recently played', played: 'Most played', score: 'Best reviews', launcher: 'Launcher' };
+// A filter button that opens a short list to pick one from, like Launchers and More: one look for every filter,
+// and one a controller can move through (the browser's own drop-down lists don't follow the app's style).
+function popPick(id, label, opts, cur, { on = false } = {}) {
+  const open = state.pop === id;
+  return `<div class="pop${open ? ' open' : ''}">
+    <button class="fsel${on ? ' on' : ''}" data-pop="${id}" aria-expanded="${open}">${label}${ICON.chevron}</button>
+    <div class="pop-panel pick" role="group">
+      ${opts.map(([v, text, n]) => `<button class="pop-opt one" data-pick="${id}" data-v="${esc(v)}" aria-pressed="${String(v) === String(cur)}"><i></i>${text}<b>${n ?? ''}</b></button>`).join('')}
+    </div></div>`;
+}
+// Picking from one of those lists: the list closes, and with keys or a controller you're back on its button.
+function pickOption(id, v) {
+  const byKeys = !!document.activeElement?.closest('.pop-panel');
+  closePops();
+  const b = state.browse;
+  let redraw = renderLibrary;
+  if (id === 'collection' && v === '__new') return collectionDialog(null);
+  if (id === 'sort') { state.sort = prefs.libSort = v; savePrefs(); }
+  else if (id === 'genre') state.genre = v;
+  else if (id === 'collection') state.collection = v;
+  else if (id === 'account') state.accounts = new Set(v ? [v] : []);
+  else if (id === 'price') { b.maxPrice = v; b.limit = 60; redraw = renderBrowse; }
+  else if (id === 'bsort') { b.sort = v; redraw = renderBrowse; }
+  else if (id === 'wsort') { prefs.wishSort = v; savePrefs(); redraw = renderWishlist; }
+  else if (id === 'ach') { state.achSid[shownGame().id] = v; redraw = () => fillAchievements(shownGame()); }
+  redraw();
+  if (byKeys) $(`#main [data-pop="${id === 'account' ? 'more' : id}"]`)?.focus({ preventScroll: true });
+}
 function renderLibrary() {
   const games = sorted(visibleGames(), state.sort);
   const pool = titles.filter(t => state.showHidden || !isHidden(t));
@@ -2906,14 +2965,18 @@ function renderLibrary() {
               ${state.lines.size ? '<button class="link-btn" data-line-clear>Every launcher</button>' : ''}
             </div>
           </div>
-          <select id="genre-filter" aria-label="Genre"><option value="">All genres</option>${genres.map(([g, n]) => `<option value="${esc(g)}" ${state.genre === g ? 'selected' : ''}>${esc(g)} (${n})</option>`).join('')}</select>
-          <select id="collection-filter" aria-label="Collection"><option value="">All collections</option>${prefs.collections.map(c => `<option value="${esc(c.name)}" ${state.collection === c.name ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}<option value="__new">+ New collection…</option></select>
-          <select id="sort" aria-label="Sort">${Object.entries(SORTS).map(([k, l]) => `<option value="${k}" ${state.sort === k ? 'selected' : ''}>Sort: ${l}</option>`).join('')}</select>
+          ${popPick('genre', state.genre ? esc(state.genre) : 'All genres', [['', 'All genres'], ...genres.map(([g, n]) => [g, esc(g), n])], state.genre || '', { on: !!state.genre })}
+          ${popPick('collection', state.collection ? esc(state.collection) : 'All collections',
+            [['', 'All collections'], ...prefs.collections.map(c => [c.name, esc(c.name), titles.filter(t => inCollection(t, c)).length]), ['__new', '+ New collection…']],
+            state.collection || '', { on: !!state.collection })}
+          ${popPick('sort', `Sort: ${SORTS[state.sort]}`, Object.entries(SORTS), state.sort)}
           <div class="pop${state.pop === 'more' ? ' open' : ''}">
             <button class="fsel${state.accounts.size || state.showHidden ? ' on' : ''}" data-pop="more" aria-expanded="${state.pop === 'more'}">More${state.accounts.size + (state.showHidden ? 1 : 0) ? ` <b>${state.accounts.size + (state.showHidden ? 1 : 0)}</b>` : ''}${ICON.chevron}</button>
-            <div class="pop-panel" role="group" aria-label="More filters">
-              ${accounts().length > 1 ? `<label class="pop-field">Steam account
-                <select id="account-filter"><option value="">Every Steam account</option>${accounts().map(a => `<option value="${esc(a.steamId)}" ${state.accounts.has(a.steamId) ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>` : ''}
+            <div class="pop-panel pick" role="group" aria-label="More filters">
+              ${accounts().length > 1 ? `<span class="pop-label">Steam account</span>
+                ${[['', 'Every Steam account'], ...accounts().map(a => [a.steamId, esc(a.name)])].map(([v, l]) =>
+                  `<button class="pop-opt one" data-pick="account" data-v="${esc(v)}" aria-pressed="${state.accounts.has(v) || (!v && !state.accounts.size)}"><i></i>${l}<b></b></button>`).join('')}
+                ${hiddenCount ? '<span class="pop-label">Games</span>' : ''}` : ''}
               ${hiddenCount ? `<button class="pop-opt" id="toggle-hidden" aria-pressed="${state.showHidden}"><i></i>Show hidden games<b>${hiddenCount}</b></button>` : ''}
             </div>
           </div>
@@ -3860,20 +3923,16 @@ function topTags(n) {
 function isNew(sg) {
   return sg.released && (store.fetchedAt * 1000 - new Date(sg.released)) < 183 * 864e5 && new Date(sg.released) <= store.fetchedAt * 1000;
 }
-function storeTabs(active) {
-  return `<div class="tabs" role="tablist">
-    <button data-store-tab="store" aria-pressed="${active === 'store'}">Featured</button>
-    <button data-store-tab="browse" aria-pressed="${active === 'browse'}">Browse all</button>
-  </div>`;
-}
-function storeHead(active) {
+// Browse all's title row looks like the Library's: the name, a count, and the same rounded switch.
+function storeHead(active, count) {
   return `
-    <div class="page-head">
-      <div>
-        <h1>Store</h1>
-        <div class="summary">${pricesNote()} · ${updatedLabel()}</div>
+    <div class="lhead">
+      <h1>Store <span>${count}</span></h1>
+      <div class="seg" role="group" aria-label="Store pages">
+        <button data-store-tab="store" aria-pressed="${active === 'store'}">Featured</button>
+        <button data-store-tab="browse" aria-pressed="${active === 'browse'}">Browse all</button>
       </div>
-      ${storeTabs(active)}
+      <p class="note lhead-tools">${pricesNote()} · ${updatedLabel()}</p>
     </div>`;
 }
 // The Store front looks like Home: the focused game's art behind its price, and rows of games.
@@ -4167,61 +4226,47 @@ function renderBrowse() {
     ...[...b.genres].map(g => [`genre:${g}`, g]), ...[...state.shops].map(id => [`shop:${id}`, shopName(id)]),
   ].filter(Boolean);
 
+  const BSORTS = { rank: 'Popular', new: 'Newest', price: 'Lowest price', cut: 'Biggest discount', score: 'Best reviews' };
+  const shopOn = state.shops.size, genreOn = b.genres.size;
+  const count = `${results.length} ${results.some(sg => sg.dlc) ? (results.length === 1 ? 'result' : 'results') : 'games'}`;
   $('#main').innerHTML = `
-    <div class="page">
-      ${storeHead('browse')}
-      <button class="btn filters-toggle" id="toggle-browse-filters" aria-expanded="${!!state.browseFiltersOpen}">Filters${active.length ? ` · ${active.length}` : ''}</button>
-      <div class="browse">
-        <aside class="filter-panel${state.browseFiltersOpen ? '' : ' collapsed'}" aria-label="Filters">
-          <label class="store-search small">
-            ${ICON.search}
-            <input id="browse-search" type="search" placeholder="Search every store" autocomplete="off" aria-label="Search every store for a game" value="${esc(b.q)}">
-          </label>
-          <div class="filter-group">
-            <label class="check"><input type="checkbox" id="on-sale" ${b.onSale ? 'checked' : ''}> On sale only</label>
-            <label class="check"><input type="checkbox" id="show-owned" ${prefs.showOwned ? 'checked' : ''}> Show games I own</label>
+    <div class="page browse-page">
+      ${storeHead('browse', count)}
+      <div class="fbar">
+        <label class="lsearch">${ICON.search}
+          <input id="browse-search" type="search" placeholder="Search every store" autocomplete="off" aria-label="Search every store for a game" value="${esc(b.q)}"></label>
+        <div class="pop${state.pop === 'shops' ? ' open' : ''}">
+          <button class="fsel${shopOn ? ' on' : ''}" data-pop="shops" aria-expanded="${state.pop === 'shops'}">${shopOn === 1 ? esc(shopName([...state.shops][0])) : 'Stores'}${shopOn > 1 ? ` <b>${shopOn}</b>` : ''}${ICON.chevron}</button>
+          <div class="pop-panel" role="group" aria-label="Stores">
+            ${topShops.map(id => `<button class="pop-opt" style="${shopVar(shopName(id))}" data-shop="${esc(id)}" aria-pressed="${state.shops.has(id)}"><i></i>${esc(shopName(id))}<b>${shopCounts[id]}</b></button>`).join('')}
           </div>
-          <div class="filter-group">
-            <span class="chip-label">Price</span>
-            <select id="max-price" aria-label="Price">${prices.map(([v, l]) => `<option value="${v}" ${b.maxPrice === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        </div>
+        <div class="pop${state.pop === 'bgenres' ? ' open' : ''}">
+          <button class="fsel${genreOn ? ' on' : ''}" data-pop="bgenres" aria-expanded="${state.pop === 'bgenres'}">${genreOn === 1 ? esc([...b.genres][0]) : 'Genres'}${genreOn > 1 ? ` <b>${genreOn}</b>` : ''}${ICON.chevron}</button>
+          <div class="pop-panel pick" role="group" aria-label="Genres">
+            ${topTags(24).map(([t, n]) => `<button class="pop-opt" data-genre="${esc(t)}" aria-pressed="${b.genres.has(t)}"><i></i>${esc(t)}<b>${n}</b></button>`).join('')}
           </div>
-          <div class="filter-group">
-            <span class="chip-label">Genre${b.genres.size ? ` · ${b.genres.size}` : ''}</span>
-            <div class="genre-list">${topTags(24).map(([t, n]) => `
-              <label class="check"><input type="checkbox" data-genre="${esc(t)}" ${b.genres.has(t) ? 'checked' : ''}> ${esc(t)} <b>${n}</b></label>`).join('')}</div>
-          </div>
-          <div class="filter-group">
-            <span class="chip-label">Stores</span>
-            <div class="filters">${topShops.map(id => `<button class="line-chip" style="${shopVar(shopName(id))}" data-shop="${esc(id)}" aria-pressed="${state.shops.has(id)}"><i></i>${esc(shopName(id))}</button>`).join('')}</div>
-          </div>
-          ${b.genres.size || b.maxPrice !== '' || b.onSale || b.q || state.shops.size ? `<button class="btn" id="clear-filters">Clear filters</button>` : ''}
-        </aside>
-        <section class="section results">
-          <div class="results-bar">
-          <div class="section-head">
-            <h2>${results.length} ${results.some(sg => sg.dlc) ? (results.length === 1 ? 'result' : 'results') : 'games'}</h2>${liveNote() ? `<span class="note live-note" aria-live="polite">${esc(liveNote())}</span>` : ''}
-            <label class="sort">Sort by
-              <select id="browse-sort">
-                <option value="rank">Popular</option>
-                <option value="new">Newest</option>
-                <option value="price">Lowest price</option>
-                <option value="cut">Biggest discount</option>
-                <option value="score">Best reviews</option>
-              </select>
-            </label>
-          </div>
-          ${active.length ? `<div class="filters">${active.map(([k, label]) => `<button class="line-chip active-chip" data-unfilter="${esc(k)}" aria-label="Remove filter ${esc(label)}">${esc(label)} <span aria-hidden="true">×</span></button>`).join('')}${results.ownedHidden && results.length ? `<button class="line-chip" id="show-owned-hits" title="Games you own are hidden">+ ${results.ownedHidden} you own</button>` : ''}</div>` : ''}
-          </div>
+        </div>
+        ${popPick('price', b.maxPrice === '' ? 'Price' : prices.find(p => p[0] === b.maxPrice)[1], prices, b.maxPrice, { on: b.maxPrice !== '' })}
+        ${popPick('bsort', `Sort: ${BSORTS[b.sort]}`, Object.entries(BSORTS), b.sort)}
+        <button class="fsel toggle" id="on-sale" aria-pressed="${b.onSale}">On sale</button>
+        <button class="fsel toggle" id="show-owned" aria-pressed="${!!prefs.showOwned}">Games I own</button>
+      </div>
+      ${active.length || liveNote() ? `<div class="libchips">
+        ${active.map(([k, label]) => `<button class="line-chip active-chip" data-unfilter="${esc(k)}" aria-label="Remove filter ${esc(label)}">${esc(label)} <span aria-hidden="true">×</span></button>`).join('')}
+        ${results.ownedHidden && results.length ? `<button class="line-chip" id="show-owned-hits" title="Games you own are hidden">+ ${results.ownedHidden} you own</button>` : ''}
+        ${active.length > 1 ? '<button class="link-btn" id="clear-filters">Clear all filters</button>' : ''}
+        ${liveNote() ? `<span class="note live-note" aria-live="polite">${esc(liveNote())}</span>` : ''}
+      </div>` : ''}
+      <section class="section results">
           ${results.length ? `<div class="deal-grid">${results.slice(0, b.limit).map(dealCard).join('')}</div>`
             : liveNote() === 'Searching every store…' ? `<div class="deal-grid" aria-busy="true">${'<div class="sk sk-card"></div>'.repeat(4)}</div>`
             : results.ownedHidden ? emptyState(ICON.search, results.ownedHidden === 1 ? 'You already own the game that matches' : `You already own the ${results.ownedHidden} games that match`, 'Games you own are hidden. Show them to compare prices or editions.', '<button class="pill" id="show-owned-hits">Show games I own</button>')
             : active.length === 1 && b.q.trim() && host.inApp ? emptyState(ICON.search, `No store sells “${b.q.trim()}”`, 'Junction looked in its Store and at every store it compares. Check the spelling, or try fewer words.', '')
             : emptyState(ICON.search, 'No games match these filters', 'Try fewer genres, a higher price limit, or another search.', '<button class="pill" id="clear-filters">Clear filters</button>')}
           ${results.length > b.limit ? `<button class="btn more" id="more-browse">Show more games</button>` : ''}
-        </section>
-      </div>
+      </section>
     </div>`;
-  $('#browse-sort').value = b.sort;
   clearTimeout(liveTimer);
   if (liveNote() === 'Searching every store…') liveTimer = setTimeout(liveSearch, 450);
 }
@@ -4509,15 +4554,13 @@ function renderWishlist() {
       <div class="backdrop" id="backdrop" aria-hidden="true"><div class="shade"></div></div>
       <section class="focus" id="focus" aria-live="polite">${items.length ? '' : `
         <h1>Your wishlist is empty</h1>
-        <p>Star games in the Store and they land here, with their best price across every store.</p>
-        <p class="tags">${wishNote()}</p>
-        ${(store.wishlistAccounts || 0) === 0 ? '<p class="tags">Your Steam wishlists are private or empty, so they can\'t be shown here.</p>' : ''}
+        <p>Star games in the Store and they show up here, with the best price across every store.</p>
         <div class="btns"><button class="pill primary" data-nav="store">Browse the store</button></div>`}</section>
       ${items.length ? `<div class="rows">
         ${sale.length ? `<section class="hrow" aria-label="On sale now"><h2>On sale now${atLow ? ` <i>${atLow} at their lowest ever</i>` : ''}</h2>
           <div class="tiles">${sale.map(storeTile).join('')}</div></section>` : ''}
         <section class="hrow" aria-label="Your wishlist">
-          <h2>Your wishlist ${items.length > 1 ? `<select id="wish-sort" class="row-sort" aria-label="Sort your wishlist">${Object.entries(WISH_SORTS).map(([k, l]) => `<option value="${k}" ${prefs.wishSort === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}</h2>
+          <h2>Your wishlist ${items.length > 1 ? `<span class="row-sort">${popPick('wsort', `Sort: ${WISH_SORTS[prefs.wishSort]}`, Object.entries(WISH_SORTS), prefs.wishSort)}</span>` : ''}</h2>
           <div class="tiles">${items.map(storeTile).join('')}</div>
         </section>
         <p class="note wish-note">${wishNote()}</p>
@@ -4773,7 +4816,7 @@ async function fillAchievements(t) {
   box.innerHTML = `
     <div class="ach-head">
       <h2>Achievements</h2><b>${a.got.length} / ${a.items.length}</b>
-      ${a.sids.length > 1 ? `<select id="ach-account" aria-label="Whose achievements">${a.sids.map(s => `<option value="${esc(s)}" ${s === a.sid ? 'selected' : ''}>${esc(achWhose(s, a.sids))}</option>`).join('')}</select>` : ''}
+      ${a.sids.length > 1 ? popPick('ach', esc(achWhose(a.sid, a.sids)), a.sids.map(s => [s, esc(achWhose(s, a.sids))]), a.sid) : ''}
       <div class="seg" role="group" aria-label="Which achievements">
         <button data-ach-filter="all" aria-pressed="${f === 'all'}">All</button>
         <button data-ach-filter="got" aria-pressed="${f === 'got'}">Unlocked <b>${a.got.length}</b></button>
@@ -5778,7 +5821,8 @@ function renderStats() {
   const perGenre = {};
   for (const t of all) if (t.playtimeMinutes) for (const g of t.tags.slice(0, 3)) perGenre[g] = (perGenre[g] || 0) + t.playtimeMinutes;
   const year = new Date().getFullYear();
-  const thisYear = sorted(all.filter(t => t.playtimeMinutes && t.lastPlayed && new Date(t.lastPlayed * 1000).getFullYear() === year), 'played').slice(0, 8);
+  // Launchers don't share hours per year, so this card lists what you played this year, most recent first.
+  const thisYear = all.filter(t => t.lastPlayed && new Date(t.lastPlayed * 1000).getFullYear() === year).sort((a, b) => b.lastPlayed - a.lastPlayed);
   // Installed games you haven't played for two months (or ever), biggest first.
   const idle = all.filter(t => isInstalled(t) && sizeOf(t) >= 1e9 && (!t.lastPlayed || Date.now() / 1000 - t.lastPlayed > 60 * 864e2))
     .sort((a, b) => sizeOf(b) - sizeOf(a));
@@ -5802,19 +5846,17 @@ function renderStats() {
           <p class="note">${host.inApp ? 'Play time from Steam, GOG Galaxy, Ubisoft Connect and (when you sign in) Epic and EA, plus what Junction times itself. Sign in to Ubisoft to keep its numbers up to date.'
             : 'Steam and GOG Galaxy share play time. The desktop app also reads the other launchers.'}</p>
         </div>
-        <div class="kpis">
-          ${kpi(Math.round(minutes / 60), 'played', ' h')}
-          ${kpi(all.length, 'games')}
-          ${kpi(all.filter(isInstalled).length, 'installed')}
-          ${kpi(onSteam.filter(t => !t.playtimeMinutes).length, 'never played on Steam')}
-          ${kpi(best.reduce((s, [d]) => s + d, 0), 'achievements')}
-          ${kpi(perfect, perfect === 1 ? 'game at 100%' : 'games at 100%')}
-        </div>
         <div class="stats-grid">
+          <div class="kpis">
+            <div>${kpi(Math.round(minutes / 60), 'played', ' h')}${kpi(all.length, 'games')}</div>
+            <div>${kpi(all.filter(isInstalled).length, 'installed')}${kpi(onSteam.filter(t => !t.playtimeMinutes).length, 'never played on Steam')}</div>
+            <div>${kpi(best.reduce((s, [d]) => s + d, 0), 'achievements')}${kpi(perfect, perfect === 1 ? 'game at 100%' : 'games at 100%')}</div>
+          </div>
           <section class="card"><h2>Most played</h2>${bars(gameRows(sorted(all.filter(t => t.playtimeMinutes), 'played').slice(0, 8)), hours)}</section>
-          <section class="card"><h2>Played in ${year}</h2>
-            ${thisYear.length ? bars(gameRows(thisYear), hours) : '<p class="note">Nothing yet this year.</p>'}
-            <p class="note">All-time hours of the games you played this year; launchers don't share hours per year.</p></section>
+          <section class="card"><h2>Played in ${year} ${thisYear.length ? `<i>${thisYear.length} ${thisYear.length === 1 ? 'game' : 'games'}</i>` : ''}</h2>
+            ${thisYear.length ? `<div class="bars plain">${thisYear.slice(0, 8).map(t => `
+              <button data-open="${esc(t.id)}" class="bar-row" style="${lineVar(t.launcher)}"><span class="bl">${esc(t.name)}</span><span class="bv">${esc(when(t.lastPlayed))}</span></button>`).join('')}</div>`
+              : '<p class="note">Nothing yet this year.</p>'}</section>
           <section class="card"><h2>Free up space ${idle.length ? `<i>${esc(size(idleBytes))}</i>` : ''}</h2>
             ${idle.length ? bars(idle.map(t => ({ label: `${t.name} · ${t.lastPlayed ? `last played ${whenLower(t.lastPlayed)}` : 'never played'}`, v: sizeOf(t), id: t.id, c: lineVar(t.launcher) })), size)
               + '<p class="note">Installed games you haven\'t played in two months. Open one and choose ··· → Uninstall.</p>'
@@ -6636,6 +6678,15 @@ document.addEventListener('click', e => {
     if (!was) { state.pop = t.dataset.pop; t.parentElement.classList.add('open'); t.setAttribute('aria-expanded', 'true'); }
     return;
   }
+  if (t.dataset.pick) return pickOption(t.dataset.pick, t.dataset.v);
+  if (t.dataset.genre && state.view.name === 'browse') {
+    const g = t.dataset.genre, b = state.browse;
+    b.genres.has(g) ? b.genres.delete(g) : b.genres.add(g);
+    b.limit = 60;
+    return renderBrowse();
+  }
+  if (t.id === 'on-sale') { state.browse.onSale = !state.browse.onSale; state.browse.limit = 60; return renderBrowse(); }
+  if (t.id === 'show-owned') { prefs.showOwned = !prefs.showOwned; savePrefs(); return renderBrowse(); }
   if ('lineClear' in t.dataset) { state.lines.clear(); return render(); }
   if (t.dataset.pal) return palRun(Number(t.dataset.pal), e.ctrlKey || e.metaKey);
   if (t.id === 'palette-btn') return openPalette();
@@ -6818,7 +6869,6 @@ document.addEventListener('click', e => {
       savePrefs(); render();
       return toast(`Deleted the collection ${name}. The games are still in your library.`);
     }
-    case 'toggle-browse-filters': state.browseFiltersOpen = !state.browseFiltersOpen; return renderBrowse();
     case 'toggle-hidden': state.showHidden = !state.showHidden; return render();
     case 'add-game': return addGameDialog();
     case 'menu-btn': $('#app').dataset.drawer = $('#app').dataset.drawer === 'open' ? '' : 'open'; return;
@@ -6834,26 +6884,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'cl-q') { state.clQuery = e.target.value; refreshClassicList(); }
 });
 document.addEventListener('change', e => {
-  if (e.target.id === 'ach-account') { state.achSid[shownGame().id] = e.target.value; return fillAchievements(shownGame()); }
-  if (e.target.id === 'sort') { state.sort = prefs.libSort = e.target.value; savePrefs(); return renderLibrary(); }
-  if (e.target.id === 'genre-filter') { state.genre = e.target.value; return renderLibrary(); }
-  if (e.target.id === 'collection-filter') {
-    if (e.target.value === '__new') { e.target.value = state.collection; return collectionDialog(null); }
-    state.collection = e.target.value;
-    return renderLibrary();
-  }
-  if (e.target.id === 'account-filter') { state.accounts = new Set(e.target.value ? [e.target.value] : []); return renderLibrary(); }
-  const b = state.browse;
-  if (e.target.id === 'show-owned') { prefs.showOwned = e.target.checked; savePrefs(); return render(); }
-  if (e.target.id === 'browse-sort') { b.sort = e.target.value; return renderBrowse(); }
-  if (e.target.id === 'wish-sort') { prefs.wishSort = e.target.value; savePrefs(); return renderWishlist(); }
-  if (e.target.id === 'max-price') { b.maxPrice = e.target.value; b.limit = 60; return renderBrowse(); }
-  if (e.target.id === 'on-sale') { b.onSale = e.target.checked; b.limit = 60; return renderBrowse(); }
-  if (e.target.dataset.genre) {
-    e.target.checked ? b.genres.add(e.target.dataset.genre) : b.genres.delete(e.target.dataset.genre);
-    b.limit = 60;
-    return renderBrowse();
-  }
+  if (e.target.id === 'show-owned') { prefs.showOwned = e.target.checked; savePrefs(); return render(); }  // the Store front's box
 });
 // Typing in either store search box shows the results on Browse all, keeping the cursor in the box.
 let searchTimer;
