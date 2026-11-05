@@ -36,6 +36,7 @@ You need Windows 10 or 11 (64-bit). Junction checks for a new version each time 
 
 When Junction opens for the first time, a short setup shows which launchers and games it found, and asks:
 
+- **How Junction looks:** Console, Classic or Big screen. You see the layout as soon as you pick it.
 - **Where you buy your games.** The Store shows prices for that country, in its currency. Junction picks the region set in Windows; type to choose another.
 - **A Steam API key** (optional, only when you use Steam). It's free and you make it on Steam's site; Junction shows you how. With it you see your full Steam library, achievements and friends. Without it, you see your installed Steam games and the ones Steam remembers.
 - **Your other launchers** (optional, only the ones you use): sign in to Epic, EA or Ubisoft to see the play time and achievements they keep. You sign in on their own page; Junction never sees your password.

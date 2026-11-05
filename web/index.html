@@ -917,6 +917,20 @@ html[data-style="glass"] .pm-fly { background: rgb(20 26 36 / .8); border-color:
 .setup-signin b { font-size: 13.5px; font-weight: 600; color: var(--signal); }
 .setup-signin.done b { color: var(--good); font-weight: 500; }
 .setup-opts { display: grid; gap: 10px; }
+.setup-layouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.setup-layout { display: flex; flex-direction: column; gap: 3px; padding: 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--raised); color: var(--ink); font: inherit; text-align: left; }
+.setup-layout:hover, .setup-layout:focus-visible { background: var(--raised-2); }
+.setup-layout[aria-checked="true"] { border-color: var(--signal); box-shadow: inset 0 0 0 1px var(--signal); }
+.setup-layout svg { display: block; width: 100%; height: auto; margin-bottom: 7px; border-radius: calc(var(--radius) * .6); color: var(--ink); }
+.setup-layout b { font-size: 14.5px; font-weight: 600; }
+.setup-layout small { font-size: 12px; line-height: 1.35; color: var(--ink-faint); }
+.setup-layout .lp-bg { fill: var(--ground); }
+.setup-layout .lp-side { fill: currentColor; opacity: .07; }
+.setup-layout .lp-a { fill: currentColor; opacity: .45; }
+.setup-layout .lp-b { fill: currentColor; opacity: .18; }
+.setup-layout .lp-c { fill: var(--signal); }
+.setup-layout .lp-ring { fill: none; stroke: var(--signal); stroke-width: 2; }
+@media (max-width: 560px) { .setup-layouts { grid-template-columns: 1fr; } }
 .setup-opts .check { font-size: 14px; color: var(--ink); }
 .dialog.setup kbd.pad { font-size: 10px; padding: 3px 6px; }
 .setup-foot { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
@@ -5427,6 +5441,26 @@ async function saveKey(form, key) {
 }
 
 // ---------- first start: a short welcome that sets Junction up ----------
+// Small drawings of the layouts, for the setup's layout step.
+const LAYOUT_PICS = {
+  console: `<svg viewBox="0 0 160 100" aria-hidden="true"><rect class="lp-bg" width="160" height="100"/>
+    <rect class="lp-b" x="8" y="7" width="26" height="4" rx="2"/><rect class="lp-b" x="140" y="6" width="12" height="6" rx="3"/>
+    <rect class="lp-a" x="8" y="22" width="48" height="10" rx="1"/><rect class="lp-b" x="8" y="37" width="32" height="3" rx="1.5"/>
+    <rect class="lp-c" x="8" y="45" width="20" height="7" rx="3.5"/>
+    ${[0, 1, 2, 3, 4, 5].map(n => `<rect class="${n ? 'lp-a' : 'lp-c'}" x="${8 + n * 25}" y="62" width="21" height="30" rx="2"/>`).join('')}</svg>`,
+  classic: `<svg viewBox="0 0 160 100" aria-hidden="true"><rect class="lp-bg" width="160" height="100"/>
+    <rect class="lp-side" width="46" height="100"/>
+    ${[0, 1, 2, 3, 4, 5, 6, 7, 8].map(n => `<rect class="${n === 2 ? 'lp-c' : 'lp-a'}" x="6" y="${9 + n * 9.5}" width="${[34, 28, 31, 25, 33, 27, 30, 24, 32][n]}" height="4" rx="2"/>`).join('')}
+    <rect class="lp-b" x="52" y="8" width="100" height="42" rx="3"/><rect class="lp-a" x="58" y="30" width="42" height="7" rx="1"/>
+    <rect class="lp-c" x="58" y="41" width="20" height="6" rx="3"/>
+    <rect class="lp-b" x="52" y="60" width="100" height="3" rx="1.5"/><rect class="lp-b" x="52" y="68" width="84" height="3" rx="1.5"/>
+    <rect class="lp-b" x="52" y="76" width="92" height="3" rx="1.5"/><rect class="lp-b" x="52" y="84" width="70" height="3" rx="1.5"/></svg>`,
+  big: `<svg viewBox="0 0 160 100" aria-hidden="true"><rect class="lp-bg" width="160" height="100"/>
+    <rect class="lp-b" x="8" y="7" width="26" height="4" rx="2"/><rect class="lp-b" x="128" y="6" width="24" height="6" rx="3"/>
+    <rect class="lp-ring" x="7" y="25" width="38" height="54" rx="4"/>
+    ${[0, 1, 2, 3].map(n => `<rect class="lp-a" x="${10 + n * 37}" y="28" width="32" height="48" rx="3"/>`).join('')}
+    <rect class="lp-a" x="10" y="85" width="36" height="4" rx="2"/></svg>`,
+};
 // Shown once, the first time the app opens on a PC without any keys. "Set up Junction again" in
 // the profile menu brings it back. Every step can be skipped.
 async function setupWizard() {
@@ -5439,23 +5473,37 @@ async function setupWizard() {
     .sort((a, b) => b[1] - a[1]);
   // The launchers you can sign in to for their play time and achievements: the ones on this PC, or with games here.
   const signIns = Object.keys(SIGN_IN_NAMES).filter(k => (lib.clientsOnPc || []).includes(k) || found.some(([l]) => l === k));
-  const steps = ['welcome', 'country', info.accounts.length && 'steam', signIns.length && 'signins', !info.pricesBuiltIn && 'prices', 'ready'].filter(Boolean);
-  const extra = steps.length - 3;  // the optional ones
+  const steps = ['welcome', 'layout', 'country', info.accounts.length && 'steam', signIns.length && 'signins', !info.pricesBuiltIn && 'prices', 'ready'].filter(Boolean);
+  const extra = steps.length - 4;  // the optional ones
   const optional = ['', 'one quick, optional step', 'two quick, optional steps', 'three quick, optional steps'][extra];
   const body = {
     welcome: () => `
       <div class="setup-logo">${$('.brand svg').outerHTML}</div>
       <h2>Welcome to Junction</h2>
       <p class="hint">Every game from every launcher in one place, and the lowest price across the official stores.
-        ${optional ? `Where you buy your games, and ${optional}.` : 'Just tell Junction where you buy your games.'}</p>
+        ${optional ? `Pick how it looks, where you buy your games, and ${optional}.` : 'Just pick how it looks and where you buy your games.'}</p>
       ${found.length ? `<div class="setup-found" aria-label="Found on this PC">
         ${found.map(([l, n]) => `<span class="setup-launcher" style="${lineVar(l)}"><i></i>${esc(lib.launchers[l] || l)} <b>${n} ${n === 1 ? 'game' : 'games'}</b></span>`).join('')}
       </div>` : '<p class="hint">Junction didn’t find any launchers yet. Install one, then choose Rescan launchers under your profile picture.</p>'}`,
+    layout: () => `
+      <h2>How should Junction look?</h2>
+      <p class="hint">You see the layout behind this window as soon as you pick it. You can switch any time in Preferences.</p>
+      <div class="setup-layouts" role="radiogroup" aria-label="Layout">${Object.entries(LAYOUTS).map(([k, o]) => `
+        <button type="button" class="setup-layout" role="radio" aria-checked="${k === (LAYOUTS[prefs.layout] ? prefs.layout : 'console')}" data-setup-layout="${k}">
+          ${LAYOUT_PICS[k] || ''}<b>${esc(o.name)}</b><small>${esc(o.about)}</small></button>`).join('')}
+      </div>`,
     country: () => `
       <h2>Where do you buy your games?</h2>
       <p class="hint">The Store shows the prices in this country, in its currency.</p>
       ${countryPickerHtml()}`,
-    steam: () => keySection('steam', info) + '<p class="hint">Optional: without a key, Junction shows your installed Steam games and the ones Steam remembers.</p>',
+    steam: () => keySection('steam', info) + '<p class="hint">Optional: without a key, Junction shows your installed Steam games and the ones Steam remembers.</p>'
+      // Only when Steam is set to ask "Who's playing?" every time: then a game from Junction would wait at that screen.
+      + (info.steamAsksWho ? `
+      <div class="setup-opts setup-picker">
+        <label class="check"><input type="checkbox" data-opt="skipSteamPicker" ${info.skipSteamPicker ? 'checked' : ''}> Skip Steam’s “Who’s playing?” screen</label>
+      </div>
+      <p class="hint">Steam is set to ask who’s playing every time it starts, so a game from Junction would wait until you pick an account.
+        With this on, Junction turns that question off in Steam, also for when you open Steam yourself. You can change it later in Preferences.</p>` : ''),
     signins: () => `
       <h2>Your other launchers</h2>
       <p class="hint">Signed in, Junction shows the play time and achievements ${listOf(signIns.map(k => SIGN_IN_NAMES[k]))} count${signIns.length === 1 ? 's' : ''}.
@@ -5475,6 +5523,8 @@ async function setupWizard() {
       </div>
       <p class="hint">With a controller: <kbd class="pad">A</kbd> opens, <kbd class="pad">B</kbd> goes back, <kbd class="pad">Y</kbd> searches,
         <kbd class="pad">☰</kbd> opens settings, and <kbd class="pad">LB</kbd> <kbd class="pad">RB</kbd> switch tabs.</p>
+      <p class="hint">With a mouse and keyboard: right-click a game for its menu, and <kbd>Ctrl</kbd> + <kbd>K</kbd> searches your games,
+        the Store and Junction’s commands.</p>
       <p class="hint">You can change all of this later under your profile picture, top right.</p>`,
   };
   const show = i => {
@@ -5500,6 +5550,13 @@ async function setupWizard() {
         host.setCountry(code).then(res => res?.changed && forgetPrices());
       });
     }
+    // A layout counts straight away, so the page behind shows it.
+    dlg.querySelectorAll('[data-setup-layout]').forEach(b => b.addEventListener('click', () => {
+      const k = b.dataset.setupLayout;
+      if (b.getAttribute('aria-checked') !== 'true') { prefs.layout = k; savePrefs(); applyLook(); render(); }
+      show(i);
+      $(`#layer [data-setup-layout="${k}"]`)?.focus();
+    }));
     dlg.querySelectorAll('[data-setup-signin]').forEach(b => b.addEventListener('click', async () => {
       const k = b.dataset.setupSignin;
       if (signInRow.busy || b.classList.contains('done')) return;  // its window is open, or it's done
@@ -5520,6 +5577,7 @@ async function setupWizard() {
       if (!box) return;
       const res = await host.setOption(box.dataset.opt, box.checked);
       if (!res?.ok) { box.checked = !box.checked; toast(res?.error || 'Junction couldn’t change that.'); }
+      else info[box.dataset.opt] = box.checked;  // so Back and Next show it as chosen
     });
     $('#setup-next').onclick = () => (last ? closeLayer() : show(i + 1));
     $('#setup-back')?.addEventListener('click', () => show(i - 1));

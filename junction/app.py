@@ -735,6 +735,7 @@ class Api:
                 "windowsRegion": config.windows_region(), "money": config.windows_money_style(),
                 "closeToTray": s.get("closeToTray", True), "trayNotice": s.get("trayNotice", True),
                 "dealAlerts": s.get("dealAlerts", True), "skipSteamPicker": s.get("skipSteamPicker", False),
+                "steamAsksWho": steam_switch.picker_always_shown(),  # Steam shows "Who's playing?" every time it starts
                 "startWithWindows": startup.enabled(), "startInTray": s.get("startInTray", False),
                 "tray": self._tray is not None, "signins": signins.overview()}
 
