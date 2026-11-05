@@ -34,12 +34,14 @@ You need Windows 10 or 11 (64-bit). Junction checks for a new version each time 
 
 ## Getting started
 
-When Junction opens for the first time, a short setup shows which launchers and games it found, and asks two things:
+When Junction opens for the first time, a short setup shows which launchers and games it found, and asks:
 
 - **Where you buy your games.** The Store shows prices for that country, in its currency. Junction picks the region set in Windows; type to choose another.
 - **A Steam API key** (optional, only when you use Steam). It's free and you make it on Steam's site; Junction shows you how. With it you see your full Steam library, achievements and friends. Without it, you see your installed Steam games and the ones Steam remembers.
+- **Your other launchers** (optional, only the ones you use): sign in to Epic, EA or Ubisoft to see the play time and achievements they keep. You sign in on their own page; Junction never sees your password.
+- **Tray and Windows:** whether closing the window keeps Junction in the tray, and whether it starts with Windows.
 
-That's it: your games are ready to play.
+That's it: your games are ready to play. You can change all of this later under your profile picture.
 
 ## Using Junction
 
@@ -47,7 +49,7 @@ That's it: your games are ready to play.
 - **Open a game** for its page: Play or Install, play time, achievements, news, screenshots and details. When you own a game on more than one launcher, you choose which copy to start.
 - **Your profile picture (top right)** holds everything else:
   - **Accounts and keys:** your Steam accounts and keys, and *Play time from launchers*. Sign in to Epic, EA or Ubisoft there to see the play time (and the achievements) those launchers keep.
-  - **Preferences:** the look (layout, style and theme) and the country for prices.
+  - **Preferences:** the look (layout, style and theme), the country for prices, starting with Windows, and **Skip Steam's account picker**.
   - **Rescan launchers**, after you install a new launcher or game.
   - **Help:** check for updates, and the problem report.
 - **Add a game by hand** (in the Library) for anything Junction doesn't find, like a game you installed without a launcher: click **Browse…** and pick the game's program (.exe). Windows asks once, before it first starts, whether that program may run.
@@ -63,6 +65,7 @@ That's it: your games are ready to play.
 | Search and commands | Ctrl+K | Y |
 | Settings | | ☰ (Menu) |
 | Switch tabs | | LB / RB |
+| Jump to the next or previous row | | RT / LT |
 | Full screen | F11 | |
 | Menu for a game | Right-click, or the menu key | X |
 
@@ -75,8 +78,14 @@ The Epic, EA and Ubisoft sign-ins work the same unofficial way as Playnite and H
 ## Good to know
 
 - **EA app, Rockstar Games and Battle.net:** Junction only sees the games you have installed, not the ones you own but haven't downloaded.
-- **Achievements** from Ubisoft, Battle.net, Rockstar and Xbox aren't shown. EA doesn't share pictures or rarity, so EA achievements show a star.
+- **Your full Steam library, achievements and friends need a free Steam API key** (you make it on Steam's site; Junction shows you how). Without one, you see your installed Steam games and the ones Steam remembers.
+- **Achievements** come from Steam, GOG, Epic, EA and Ubisoft. Battle.net, Rockstar and Xbox achievements aren't shown. EA doesn't share pictures or rarity, so EA achievements show a star, and Ubisoft doesn't share rarity.
+- **Play time:** Battle.net only says when you last played. For launchers that don't share play time, Junction counts it itself while it's running (it can sit in the tray for that).
+- **Wishlist:** games you star in Junction stay on your PC; they don't go on your Steam wishlist. Your Steam wishlist shows up if it's public. A game leaves the wishlist once it's in your library.
 - **Switching Steam accounts restarts Steam,** which takes about 15 seconds.
+- **Steam's "Who's playing?" screen:** if Steam is set to ask it every time it starts, a game from Junction waits until you pick an account, and Junction tells you which one. To skip it, turn on **Skip Steam's account picker** in Preferences: Junction then switches that question off in Steam, also for when you open Steam yourself.
+- **Games you add by hand** ask once, in a Windows box, before they first start. That's on purpose.
+- **No emulators, plugins or custom themes.**
 - **Junction is still young (version 0.9).** Expect the odd bug, and please report it.
 
 ## Found a problem?
@@ -113,11 +122,11 @@ When you run from the source, a `local_settings.json` next to `Junction.pyw` is 
 ### Build the installer
 
 ```
-pip install pyinstaller pillow
+pip install pyinstaller pillow pyflakes
 python tools/build.py
 ```
 
-This checks the code, builds a new person's Store as a test, makes `dist/Junction/Junction.exe` with PyInstaller, and then `dist/JunctionSetup-<version>.exe` with [Inno Setup 6](https://jrsoftware.org/isinfo.php). The version comes from `VERSION` in `junction/config.py`. Use `--exe-only` to skip the installer and `--skip-store-check` to build offline.
+This checks the code (with pyflakes), builds a new person's Store as a test, makes `dist/Junction/Junction.exe` with PyInstaller, and then `dist/JunctionSetup-<version>.exe` with [Inno Setup 6](https://jrsoftware.org/isinfo.php). The version comes from `VERSION` in `junction/config.py`. Use `--exe-only` to skip the installer and `--skip-store-check` to build offline.
 
 If `JUNCTION_ITAD_KEY` is set (or `itadApiKey` is in `local_settings.json`), the build puts that IsThereAnyDeal key into the app. Without it, the built app asks each person for their own key.
 
@@ -142,6 +151,10 @@ Junction is a [pywebview](https://pywebview.flowrl.com/) window. The whole inter
 | `design/` | Earlier style experiments |
 
 The Epic, EA and Ubisoft sign-ins use the launchers' own unofficial web services, the way [Playnite](https://github.com/JosefNemec/Playnite), [Heroic](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) and the GOG Galaxy plugins do. API keys and sign-ins are stored encrypted with Windows' per-user protection (DPAPI). Junction never sends them anywhere except to the service they belong to.
+
+## Made with Claude
+
+Junction is made with Claude. Its maker decided what it does and tested every change; Claude wrote most of the code. The app itself doesn't use any AI and sends nothing to Claude.
 
 ## License
 
