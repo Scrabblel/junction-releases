@@ -154,7 +154,7 @@ The Epic, EA and Ubisoft sign-ins use the launchers' own unofficial web services
 
 ## Made with Claude
 
-Junction is made with Claude. Its maker decided what it does and tested every change; Claude wrote most of the code. The app itself doesn't use any AI and sends nothing to Claude.
+Junction is made with Claude. I decided what it does and tested every change; Claude wrote most of the code. The app itself doesn't use any AI and sends nothing to Claude.
 
 ## License
 
