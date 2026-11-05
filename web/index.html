@@ -1924,6 +1924,10 @@ html[data-style="glass"][data-theme="light"] .vkb { background: rgb(255 255 255 
 @media (prefers-reduced-motion: reduce) { .vkb-text::after { animation: none; } .vkb button { transition: none; } }
 /* With a controller, the search palette's first result is only chosen once you move down into the results. */
 html.pad-input .palette:not(.moved) .pal-item[aria-selected="true"]:not(:hover) { background: none; }
+/* While a controller is in use, the mouse is put away: the pointer hides, and whatever slides under it as the page
+   moves doesn't light up or take the selection. Moving the mouse brings it back. */
+html.pad-input { cursor: none; }
+html.pad-input body, html.pad-input body * { pointer-events: none !important; }
 </style>
 
 <div class="app" id="app">
@@ -3177,6 +3181,16 @@ function moveWithin(box, dir) {
   style.textContent = twins.join('\n');
   document.head.append(style);
   addEventListener('pointerdown', e => { if (e.isTrusted) document.documentElement.classList.remove('pad-input'); }, true);
+  // The browser also sends mouse moves of its own when the page scrolls under a still mouse, so only a mouse
+  // that really went somewhere ends controller mode.
+  let at = null;  // where the mouse was when the controller took over
+  addEventListener('mousemove', e => {
+    if (!e.isTrusted) return;
+    if (!at || !document.documentElement.classList.contains('pad-input')) return at = [e.screenX, e.screenY];
+    if (Math.abs(e.screenX - at[0]) + Math.abs(e.screenY - at[1]) < 3) return;
+    document.documentElement.classList.remove('pad-input');
+    at = [e.screenX, e.screenY];
+  }, true);
 })();
 function padPress(k) {
   document.documentElement.classList.add('pad-input');
@@ -6908,7 +6922,7 @@ addEventListener('resize', closeMenu);
 addEventListener('resize', () => sizeIntro());
 addEventListener('resize', () => { measureTop(); placeMarkers(); });
 // Pointing at the top edge brings the bar back.
-addEventListener('mousemove', e => { if (e.clientY < 56 && $('#app').classList.contains('top-hidden')) { $('#app').classList.remove('top-hidden'); topLock = Date.now() + 420; } }, { passive: true });
+addEventListener('mousemove', e => { if (e.clientY < 56 && !document.documentElement.classList.contains('pad-input') && $('#app').classList.contains('top-hidden')) { $('#app').classList.remove('top-hidden'); topLock = Date.now() + 420; } }, { passive: true });
 // A turn of the wheel upwards brings it back at once, before the page has even started to move.
 $('#main').addEventListener('wheel', e => {
   if (e.deltaY < 0 && !e.ctrlKey && $('#app').classList.contains('top-hidden') && !document.querySelector('.pop.open')) {
