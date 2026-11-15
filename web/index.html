@@ -3919,7 +3919,7 @@ async function ensureStore() {
   if (state.view !== view) return false;
   if (ok) return true;
   $('#main').innerHTML = `<div class="page no-hero"><div class="page-head"><h1>${sectionOf(view) === 'wishlist' ? 'Wishlist' : 'Store'}</h1></div><div class="empty-state">
-    <p>Junction couldn’t load prices right now. If it keeps happening, send a problem report (profile picture → Help).</p>
+    <p>Junction couldn’t load prices right now. If it keeps happening, report it: profile picture → Help → Report a problem.</p>
     <button class="btn" type="button" id="store-retry">Try again</button></div></div>`;
   $('#store-retry').onclick = () => render();
   $('#store-retry').focus({ preventScroll: true });
@@ -5095,7 +5095,8 @@ async function profileMenu(page = 'main') {
     ].filter(Boolean) },
     help: { title: 'Help', items: [
       { icon: PM.spark, label: 'Set up Junction again', run: () => (closeMenu(), setupWizard()) },
-      { icon: PM.report, label: 'Problem report', run: () => (closeMenu(), reportDialog()) },
+      { icon: PM.report, label: 'Report a problem', run: () => (closeMenu(), reportDialog()) },
+      { icon: PM.idea, label: 'Suggest something', run: () => (closeMenu(), suggestDialog()) },
     ] },
   };
   const me = accounts().find(a => a.steamId === lib.steamSignedIn);
@@ -5252,6 +5253,7 @@ const PM = {
   help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17.2h.01"/></svg>',
   spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>',
   report: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
+  idea: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>',
   update: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
 };
@@ -5669,21 +5671,29 @@ async function chooseCountry(code) {
   if (['store', 'wishlist', 'home'].includes(sectionOf(state.view))) render(); else loadStoreQuiet();
 }
 
-// ---------- when something goes wrong: a report to send to whoever helps ----------
+// ---------- reporting a problem, or suggesting something: both on Junction's GitHub page ----------
+const GITHUB = 'https://github.com/scrabblel/junction-releases';
+// The new issue starts with these questions, so a report says what's needed. Nothing personal goes in the link:
+// the problem report itself is copied, and the person pastes it in.
+const ISSUE_BODY = '**What did you do?**\n\n\n**What happened?**\n\n\n'
+  + '**Problem report** (Junction copied it for you: paste it below this line)\n\n';
+
 async function reportDialog() {
   if (!host.inApp) return toast('In the Junction app, this makes a report of your launchers and Junction’s log to send when something goes wrong.');
   const text = await host.problemReport();
   $('#layer').innerHTML = `
     <div class="scrim" id="scrim">
       <div class="dialog keys report" role="dialog" aria-modal="true" aria-labelledby="report-title">
-        <h2 id="report-title">Problem report</h2>
-        <p class="hint">If something in Junction doesn’t work, send this to whoever helps you with it. It lists your launchers,
-          how many games Junction found, and its recent log. API keys are left out.</p>
+        <h2 id="report-title">Report a problem</h2>
+        <p class="hint">Something not working? Report it on GitHub (you need a free account there). Say what you did and
+          what happened, and paste in this report: it lists your launchers, how many games Junction found, and its
+          recent log. API keys and sign-ins are left out.</p>
         <textarea class="report-text" readonly aria-label="The report" spellcheck="false">${esc(text)}</textarea>
         <p class="key-msg" aria-live="polite"></p>
         <div class="row-btns">
           <button class="btn" type="button" id="report-file">Show as a file</button>
-          <button class="btn primary" type="button" id="report-copy">Copy</button>
+          <button class="btn" type="button" id="report-copy">Copy</button>
+          <button class="btn primary" type="button" id="report-github">Copy and open GitHub</button>
           <button class="btn" type="button" id="report-done">Done</button>
         </div>
       </div>
@@ -5692,7 +5702,14 @@ async function reportDialog() {
   $('#report-copy').onclick = async () => {
     const res = await host.copyReport();
     msg.className = `key-msg${res?.ok ? '' : ' bad'}`;
-    msg.textContent = res?.ok ? 'Copied. Paste it into a message, for example on Discord.' : 'Junction couldn’t reach the clipboard. Try Show as a file instead.';
+    msg.textContent = res?.ok ? 'Copied. Paste it into your report.' : 'Junction couldn’t reach the clipboard. Try Show as a file instead.';
+  };
+  $('#report-github').onclick = async () => {
+    const res = await host.copyReport();
+    host.openUrl(`${GITHUB}/issues/new?body=${encodeURIComponent(ISSUE_BODY)}`);
+    msg.className = `key-msg${res?.ok ? '' : ' bad'}`;
+    msg.textContent = res?.ok ? 'Copied. GitHub opens in your browser: paste the report into the issue.'
+      : 'GitHub opens in your browser, but Junction couldn’t reach the clipboard. Use Show as a file and attach the report.';
   };
   $('#report-file').onclick = async () => {
     await host.showReport();
@@ -5701,7 +5718,33 @@ async function reportDialog() {
   };
   $('#report-done').onclick = closeLayer;
   closeOnScrim();
-  $('#report-copy').focus();
+  $('#report-github').focus();
+}
+
+// Ideas go to the Ideas section of Junction's GitHub Discussions, where others can vote for them.
+function suggestDialog() {
+  $('#layer').innerHTML = `
+    <div class="scrim" id="scrim">
+      <div class="dialog keys" role="dialog" aria-modal="true" aria-labelledby="suggest-title">
+        <h2 id="suggest-title">Suggest something</h2>
+        <p class="hint">Missing something in Junction, or have an idea? Post it on GitHub (you need a free account there).</p>
+        <p class="hint">Have a look at the other ideas first. If yours is already there, vote for it instead: the ideas
+          with the most votes stand out.</p>
+        <p class="key-msg" aria-live="polite"></p>
+        <div class="row-btns">
+          <button class="btn" type="button" id="suggest-see">See the ideas</button>
+          <button class="btn primary" type="button" id="suggest-new">Suggest something</button>
+          <button class="btn" type="button" id="suggest-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  const msg = $('#layer .key-msg');
+  const open = url => { host.openUrl(url); msg.textContent = 'GitHub opens in your browser.'; };
+  $('#suggest-see').onclick = () => open(`${GITHUB}/discussions/categories/ideas`);
+  $('#suggest-new').onclick = () => open(`${GITHUB}/discussions/new?category=ideas`);
+  $('#suggest-cancel').onclick = closeLayer;
+  closeOnScrim();
+  $('#suggest-see').focus();
 }
 
 // A game picked from the tray icon's menu: play it as if Play was pressed in Junction.

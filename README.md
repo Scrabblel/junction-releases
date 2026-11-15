@@ -52,7 +52,7 @@ That's it: your games are ready to play. You can change all of this later under 
   - **Accounts and keys:** your Steam accounts and keys, and *Play time from launchers*. Sign in to Epic, EA or Ubisoft there to see the play time (and the achievements) those launchers keep.
   - **Preferences:** the look (layout, style and theme), the country for prices, starting with Windows, and **Skip Steam's account picker**.
   - **Rescan launchers**, after you install a new launcher or game.
-  - **Help:** check for updates, and the problem report.
+  - **Help:** check for updates, **Report a problem** and **Suggest something**.
 - **Add a game by hand** (in the Library) for anything Junction doesn't find, like a game you installed without a launcher: click **Browse…** and pick the game's program (.exe). Windows asks once, before it first starts, whether that program may run.
 - **Closing the window** can keep Junction in the tray (you choose in the setup). That way it can count play time for launchers that don't keep it themselves. **Start with Windows** (in Preferences) opens Junction when you sign in; turn on **Start in the tray** to keep it out of the way until you need it.
 
@@ -89,9 +89,13 @@ The Epic, EA and Ubisoft sign-ins work the same unofficial way as Playnite and H
 - **No emulators, plugins or custom themes.**
 - **Junction is still young (version 0.9).** Expect the odd bug, and please report it.
 
-## Found a problem?
+## Found a problem, or have an idea?
 
-[Open an issue](https://github.com/scrabblel/junction-releases/issues). Say what you did and what happened, and add a problem report: click your profile picture → **Help → Problem report → Copy**, then paste it in. Junction removes your keys and sign-ins from the report by itself. Screenshots help a lot.
+**A problem:** click your profile picture → **Help → Report a problem → Copy and open GitHub**. Junction copies a problem report and opens a new [issue](https://github.com/scrabblel/junction-releases/issues): say what you did and what happened, and paste the report in. Junction removes your keys and sign-ins from the report by itself. Screenshots help a lot.
+
+**An idea or a wish:** post it under [Ideas](https://github.com/scrabblel/junction-releases/discussions/categories/ideas) in Discussions (or in Junction: **Help → Suggest something**). Look first whether someone already suggested it; if so, vote for it instead.
+
+Both need a free GitHub account.
 
 ## Uninstall
 
