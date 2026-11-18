@@ -499,6 +499,28 @@ def _local(tag):
     return tag.split("}")[-1]
 
 
+def _package_string(package, value):
+    """A game's name can be a reference into its own language files ("ms-resource:IDS_Title2") instead of the name.
+    Windows looks it up for the installed package; None when it can't."""
+    import ctypes
+    from ctypes import wintypes
+    key = value[len("ms-resource:"):]
+    if key.startswith("//"):
+        tries = [value]  # a full reference already
+    else:
+        key = key.lstrip("/")
+        tries = ([f"ms-resource:///Resources/{key}"] if "/" not in key else []) + [f"ms-resource:///{key}", value]
+    load = ctypes.windll.shlwapi.SHLoadIndirectString
+    load.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.UINT, ctypes.c_void_p]
+    for ref in tries:
+        buf = ctypes.create_unicode_buffer(512)
+        if load(f"@{{{package}?{ref}}}", buf, len(buf), None) == 0:
+            text = buf.value.strip()
+            if text and not text.lower().startswith("ms-resource:"):
+                return text
+    return None
+
+
 def find_xbox():
     import xml.etree.ElementTree as ET
 
@@ -546,6 +568,8 @@ def find_xbox():
                 pass
 
             name = exe.get("OverrideDisplayName") or (visuals.get("DefaultDisplayName") if visuals is not None else None) or folder
+            if name.lower().startswith("ms-resource:"):
+                name = _package_string(full, name) or folder  # the install folder is named after the game too
             logo = None
             if visuals is not None:
                 for attr in ("Square480x480Logo", "Square150x150Logo", "StoreLogo"):
